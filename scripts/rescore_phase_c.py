@@ -15,8 +15,13 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import sys
+from pathlib import Path
 
-from ugh_audit.scorer import UGHScorer
+# source checkout から直接実行できるよう repo root を sys.path に追加
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from ugh_audit.scorer import UGHScorer  # noqa: E402
 
 
 def _get_grv_top(grv: dict) -> str:
