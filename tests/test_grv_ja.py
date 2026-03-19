@@ -71,7 +71,7 @@ def test_grv_stopword_removal():
 
 
 def test_grv_katakana_merge():
-    """Step 2: カタカナ複合語が正しく結合されること"""
+    """Step 2: カタカナ複合語が正しく結合されること（断片なし・結合語あり）"""
     pytest.importorskip("fugashi", reason="fugashi not installed")
     from ugh_audit.scorer.ugh_scorer import UGHScorer
 
@@ -80,7 +80,15 @@ def test_grv_katakana_merge():
         "トランスフォーマーアーキテクチャはフレームワークの中核です。"
         "アテンションメカニズムとスケーリング則が重要です。"
     )
-    # 断片（「フレ」「ムワ」「ション」）が出ず、結合語が出ること
+    # 断片（「フレ」「ムワ」「ション」）が出ないこと
     bad_fragments = {"フレ", "ムワ", "ション", "スパ", "チュ"}
     found_bad = [w for w in grv if w in bad_fragments]
     assert found_bad == [], f"カタカナ断片が検出された: {found_bad}"
+
+    # 結合後のカタカナ語が grv に含まれること（正例）
+    katakana_words = [w for w in grv if any(
+        "\u30A0" <= c <= "\u30FF" for c in w
+    )]
+    assert len(katakana_words) >= 1, (
+        f"結合後のカタカナ語がgrvに含まれていない。grv={grv}"
+    )
