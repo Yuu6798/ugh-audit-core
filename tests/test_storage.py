@@ -3,7 +3,6 @@ tests/test_storage.py
 AuditDB の基本テスト
 """
 import pytest
-from pathlib import Path
 from ugh_audit.scorer.models import AuditResult
 from ugh_audit.storage.audit_db import AuditDB
 

@@ -28,15 +28,15 @@ def generate_text_report(history: List[dict]) -> str:
         d = r.get("meaning_drift", "不明")
         drift_counts[d] = drift_counts.get(d, 0) + 1
 
-    lines.append(f"\n📊 集計サマリー")
+    lines.append("\n📊 集計サマリー")
     lines.append(f"  平均 PoR:    {avg_por:.3f}  (発火率: {fired}/{len(history)})")
     lines.append(f"  平均 ΔE:     {avg_de:.3f}")
-    lines.append(f"\n  意味ズレ分布:")
+    lines.append("\n  意味ズレ分布:")
     for drift, count in sorted(drift_counts.items(), key=lambda x: -x[1]):
         bar = "█" * count
         lines.append(f"    {drift:10s} {bar} ({count}件)")
 
-    lines.append(f"\n📈 時系列 (ΔE推移)")
+    lines.append("\n📈 時系列 (ΔE推移)")
     lines.append(f"  {'時刻':20s} {'PoR':>6} {'ΔE':>6} {'発火':>4} {'ドリフト'}")
     lines.append(f"  {'-'*20} {'-'*6} {'-'*6} {'-'*4} {'-'*10}")
     for r in history[-20:]:  # 直近20件

@@ -2,7 +2,6 @@
 tests/test_scorer.py
 UGHScorer の基本テスト
 """
-import pytest
 from ugh_audit.scorer.models import AuditResult
 from ugh_audit.scorer.ugh_scorer import UGHScorer
 
