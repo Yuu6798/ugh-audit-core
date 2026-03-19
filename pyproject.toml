@@ -31,6 +31,9 @@ dev = [
     "ruff>=0.1",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
