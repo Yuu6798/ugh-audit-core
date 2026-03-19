@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "ugh-audit-core"
@@ -13,11 +13,13 @@ requires-python = ">=3.10"
 keywords = ["UGH", "PoR", "semantic", "audit", "AI", "UGHer"]
 
 dependencies = [
-    "sentence-transformers>=2.2",
     "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
+full = [
+    "sentence-transformers>=2.2",
+]
 ugh3 = [
     "ugh3-metrics-lib @ git+https://github.com/Yuu6798/ugh3-metrics-lib.git",
 ]
