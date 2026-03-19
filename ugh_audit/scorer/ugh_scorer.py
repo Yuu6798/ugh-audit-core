@@ -238,24 +238,66 @@ class UGHScorer:
         return self._grv_with_regex(text)
 
     def _grv_with_fugashi(self, text: str) -> dict:
+        import re
         from collections import Counter
 
-        # 対象品詞: 名詞・動詞（基本形）・形容詞（基本形）
-        TARGET_POS = {"名詞", "動詞", "形容詞"}
+        # 対象品詞: 名詞のみ（暫定仕様 — 動詞・形容詞は機能語混入が多いため除外。
+        # Phase C v1 人手アノテーション後に品詞範囲を再評価する予定）
+        TARGET_POS = {"名詞"}
+
+        # ストップワード: 機能語・形式名詞・高頻度非内容語・GPT定型句
+        # 注: 「必要」「可能」「重要」はドメイン内容語になりうるため除外しない
         STOPWORDS = {
-            "する", "ある", "いる", "なる", "れる", "られる",
-            "こと", "もの", "ため", "よう", "それ", "これ",
+            # 助詞・助動詞
+            "は", "が", "の", "を", "に", "へ", "と", "で", "も", "か",
+            "です", "ます", "する", "した", "している", "される", "された",
+            "ある", "ない", "いる", "なる", "できる", "れる", "られる",
+            # 接続・指示
+            "この", "その", "あの", "これ", "それ", "あれ",
+            "また", "しかし", "ただし", "そして", "さらに", "つまり",
+            # 形式名詞（内容語ではないもののみ）
+            "ため", "こと", "もの", "ところ", "よう", "ほう",
+            "特に", "非常",
+            # 高頻度非内容語（GPT回答で過剰出現）
+            # 注: 「説明」は説明系プロンプトで内容語になりうるため除外しない
+            "回答", "質問", "以下", "例えば", "について",
+            # 機能語的末尾（fugashi が名詞として取得する場合がある）
+            "があります", "ています", "ません", "でしょう", "かもしれません",
+            "いことは", "します", "である", "として",
+            # 不完全カタカナ断片（明示的な既知断片のみ列挙）
+            "スパ", "チュ", "フレ", "ムワ", "パタ", "ション",
         }
 
         words = []
+        buffer_kata = ""
+
         for word in _TAGGER(text):
             pos = word.feature.pos1 if hasattr(word.feature, "pos1") else str(word.feature).split(",")[0]
+            surface = word.surface
+
+            # カタカナ隣接トークンを結合（長音・複合語の分断対策）
+            if re.match(r'^[\u30A0-\u30FF\u30FC]+$', surface):
+                buffer_kata += surface
+                continue
+            else:
+                if buffer_kata:
+                    if len(buffer_kata) >= 2 and buffer_kata not in STOPWORDS:
+                        words.append(buffer_kata)
+                    buffer_kata = ""
+
             if pos not in TARGET_POS:
                 continue
+
             # 原形を使う（なければ表層形）
-            surface = word.feature.lemma if hasattr(word.feature, "lemma") and word.feature.lemma else word.surface
-            if surface and surface not in STOPWORDS and len(surface) > 1:
-                words.append(surface)
+            lemma = word.feature.lemma if hasattr(word.feature, "lemma") and word.feature.lemma else surface
+
+            # フィルタ: ストップワード除外、2文字以上
+            if lemma and lemma not in STOPWORDS and len(lemma) >= 2:
+                words.append(lemma)
+
+        # バッファ残りを処理
+        if buffer_kata and len(buffer_kata) >= 2 and buffer_kata not in STOPWORDS:
+            words.append(buffer_kata)
 
         if not words:
             return self._grv_with_regex(text)  # fallback
@@ -268,13 +310,17 @@ class UGHScorer:
         import re
         from collections import Counter
 
-        # 漢字ブロック・ひらがな連続・カタカナ連続・英単語を抽出
-        words = re.findall(r'[一-龯]{2,}|[ぁ-ん]{3,}|[ァ-ヴ]{2,}|[a-zA-Z]{3,}', text)
+        # 漢字ブロック・ひらがな連続（3文字以上）・カタカナ連続（2文字以上）・英単語を抽出
+        words = re.findall(r'[一-龯]{2,}|[ぁ-ん]{3,}|[ァ-ヴ\u30FC]{2,}|[a-zA-Z]{3,}', text)
         STOPWORDS = {
-            'は', 'が', 'を', 'に', 'で', 'の', 'と', 'も', 'か',
-            'this', 'that', 'the', 'and', 'for',
+            # 日本語機能語
+            "は", "が", "を", "に", "で", "の", "と", "も", "か",
+            "場合", "回答", "以下",
+            "こと", "もの", "ため", "よう", "ほう", "として",
+            # 英語機能語
+            "this", "that", "the", "and", "for", "are", "not", "with",
         }
-        words = [w for w in words if w not in STOPWORDS]
+        words = [w for w in words if w not in STOPWORDS and len(w) >= 2]
         if not words:
             return {}
 
