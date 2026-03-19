@@ -59,6 +59,7 @@ class AuditCollector:
         question: str,
         response: str,
         reference: Optional[str] = None,
+        reference_core: Optional[str] = None,
         session_id: Optional[str] = None,
     ) -> AuditResult:
         """
@@ -74,6 +75,7 @@ class AuditCollector:
             question=question,
             response=response,
             reference=ref,
+            reference_core=reference_core,
             session_id=session_id,
         )
         self._db.save(result)

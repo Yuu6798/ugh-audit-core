@@ -20,7 +20,10 @@ class AuditResult:
     # UGH指標
     por: float = 0.0          # Point of Resonance（共鳴度）0-1
     por_fired: bool = False    # PoR発火フラグ（por >= POR_FIRE_THRESHOLD）
-    delta_e: float = 0.0      # ΔE 意味ズレ量（0: 完全一致, 1: 完全乖離）
+    delta_e: float = 0.0      # ΔE 意味ズレ量（0: 完全一致, 1: 完全乖離）— プライマリ（= delta_e_full）
+    delta_e_core: float = 0.0    # reference_core vs response 全文
+    delta_e_full: float = 0.0    # reference 全文 vs response 全文
+    delta_e_summary: float = 0.0  # reference_core vs response 先頭3文
     grv: Dict[str, float] = field(default_factory=dict)  # 語彙重力分布
 
     # メタデータ
