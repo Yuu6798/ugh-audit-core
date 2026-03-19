@@ -80,6 +80,7 @@ def export_html(records: list[dict], output_path: Path, version: str) -> None:
     backend = r0[0].get("scoring_meta", {}).get("backend", "unknown")
     ref_field = r0[0].get("scoring_meta", {}).get("reference_field", "unknown")
 
+    temps = sorted(set(r["temperature"] for r in records))
     html = f"""<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8">
 <title>UGH Audit Phase C {version} — GPT-4o スコアリング結果</title>
@@ -102,8 +103,10 @@ tr:hover{{background:#f9f9f9}}
 </head><body>
 <h1>🔬 UGH Audit Phase C {version} — GPT-4o スコアリング結果</h1>
 <p class="meta">
-  モデル: gpt-4o ／ 問題数: {len(r0)}問 ／ 総レコード: {len(records)}件（×3温度）<br>
-  backend: {backend} ／ reference_field: {ref_field}
+  モデル: gpt-4o ／ 総レコード: {len(records)}件（温度: {temps}）<br>
+  backend: {backend} ／ reference_field: {ref_field}<br>
+  ⚠️ 以下の統計・一覧は <strong>temp=0.0 の {len(r0)} 件を代表値として使用</strong>。
+  temp=0.0 は決定論的出力でモデルの基本傾向を示す。温度別の分析は scored.jsonl を参照。
 </p>
 
 <div class="summary">
