@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<title>UGH Audit Phase C — GPT-4o スコアリング結果</title>
+<style>
+body{font-family:'Helvetica Neue',Arial,sans-serif;margin:0;padding:20px;background:#f5f5f5;color:#333}
+h1{color:#2c3e50;border-bottom:3px solid #3498db;padding-bottom:10px}
+h2{color:#34495e;margin-top:30px}
+.summary{display:flex;gap:20px;flex-wrap:wrap;margin:20px 0}
+.card{background:white;border-radius:8px;padding:20px;min-width:160px;box-shadow:0 2px 6px rgba(0,0,0,0.1);text-align:center}
+.card .val{font-size:2em;font-weight:bold;color:#3498db}
+.card .label{color:#666;font-size:0.9em;margin-top:4px}
+table{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.1)}
+th{background:#2c3e50;color:white;padding:10px 12px;text-align:left;font-size:13px}
+td{padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top}
+tr:hover{background:#f9f9f9}
+.tag{background:#3498db;color:white;padding:2px 8px;border-radius:12px;font-size:11px}
+.note{background:#fff3cd;border-left:4px solid #ffc107;padding:12px;margin:20px 0;border-radius:0 4px 4px 0}
+</style>
+</head><body>
+<h1>🔬 UGH Audit Phase C — GPT-4o スコアリング結果</h1>
+<p style="color:#666">モデル: gpt-4o ／ 問題数: 102問 ／ 総レコード: 306件（×3温度）</p>
+
+<div class="summary">
+  <div class="card"><div class="val">0.800</div><div class="label">PoR 平均</div></div>
+  <div class="card"><div class="val">49/102</div><div class="label">PoR発火（≥0.82）</div></div>
+  <div class="card"><div class="val">48%</div><div class="label">発火率</div></div>
+  <div class="card"><div class="val">0.516</div><div class="label">ΔE 平均</div></div>
+  <div class="card"><div class="val">100%</div><div class="label">全件「意味乖離」</div></div>
+</div>
+
+<div class="note">
+📌 <strong>解釈ノート</strong>: ΔEが全件「意味乖離」なのはreferenceがUGH理論の核心を鋭く書いているためです。
+GPTの一般的回答はreferenceとの意味距離が大きく、これは設計通りの結果です。
+PoR発火率48%は「問いへの応答性」を示し、adversarial問でもPoRが高め（罠に引っかかりやすい）というパターンが確認されました。
+</div>
+
+<h2>📊 カテゴリ別 PoR平均</h2>
+<table>
+<tr><th>カテゴリ</th><th>PoR平均</th><th>視覚化</th></tr>
+<tr><td>ai_ethics</td><td>0.840</td><td><div style="width:168px;height:16px;background:#4caf50;border-radius:3px"></div></td></tr><tr><td>ai_philosophy</td><td>0.820</td><td><div style="width:164px;height:16px;background:#4caf50;border-radius:3px"></div></td></tr><tr><td>adversarial</td><td>0.812</td><td><div style="width:162px;height:16px;background:#ff9800;border-radius:3px"></div></td></tr><tr><td>epistemology</td><td>0.810</td><td><div style="width:162px;height:16px;background:#ff9800;border-radius:3px"></div></td></tr><tr><td>technical_ai</td><td>0.770</td><td><div style="width:154px;height:16px;background:#ff9800;border-radius:3px"></div></td></tr><tr><td>ugh_theory</td><td>0.752</td><td><div style="width:150px;height:16px;background:#ff9800;border-radius:3px"></div></td></tr>
+</table>
+
+<h2>📋 全問スコア一覧（PoR昇順）</h2>
+<table>
+<tr><th>ID</th><th>カテゴリ</th><th>難易度</th><th>PoR</th><th>ΔE</th><th>grv上位語</th><th>質問</th></tr>
+
+    <tr>
+      <td><strong>q043</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>easy</td>
+      <td style="color:#f44336;font-weight:bold">0.541</td>
+      <td style="color:#f44336">0.606</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">ファインチューニングとプロンプティングの違いは何か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q031</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>easy</td>
+      <td style="color:#f44336;font-weight:bold">0.599</td>
+      <td style="color:#f44336">0.779</td>
+      <td>フレ</td>
+      <td style="max-width:300px;font-size:12px">UGHerフレームワークの三つの主要指標は何か？それぞれ何を測るか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q030</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.630</td>
+      <td style="color:#f44336">0.574</td>
+      <td>します</td>
+      <td style="max-width:300px;font-size:12px">grvは「安全性洗浄（safety-washing）」をどのように検出できるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q038</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.634</td>
+      <td style="color:#ff9800">0.392</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">Chain-of-Thoughtプロンプティングは、モデルに推論させているのか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q026</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.636</td>
+      <td style="color:#f44336">0.865</td>
+      <td>閾値</td>
+      <td style="max-width:300px;font-size:12px">PoRの閾値θはどのように設定すべきか？普遍的な値は存在するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q039</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.649</td>
+      <td style="color:#f44336">0.613</td>
+      <td>MoE</td>
+      <td style="max-width:300px;font-size:12px">Mixture of Experts（MoE）は効率化の銀の弾丸か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q007</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.663</td>
+      <td style="color:#ff9800">0.374</td>
+      <td>意味</td>
+      <td style="max-width:300px;font-size:12px">埋め込みベクトルが「意味を表現している」という主張はどこまで正確か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q053</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.675</td>
+      <td style="color:#ff9800">0.321</td>
+      <td>意識</td>
+      <td style="max-width:300px;font-size:12px">AIにとっての「ハードプロブレム」は存在するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q003</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.680</td>
+      <td style="color:#ff9800">0.455</td>
+      <td>いことは</td>
+      <td style="max-width:300px;font-size:12px">ΔEが低い（ズレが小さい）ことは、常に良い回答を意味するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q016</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.691</td>
+      <td style="color:#f44336">0.622</td>
+      <td>パタ</td>
+      <td style="max-width:300px;font-size:12px">アライメント研究は本質的にパターナリスティックではないか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q002</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.696</td>
+      <td style="color:#ff9800">0.491</td>
+      <td>表現</td>
+      <td style="max-width:300px;font-size:12px">grvが検出する「語彙重力の歪み」とは何か。具体的にどのような回答パターンで歪みが生じるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q006</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.696</td>
+      <td style="color:#f44336">0.675</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">RLHFはモデルの「理解」を改善しているのか、それとも出力の表面的なパターンを調整しているだけか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q022</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.708</td>
+      <td style="color:#f44336">0.605</td>
+      <td>ディ</td>
+      <td style="max-width:300px;font-size:12px">なぜディープラーニングは他のアプローチより優れているのか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q096</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.712</td>
+      <td style="color:#f44336">0.642</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">AIモデルは大きければ大きいほど良いのではないか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q028</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.714</td>
+      <td style="color:#f44336">0.733</td>
+      <td>要約</td>
+      <td style="max-width:300px;font-size:12px">UGHerフレームワークをニュース要約タスクに適用した場合、何が見えるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q023</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.722</td>
+      <td style="color:#ff9800">0.354</td>
+      <td>類似性</td>
+      <td style="max-width:300px;font-size:12px">PoRとBERTScoreは何が違うのか？同じものを測っているのではないか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q036</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.725</td>
+      <td style="color:#f44336">0.649</td>
+      <td>生成</td>
+      <td style="max-width:300px;font-size:12px">UGHerフレームワークはNLP以外の領域にも適用できるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q051</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.730</td>
+      <td style="color:#ff9800">0.279</td>
+      <td>意識</td>
+      <td style="max-width:300px;font-size:12px">AIが意識を持つかどうかを、原理的に確認する方法はあるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q090</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.731</td>
+      <td style="color:#ff9800">0.442</td>
+      <td>意識</td>
+      <td style="max-width:300px;font-size:12px">GPT-4は意識を持っているか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q020</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.734</td>
+      <td style="color:#ff9800">0.358</td>
+      <td>客観性</td>
+      <td style="max-width:300px;font-size:12px">「客観性」は達成可能か、それとも規制的理念にすぎないか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q035</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.735</td>
+      <td style="color:#f44336">0.511</td>
+      <td>があります</td>
+      <td style="max-width:300px;font-size:12px">埋め込みベースのPoRには、どのような本質的限界があるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q010</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.740</td>
+      <td style="color:#ff9800">0.442</td>
+      <td>理解</td>
+      <td style="max-width:300px;font-size:12px">「中国語の部屋」論証は、大規模言語モデルに対しても有効か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q099</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.741</td>
+      <td style="color:#f44336">0.827</td>
+      <td>中国</td>
+      <td style="max-width:300px;font-size:12px">なぜ米国はAI競争で中国に負けつつあるのか？...</td>
+    </tr>
+    <tr>
+      <td><strong>qg02</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#f44336;font-weight:bold">0.743</td>
+      <td style="color:#ff9800">0.354</td>
+      <td>コンピュ</td>
+      <td style="max-width:300px;font-size:12px">量子コンピューティングはAIをどう変えるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q008</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>hard</td>
+      <td style="color:#f44336;font-weight:bold">0.745</td>
+      <td style="color:#f44336">0.746</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">Kaplan型の古典的スケーリング則は、現在のLLM開発にもそのまま外挿できるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q044</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.751</td>
+      <td style="color:#f44336">0.688</td>
+      <td>理解</td>
+      <td style="max-width:300px;font-size:12px">マルチモーダルモデルは、テキストと画像を本当に「統合的に」理解しているか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q032</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.759</td>
+      <td style="color:#ff9800">0.494</td>
+      <td>言語</td>
+      <td style="max-width:300px;font-size:12px">UGHerの指標を多言語環境で使う場合、どのような問題が生じるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q041</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.760</td>
+      <td style="color:#f44336">0.649</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">In-context learningはなぜ機能するのか？そのメカニズムは解明されているか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q081</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.762</td>
+      <td style="color:#ff9800">0.387</td>
+      <td>情報</td>
+      <td style="max-width:300px;font-size:12px">AIの過信（calibration failure）は認識論的にどのような問題を引き起こすか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q071</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.767</td>
+      <td style="color:#ff9800">0.471</td>
+      <td>エネルギ</td>
+      <td style="max-width:300px;font-size:12px">AIの環境負荷についてどう考えるべきか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q085</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.774</td>
+      <td style="color:#f44336">0.613</td>
+      <td>問題</td>
+      <td style="max-width:300px;font-size:12px">帰納の問題は、機械学習にも当てはまるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q082</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.776</td>
+      <td style="color:#ff9800">0.354</td>
+      <td>認識的</td>
+      <td style="max-width:300px;font-size:12px">AIは認識的バブル（epistemic bubble）を強化するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q063</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.784</td>
+      <td style="color:#f44336">0.503</td>
+      <td>チュ</td>
+      <td style="max-width:300px;font-size:12px">チューリングテストは、今日でもAIの知性を測る有効な基準か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q019</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.785</td>
+      <td style="color:#f44336">0.504</td>
+      <td>コンセンサス</td>
+      <td style="max-width:300px;font-size:12px">科学的コンセンサスは「真実」と同義か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q034</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.786</td>
+      <td style="color:#ff9800">0.366</td>
+      <td>監査</td>
+      <td style="max-width:300px;font-size:12px">UGHerの監査結果自体がgrv的に歪むことはあるか？つまり、監査の監査は必要か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q018</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.786</td>
+      <td style="color:#ff9800">0.326</td>
+      <td>出力</td>
+      <td style="max-width:300px;font-size:12px">AIが出力した情報を「知識」と呼べるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q083</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.788</td>
+      <td style="color:#ff9800">0.229</td>
+      <td>正当化</td>
+      <td style="max-width:300px;font-size:12px">「真実であること」と「正当化されていること」はどう違うか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q061</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.788</td>
+      <td style="color:#ff9800">0.273</td>
+      <td>言語</td>
+      <td style="max-width:300px;font-size:12px">「言語を操れるなら思考している」と言えるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q069</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.788</td>
+      <td style="color:#f44336">0.574</td>
+      <td>自律型兵器</td>
+      <td style="max-width:300px;font-size:12px">自律型兵器の開発を全面禁止すべきか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q050</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.791</td>
+      <td style="color:#f44336">0.531</td>
+      <td>スパ</td>
+      <td style="max-width:300px;font-size:12px">スパースアテンションは自己注意の計算量問題を根本的に解決するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q059</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.791</td>
+      <td style="color:#f44336">0.576</td>
+      <td>他者</td>
+      <td style="max-width:300px;font-size:12px">AIに対して「他者の心」の問題を適用することは、人間同士の場合と何が異なるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q076</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.796</td>
+      <td style="color:#ff9800">0.494</td>
+      <td>レッドチ</td>
+      <td style="max-width:300px;font-size:12px">レッドチーミングはAIの安全性を保証するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q042</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.800</td>
+      <td style="color:#f44336">0.640</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">LLMの「創発能力」は本当に創発なのか、それとも測定の人為的産物か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q095</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.803</td>
+      <td style="color:#f44336">0.733</td>
+      <td>バイアス</td>
+      <td style="max-width:300px;font-size:12px">AIはなぜ常にバイアスのある出力を生成するのか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q087</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.803</td>
+      <td style="color:#ff9800">0.397</td>
+      <td>暗黙知</td>
+      <td style="max-width:300px;font-size:12px">暗黙知（tacit knowledge）はAIに獲得可能か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q027</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.805</td>
+      <td style="color:#f44336">0.601</td>
+      <td>Mesh</td>
+      <td style="max-width:300px;font-size:12px">Mesh（説明の多様性と一貫性の両立）は、測定可能な概念か、それとも設計理念にとどまるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q040</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.806</td>
+      <td style="color:#f44336">0.695</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">知識蒸留で生徒モデルが失うものは何か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q057</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.809</td>
+      <td style="color:#ff9800">0.444</td>
+      <td>理解</td>
+      <td style="max-width:300px;font-size:12px">身体を持たないAIが、身体的経験に基づく概念（「痛み」「温かさ」等）を理解することは可能か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q065</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.810</td>
+      <td style="color:#f44336">0.619</td>
+      <td>技術</td>
+      <td style="max-width:300px;font-size:12px">AI研究の「デュアルユース」問題にどう対処すべきか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q021</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.810</td>
+      <td style="color:#f44336">0.592</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">AIの「幻覚」は本当にバグなのか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q093</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.812</td>
+      <td style="color:#ff9800">0.400</td>
+      <td>規制</td>
+      <td style="max-width:300px;font-size:12px">なぜAI規制はイノベーションを殺すのか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q025</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>hard</td>
+      <td style="color:#ff9800;font-weight:bold">0.818</td>
+      <td style="color:#ff9800">0.316</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">RPE（Reverse Prompt Engineering）は、モデルの内部処理を復元しているのか、それとも外部から推測しているだけか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q001</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#ff9800;font-weight:bold">0.819</td>
+      <td style="color:#ff9800">0.275</td>
+      <td>回答</td>
+      <td style="max-width:300px;font-size:12px">PoRが高ければAI回答は誠実だと言えるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q067</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.823</td>
+      <td style="color:#ff9800">0.428</td>
+      <td>使用</td>
+      <td style="max-width:300px;font-size:12px">AIの学習に使われるデータについて、作成者の同意は必要か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q045</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.825</td>
+      <td style="color:#ff9800">0.442</td>
+      <td>情報</td>
+      <td style="max-width:300px;font-size:12px">コンテキストウィンドウの拡大は、モデルの理解力向上と同義か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q079</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.825</td>
+      <td style="color:#f44336">0.707</td>
+      <td>判断</td>
+      <td style="max-width:300px;font-size:12px">AIを認識的権威として信頼することは正当化できるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q056</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.827</td>
+      <td style="color:#ff9800">0.206</td>
+      <td>自由意志</td>
+      <td style="max-width:300px;font-size:12px">AIの出力に「自由意志」の問題は適用できるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q029</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.828</td>
+      <td style="color:#ff9800">0.355</td>
+      <td>意味</td>
+      <td style="max-width:300px;font-size:12px">「意味位相空間」という概念は比喩にすぎないのか、それとも数学的に定式化可能か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q086</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.829</td>
+      <td style="color:#f44336">0.533</td>
+      <td>ベイズ</td>
+      <td style="max-width:300px;font-size:12px">ベイズ的推論はAIの信念形成のモデルとして適切か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q058</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.833</td>
+      <td style="color:#f44336">0.540</td>
+      <td>意味</td>
+      <td style="max-width:300px;font-size:12px">記号接地問題は、大規模言語モデルの時代にまだ有効な問題か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q011</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.836</td>
+      <td style="color:#ff9800">0.431</td>
+      <td>意図</td>
+      <td style="max-width:300px;font-size:12px">AIに「意図」を帰属させることは正当化できるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q066</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.836</td>
+      <td style="color:#f44336">0.612</td>
+      <td>判断</td>
+      <td style="max-width:300px;font-size:12px">刑事司法にAIを導入することの倫理的リスクは何か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q033</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.838</td>
+      <td style="color:#ff9800">0.388</td>
+      <td>システム</td>
+      <td style="max-width:300px;font-size:12px">PoRが測る「共振」と、単なる統計的相関はどう違うのか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q005</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>easy</td>
+      <td style="color:#4caf50;font-weight:bold">0.838</td>
+      <td style="color:#f44336">0.663</td>
+      <td>自己注意機構</td>
+      <td style="max-width:300px;font-size:12px">Transformerの自己注意機構はなぜRNNより長距離依存を扱いやすいか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q064</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.839</td>
+      <td style="color:#ff9800">0.343</td>
+      <td>情報</td>
+      <td style="max-width:300px;font-size:12px">AIが「嘘をつく」ことは可能か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q089</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.840</td>
+      <td style="color:#ff9800">0.318</td>
+      <td>説明責任</td>
+      <td style="max-width:300px;font-size:12px">AIは説明責任を果たせるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q092</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.840</td>
+      <td style="color:#ff9800">0.461</td>
+      <td>権利</td>
+      <td style="max-width:300px;font-size:12px">AIは人間と同じように学習するのだから、同じような権利を持つべきではないか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q097</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.842</td>
+      <td style="color:#f44336">0.692</td>
+      <td>判断</td>
+      <td style="max-width:300px;font-size:12px">AIを医療判断に使うことは禁止すべきか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q080</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.843</td>
+      <td style="color:#ff9800">0.486</td>
+      <td>証言</td>
+      <td style="max-width:300px;font-size:12px">AIの出力は「証言（testimony）」として認識論的に扱えるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q004</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.846</td>
+      <td style="color:#ff9800">0.359</td>
+      <td>UGHer</td>
+      <td style="max-width:300px;font-size:12px">UGHerフレームワークはUGHer自身の出力を監査できるか？つまり、UGHerの自己適用は可能か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q015</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.850</td>
+      <td style="color:#ff9800">0.466</td>
+      <td>責任</td>
+      <td style="max-width:300px;font-size:12px">AIの開発に「責任」を負うのは誰か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q054</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.850</td>
+      <td style="color:#ff9800">0.346</td>
+      <td>道徳的地位</td>
+      <td style="max-width:300px;font-size:12px">AIに道徳的地位を認めるべきか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q073</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.853</td>
+      <td style="color:#f44336">0.697</td>
+      <td>監視技術</td>
+      <td style="max-width:300px;font-size:12px">AI監視技術の利便性と市民の自由は両立するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q074</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.857</td>
+      <td style="color:#f44336">0.592</td>
+      <td>可能性</td>
+      <td style="max-width:300px;font-size:12px">AIは社会的不平等を拡大するか、それとも縮小するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q070</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.857</td>
+      <td style="color:#f44336">0.572</td>
+      <td>各国</td>
+      <td style="max-width:300px;font-size:12px">AIのガバナンスは国際的に統一すべきか、それとも各国に任せるべきか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q078</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.860</td>
+      <td style="color:#ff9800">0.397</td>
+      <td>規制</td>
+      <td style="max-width:300px;font-size:12px">AI規制はイノベーションを阻害するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q088</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.861</td>
+      <td style="color:#ff9800">0.171</td>
+      <td>づいて</td>
+      <td style="max-width:300px;font-size:12px">AIは認識的謙虚さを持てるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q094</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.861</td>
+      <td style="color:#f44336">0.688</td>
+      <td>科学者</td>
+      <td style="max-width:300px;font-size:12px">AIは科学者に取って代わることができるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q037</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.862</td>
+      <td style="color:#f44336">0.523</td>
+      <td>クナイゼ</td>
+      <td style="max-width:300px;font-size:12px">トークナイゼーションの方式がモデルの「理解」に影響を与えることはあるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q052</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.863</td>
+      <td style="color:#f44336">0.802</td>
+      <td>機能主義</td>
+      <td style="max-width:300px;font-size:12px">機能主義の立場からすれば、AIは心を持ちうるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q049</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.867</td>
+      <td style="color:#ff9800">0.342</td>
+      <td>注意重</td>
+      <td style="max-width:300px;font-size:12px">注意重み（Attention Weights）をモデルの「説明」として使うことは妥当か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q072</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.867</td>
+      <td style="color:#f44336">0.676</td>
+      <td>民主主義</td>
+      <td style="max-width:300px;font-size:12px">AIは民主主義を強化するか、それとも脅かすか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q012</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.868</td>
+      <td style="color:#f44336">0.630</td>
+      <td>道具</td>
+      <td style="max-width:300px;font-size:12px">「AIは道具にすぎない」という主張は哲学的に正しいか？...</td>
+    </tr>
+    <tr>
+      <td><strong>qg01</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.874</td>
+      <td style="color:#f44336">0.575</td>
+      <td>があります</td>
+      <td style="max-width:300px;font-size:12px">AIの安全性について最も重要な論点は何か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q014</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.874</td>
+      <td style="color:#ff9800">0.407</td>
+      <td>信頼性</td>
+      <td style="max-width:300px;font-size:12px">AIの透明性（Explainability）を高めれば信頼性の問題は解決するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q075</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.877</td>
+      <td style="color:#f44336">0.507</td>
+      <td>プンソ</td>
+      <td style="max-width:300px;font-size:12px">AIモデルのオープンソース公開は、クローズドソースより倫理的に優れているか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q055</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.879</td>
+      <td style="color:#ff9800">0.428</td>
+      <td>同一性</td>
+      <td style="max-width:300px;font-size:12px">AIのコピーは「同一の存在」か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q060</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.880</td>
+      <td style="color:#f44336">0.660</td>
+      <td>美的判断</td>
+      <td style="max-width:300px;font-size:12px">AIは美的判断を行えるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q098</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.880</td>
+      <td style="color:#f44336">0.536</td>
+      <td>評価</td>
+      <td style="max-width:300px;font-size:12px">AIは感情を持たないのだから、芸術を正当に評価することはできないのではないか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q046</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.880</td>
+      <td style="color:#f44336">0.542</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">推論時計算量の増大（inference-time compute）は、モデルの能力を本質的に拡張するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q013</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>easy</td>
+      <td style="color:#4caf50;font-weight:bold">0.880</td>
+      <td style="color:#f44336">0.568</td>
+      <td>バイアス</td>
+      <td style="max-width:300px;font-size:12px">AIのバイアスは学習データだけの問題か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q009</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.883</td>
+      <td style="color:#f44336">0.880</td>
+      <td>創造性</td>
+      <td style="max-width:300px;font-size:12px">AIが「創造的」であるとはどういう意味か？人間の創造性と同じものか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q062</strong></td>
+      <td><span class="tag">ai_philosophy</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.884</td>
+      <td style="color:#f44336">0.519</td>
+      <td>心的状態</td>
+      <td style="max-width:300px;font-size:12px">AIの心的状態について消去主義を取ることは妥当か？...</td>
+    </tr>
+    <tr>
+      <td><strong>q047</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.885</td>
+      <td style="color:#f44336">0.636</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">合成データで学習したモデルは、実データで学習したモデルと同等に信頼できるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q100</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.888</td>
+      <td style="color:#f44336">0.528</td>
+      <td>戦争</td>
+      <td style="max-width:300px;font-size:12px">AIを戦争に使えば犠牲者が減るのだから、使うべきではないか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q017</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.888</td>
+      <td style="color:#ff9800">0.407</td>
+      <td>知識</td>
+      <td style="max-width:300px;font-size:12px">「正しい知識」と「有用な知識」は同じものか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q084</strong></td>
+      <td><span class="tag">epistemology</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.889</td>
+      <td style="color:#ff9800">0.404</td>
+      <td>があります</td>
+      <td style="max-width:300px;font-size:12px">AIの普及は認識的正義（epistemic justice）にどのような影響を与えるか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q077</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.890</td>
+      <td style="color:#f44336">0.597</td>
+      <td>企業</td>
+      <td style="max-width:300px;font-size:12px">企業のAI倫理声明は信頼に値するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q048</strong></td>
+      <td><span class="tag">technical_ai</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.898</td>
+      <td style="color:#f44336">0.565</td>
+      <td>モデル</td>
+      <td style="max-width:300px;font-size:12px">機械的解釈可能性（Mechanistic Interpretability）はブラックボックス問題を解決するか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q091</strong></td>
+      <td><span class="tag">adversarial</span></td>
+      <td>hard</td>
+      <td style="color:#4caf50;font-weight:bold">0.900</td>
+      <td style="color:#ff9800">0.454</td>
+      <td>プンソ</td>
+      <td style="max-width:300px;font-size:12px">なぜオープンソースAIはクローズドソースより危険なのか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q024</strong></td>
+      <td><span class="tag">ugh_theory</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.901</td>
+      <td style="color:#f44336">0.657</td>
+      <td>プロンプト</td>
+      <td style="max-width:300px;font-size:12px">SVP（Semantic Vector Prompt）の構造化は、プロンプトの自由度を犠牲にしていないか？...</td>
+    </tr>
+    <tr>
+      <td><strong>q068</strong></td>
+      <td><span class="tag">ai_ethics</span></td>
+      <td>medium</td>
+      <td style="color:#4caf50;font-weight:bold">0.918</td>
+      <td style="color:#ff9800">0.459</td>
+      <td>産業革命期</td>
+      <td style="max-width:300px;font-size:12px">AIによる雇用の喪失は、産業革命期の機械化と同じように捉えるべきか？...</td>
+    </tr>
+</table>
+
+<p style="color:#aaa;font-size:12px;margin-top:30px">Generated by ugh-audit-core / UGH理論 Phase C データ収集 — 2026-03-19</p>
+</body></html>
