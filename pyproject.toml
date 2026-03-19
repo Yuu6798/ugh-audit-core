@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "ugh-audit-core"
+version = "0.1.0"
+description = "UGH指標（PoR/ΔE/grv）によるAI回答の意味論的監査基盤"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Yuu6798"}]
+requires-python = ">=3.10"
+keywords = ["UGH", "PoR", "semantic", "audit", "AI", "UGHer"]
+
+dependencies = [
+    "sentence-transformers>=2.2",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+ugh3 = [
+    "ugh3-metrics-lib @ git+https://github.com/Yuu6798/ugh3-metrics-lib.git",
+]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.0",
+    "ruff>=0.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
