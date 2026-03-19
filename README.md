@@ -46,9 +46,17 @@ AIの回答が「意味的に誠実だったか」を定量的に評価・記録
 ## インストール
 
 ```bash
-pip install -e .
-# または
-pip install -r requirements.txt
+# 基本（minimal backend — numpy のみ、テスト用）
+pip install -e ".[dev]"
+
+# フル機能（sentence-transformers + 日本語形態素解析）
+pip install -e ".[full]"
+
+# 日本語対応のみ追加
+pip install -e ".[ja]"
+
+# ugh3-metrics-lib native backend
+pip install -e ".[ugh3]"
 ```
 
 依存：`ugh3-metrics-lib`（PoR/ΔE/grv計算エンジン）

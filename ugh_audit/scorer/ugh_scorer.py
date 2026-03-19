@@ -137,18 +137,40 @@ class UGHScorer:
     def _score_with_ugh3(
         self, question: str, response: str, reference: str, session_id: str
     ) -> AuditResult:
+        """
+        ugh3-metrics-lib の実API に合わせた native 経路。
+
+        ugh3 API 契約（ugh3-metrics-lib 実装より）:
+            PorV4().score(a: str, b: str) -> float  ※シグモイド変換済み 0-1
+            DeltaE4().score(a: str, b: str) -> float  ※コサイン距離 0-1
+            GrvV4().score(a: str, b: str) -> float  ※TF-IDF+PMI+Entropy 0-1
+            POR_FIRE_THRESHOLD = 0.82 (core/metrics.py)
+
+        .fired / .weights プロパティは存在しない。
+        全て float を直接返すので自前で判定・変換する。
+        """
         try:
-            por_result = self._por.compute(question, [response])
-            delta_e_result = self._delta_e.compute(reference, response)
-            grv_result = self._grv.compute(response)
+            por: float = float(self._por.score(question, response))
+            por_fired: bool = por >= POR_FIRE_THRESHOLD
+
+            delta_e: float = float(self._delta_e.score(reference, response))
+            delta_e = max(0.0, min(1.0, delta_e))
+
+            # GrvV4.score(a, b) は b を無視して a のスカラー重力値を返す
+            # 辞書形式の grv はフォールバック実装で補完する
+            grv_scalar: float = float(self._grv.score(response, ""))
+            grv: dict = {"_grv_scalar": round(grv_scalar, 4)}
+            # 語彙分布は ST フォールバックの grv 計算で補完
+            grv.update(self._compute_grv(response))
+
             return AuditResult(
                 question=question,
                 response=response,
                 reference=reference,
-                por=float(por_result.score),
-                por_fired=bool(por_result.fired),
-                delta_e=float(delta_e_result.score),
-                grv=dict(grv_result.weights),
+                por=por,
+                por_fired=por_fired,
+                delta_e=delta_e,
+                grv=grv,
                 model_id=self.model_id,
                 session_id=session_id,
                 created_at=datetime.now(timezone.utc),
