@@ -5,8 +5,16 @@ GoldenStore の日本語マッチングテスト
 from ugh_audit.reference.golden_store import GoldenStore, GoldenEntry
 
 
-def test_find_reference_exact_substring(tmp_path):
+def _empty_store(tmp_path) -> GoldenStore:
+    """初期データなしの空ストアを返す"""
     store = GoldenStore(path=tmp_path / "golden.json")
+    # 初期データをクリアしてテスト用エントリのみにする
+    store._store.clear()
+    return store
+
+
+def test_find_reference_exact_substring(tmp_path):
+    store = _empty_store(tmp_path)
     store.add("test", GoldenEntry(
         question="AIは意味を持てるか",
         reference="AIは意味と共振する",
@@ -18,7 +26,7 @@ def test_find_reference_exact_substring(tmp_path):
 
 
 def test_find_reference_bigram(tmp_path):
-    store = GoldenStore(path=tmp_path / "golden.json")
+    store = _empty_store(tmp_path)
     store.add("por", GoldenEntry(
         question="PoRとは何か",
         reference="意味の発火点",
@@ -30,14 +38,12 @@ def test_find_reference_bigram(tmp_path):
 
 
 def test_find_reference_no_match(tmp_path):
-    store = GoldenStore(path=tmp_path / "golden.json")
+    store = _empty_store(tmp_path)
+    # 空ストアでは完全に無関係な質問は None
     ref = store.find_reference("全く関係のない質問xyz")
-    # マッチしない場合は None か初期エントリの reference
-    # 初期データ3件があるので完全に無関係ならNoneが理想だが
-    # Jaccard 0.1 未満なら None を返す
-    assert ref is None or isinstance(ref, str)
+    assert ref is None
 
 
 def test_find_reference_empty(tmp_path):
-    store = GoldenStore(path=tmp_path / "golden.json")
+    store = _empty_store(tmp_path)
     assert store.find_reference("") is None
