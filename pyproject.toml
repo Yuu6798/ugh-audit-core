@@ -19,6 +19,8 @@ dependencies = [
 [project.optional-dependencies]
 full = [
     "sentence-transformers>=2.2",
+    "fugashi>=1.3",
+    "ipadic>=1.0",
 ]
 ugh3 = [
     "ugh3-metrics-lib @ git+https://github.com/Yuu6798/ugh3-metrics-lib.git",

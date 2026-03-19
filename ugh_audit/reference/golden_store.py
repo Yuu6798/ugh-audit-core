@@ -118,12 +118,42 @@ class GoldenStore:
         self._save()
 
     def find_reference(self, question: str) -> Optional[str]:
-        """質問に最も近いreferenceを返す（簡易マッチング）"""
+        """
+        質問に最も近い reference を返す。
+
+        マッチング戦略（優先順位順）:
+            1. question が golden entry の question を部分文字列として含む
+            2. golden entry の question が question の部分文字列
+            3. 文字レベルの bigram 重複率が最大のエントリ（日本語対応）
+        """
+        if not question:
+            return None
+
+        # 戦略 1 & 2: 直接部分一致
         for entry in self._store.values():
-            # 部分一致で近似
-            if any(w in question for w in entry.question.split()):
+            if entry.question in question or question in entry.question:
                 return entry.reference
-        return None
+
+        # 戦略 3: bigram 重複率（日本語の形態素解析なしでも有効）
+        def bigrams(text: str) -> set:
+            return {text[i:i+2] for i in range(len(text) - 1)}
+
+        q_bg = bigrams(question)
+        best_score = 0.0
+        best_ref: Optional[str] = None
+
+        for entry in self._store.values():
+            e_bg = bigrams(entry.question)
+            union = q_bg | e_bg
+            if not union:
+                continue
+            score = len(q_bg & e_bg) / len(union)  # Jaccard係数
+            if score > best_score:
+                best_score = score
+                best_ref = entry.reference
+
+        # Jaccard 0.1 以上なら採用（低すぎる場合は None を返す）
+        return best_ref if best_score >= 0.1 else None
 
     def list_keys(self):
         return list(self._store.keys())
