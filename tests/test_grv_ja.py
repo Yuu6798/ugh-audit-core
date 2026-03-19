@@ -16,22 +16,26 @@ def test_grv_without_fugashi_fallback():
         reference="参照文です。",
     )
     assert result is not None
-    # minimal / ST どちらでも dict or None
     assert isinstance(result.grv, dict)
 
 
 def test_grv_with_fugashi():
-    """fugashi がある場合は形態素単位のキーが含まれること"""
+    """fugashi がある場合、score() 経由で grv が dict として返ること"""
     pytest.importorskip("fugashi", reason="fugashi not installed")
 
-    from ugh_audit.scorer.ugh_scorer import UGHScorer
+    from ugh_audit.scorer import UGHScorer
 
     s = UGHScorer()
-    # _grv_with_fugashi を直接呼んで動作確認
-    grv = s._grv_with_fugashi("AIは意味を持てるか。意味と共振する動的プロセスです。")
-    # fugashi が動いていれば空でないはず
-    # （MeCab辞書がなければ空になることもあるので、エラーにならないことだけ確認）
-    assert isinstance(grv, dict)
+    # public API 経由でテスト（リファクタリング耐性を優先）
+    result = s.score(
+        question="AIは意味を持てるか",
+        response="AIは意味を持てるか。意味と共振する動的プロセスです。",
+        reference="意味位相空間での共振",
+    )
+    assert isinstance(result.grv, dict)
+    # fugashi が正常動作している場合は空でないはず
+    # （MeCab辞書未整備環境では空になることも許容）
+    assert result.grv is not None
 
 
 def test_grv_regex_fallback():
@@ -42,4 +46,4 @@ def test_grv_regex_fallback():
     grv = s._grv_with_regex("AIは意味を持てるか。意味と共振する動的プロセスです。")
     assert isinstance(grv, dict)
     # 「意味」は2文字以上の漢字ブロックとして抽出されるはず
-    assert "意味" in grv or len(grv) >= 0  # 空でもエラーにならない
+    assert "意味" in grv
