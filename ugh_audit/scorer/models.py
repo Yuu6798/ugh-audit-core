@@ -33,6 +33,15 @@ class AuditResult:
     session_id: str = ""
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
+    def __post_init__(self) -> None:
+        """delta_e と delta_e_full を同期（frozen なので object.__setattr__ を使用）"""
+        # delta_e_full が設定済みで delta_e が未設定 → delta_e を delta_e_full に同期
+        if self.delta_e == 0.0 and self.delta_e_full != 0.0:
+            object.__setattr__(self, "delta_e", self.delta_e_full)
+        # delta_e が設定済みで delta_e_full が未設定 → delta_e_full を delta_e に同期
+        if self.delta_e_full == 0.0 and self.delta_e != 0.0:
+            object.__setattr__(self, "delta_e_full", self.delta_e)
+
     # 評価サマリー
     @property
     def meaning_drift(self) -> str:
