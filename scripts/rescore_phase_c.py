@@ -98,6 +98,11 @@ def main() -> None:
                 reference_core=reference_core,
             )
 
+            # per-row で minimal fallback が発生した場合はスキップ（all-zero 汚染防止）
+            if scorer.last_backend == "minimal":
+                print(f"Warning: {qid} で minimal backend にフォールバック、スキップ")
+                continue
+
             results.append({
                 "id": qid,
                 "category": record.get("category") or q.get("category", ""),

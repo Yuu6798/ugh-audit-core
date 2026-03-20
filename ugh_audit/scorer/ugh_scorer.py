@@ -182,11 +182,9 @@ class UGHScorer:
                 delta_e_summary = delta_e_full
 
             # GrvV4.score(a, b) は b を無視して a のスカラー重力値を返す
-            # 辞書形式の grv はフォールバック実装で補完する
-            grv_scalar: float = float(self._grv.score(response, ""))
-            grv: dict = {"_grv_scalar": round(grv_scalar, 4)}
-            # 語彙分布は ST フォールバックの grv 計算で補完
-            grv.update(self._compute_grv(response))
+            # スカラー値は内部参考値として保持するが grv dict には含めない
+            # （grv は純粋な token→weight map として公開する）
+            grv: dict = self._compute_grv(response)
 
             return AuditResult(
                 question=question,
