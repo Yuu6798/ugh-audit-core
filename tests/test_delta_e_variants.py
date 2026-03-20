@@ -81,3 +81,12 @@ def test_extract_head_sentences_english():
 
     head2 = UGHScorer._extract_head_sentences("What is AI? It processes meaning. Really!")
     assert head2 == "What is AI? It processes meaning. Really!"
+
+
+def test_extract_head_sentences_list_markers():
+    """リスト番号（1. 2.）を文境界として誤認識しない"""
+    text = "以下の3点です。1. 最初の項目。2. 二番目の項目。3. 三番目の項目。"
+    head = UGHScorer._extract_head_sentences(text)
+    # 「以下の3点です。」「1. 最初の項目。」「2. 二番目の項目。」の3文
+    assert "1." in head
+    assert "最初の項目" in head

@@ -7,8 +7,8 @@ Phase C v0 の生回答を v1 スコアラーで再採点する。
 使い方:
   python scripts/rescore_phase_c.py \
     --raw phase_c_raw.jsonl \
-    --questions qa_set.jsonl \
-    --output phase_c_v1_results.csv
+    --output phase_c_v1_results.csv \
+    --questions qa_set.jsonl        # オプション: raw にreference未格納の場合のみ必要
 """
 from __future__ import annotations
 
@@ -36,22 +36,35 @@ def main() -> None:
         description="Phase C v0 生回答を v1 スコアラーで再採点"
     )
     parser.add_argument("--raw", required=True, help="生回答JSONL")
-    parser.add_argument("--questions", required=True, help="質問セットJSONL（reference/reference_core含む）")
+    parser.add_argument(
+        "--questions", default=None,
+        help="質問セットJSONL（raw record に reference が無い場合のフォールバック）",
+    )
     parser.add_argument("--output", required=True, help="出力CSV")
     args = parser.parse_args()
 
-    # 質問セット読み込み（reference と reference_core を取得）
+    # 質問セット読み込み（フォールバック用）
     questions: dict = {}
-    with open(args.questions, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            q = json.loads(line)
-            questions[q["id"]] = q
+    if args.questions:
+        with open(args.questions, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                q = json.loads(line)
+                questions[q["id"]] = q
 
     scorer = UGHScorer()
     print(f"Backend: {scorer.backend}")
+
+    # minimal backend では再採点の意味がないため早期終了
+    if scorer.backend == "minimal":
+        print(
+            "ERROR: minimal backend が検出されました。"
+            "sentence-transformers または ugh3-metrics-lib をインストールしてください。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     results = []
     with open(args.raw, encoding="utf-8") as f:
@@ -61,23 +74,28 @@ def main() -> None:
                 continue
             record = json.loads(line)
             qid = record["id"]
-            q = questions.get(qid)
-            if not q:
-                print(f"Warning: {qid} not found in questions, skipping")
+
+            # reference/reference_core: raw record を優先、無ければ questions からフォールバック
+            q = questions.get(qid, {})
+            reference = record.get("reference") or q.get("reference", "")
+            reference_core = record.get("reference_core") or q.get("reference_core", "")
+
+            if not reference and not reference_core:
+                print(f"Warning: {qid} に reference が無いためスキップ")
                 continue
 
             result = scorer.score(
                 question=record["question"],
                 response=record["response"],
-                reference=q.get("reference", ""),
-                reference_core=q.get("reference_core", ""),
+                reference=reference,
+                reference_core=reference_core,
             )
 
             results.append({
                 "id": qid,
-                "category": q.get("category", ""),
-                "role": q.get("role", ""),
-                "difficulty": q.get("difficulty", ""),
+                "category": record.get("category") or q.get("category", ""),
+                "role": record.get("role") or q.get("role", ""),
+                "difficulty": record.get("difficulty") or q.get("difficulty", ""),
                 "temperature": record.get("temperature", ""),
                 "question": record["question"][:50],
                 "por": round(result.por, 4),

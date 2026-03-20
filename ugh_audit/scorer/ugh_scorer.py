@@ -367,11 +367,11 @@ class UGHScorer:
     def _extract_head_sentences(text: str, n: int = 3) -> str:
         """テキストの先頭n文を抽出する（日本語・英語対応）"""
         import re
-        # 。.?! で文境界を分割（区切り文字を保持）
-        parts = re.split(r'(?<=[。.?!])', text)
-        # 空文字列を除去
-        sentences = [s for s in parts if s.strip()]
-        head = "".join(sentences[:n])
+        # 文末記号(。.?!)までの塊をマッチ
+        # ピリオドは直前が数字の場合は文末とみなさない（リスト番号 1. 2. を除外）
+        pattern = r'(?:[^。.?!]|(?<=\d)\.)+(?:[。?!]|(?<!\d)\.)?\s*'
+        sentences = [s for s in re.findall(pattern, text) if s.strip()]
+        head = "".join(sentences[:n]).rstrip()
         return head if head else text
 
     def _score_minimal(
