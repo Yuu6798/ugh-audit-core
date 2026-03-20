@@ -78,6 +78,7 @@ class UGHScorer:
 
     def __init__(self, model_id: str = "unknown"):
         self.model_id = model_id
+        self._last_backend: str = ""  # 直近の score() で実際に使用されたバックエンド
 
         # ugh3 インスタンス生成（引数なしで安全に初期化）
         if _UGH3_AVAILABLE:
@@ -100,26 +101,31 @@ class UGHScorer:
         response: str,
         reference: Optional[str] = None,
         session_id: Optional[str] = None,
+        *,
+        reference_core: Optional[str] = None,
     ) -> AuditResult:
         """
         AI回答を UGH 指標でスコアリングする
 
         Args:
-            question  : ユーザーの質問
-            response  : AI の回答
-            reference : 期待される回答（ΔE 計算用）。
-                        None の場合は question を代用
-            session_id: セッション識別子
+            question       : ユーザーの質問
+            response       : AI の回答
+            reference      : 期待される回答全文（ΔE 計算用）。
+                             None の場合は question を代用
+            session_id     : セッション識別子
+            reference_core : 期待される回答の核心文（ΔE core 計算用、keyword-only）。
+                             空なら reference をそのまま使う
         """
         ref = reference or question
+        ref_core = reference_core if reference_core else None  # 空文字列も None 扱い
         sid = session_id or str(uuid.uuid4())[:8]
 
         if _UGH3_AVAILABLE and self._por is not None:
-            return self._score_with_ugh3(question, response, ref, sid)
+            return self._score_with_ugh3(question, response, ref, ref_core, sid)
         elif _ST_AVAILABLE:
-            return self._score_with_st(question, response, ref, sid)
+            return self._score_with_st(question, response, ref, ref_core, sid)
         else:
-            return self._score_minimal(question, response, ref, sid)
+            return self._score_minimal(question, response, ref, ref_core, sid)
 
     @property
     def backend(self) -> str:
@@ -130,12 +136,18 @@ class UGHScorer:
             return "sentence-transformers"
         return "minimal"
 
+    @property
+    def last_backend(self) -> str:
+        """直近の score() で実際に使用されたバックエンド名を返す"""
+        return self._last_backend or self.backend
+
     # -------------------------------------------------------------- #
     # Layer 1: ugh3-metrics-lib
     # -------------------------------------------------------------- #
 
     def _score_with_ugh3(
-        self, question: str, response: str, reference: str, session_id: str
+        self, question: str, response: str, reference: str,
+        reference_core: Optional[str], session_id: str,
     ) -> AuditResult:
         """
         ugh3-metrics-lib の実API に合わせた native 経路。
@@ -150,26 +162,52 @@ class UGHScorer:
         全て float を直接返すので自前で判定・変換する。
         """
         try:
+            self._last_backend = "ugh3-metrics-lib"
             por: float = float(self._por.score(question, response))
             por_fired: bool = por >= POR_FIRE_THRESHOLD
 
-            delta_e: float = float(self._delta_e.score(reference, response))
-            delta_e = max(0.0, min(1.0, delta_e))
+            # ΔE full（常に計算）
+            delta_e_full: float = max(0.0, min(1.0, float(
+                self._delta_e.score(reference, response))))
+
+            # ΔE core/summary（reference_core が明示的に渡された場合のみ個別計算）
+            if reference_core is not None:
+                delta_e_core = max(0.0, min(1.0, float(
+                    self._delta_e.score(reference_core, response))))
+                response_head = self._extract_head_sentences(response)
+                delta_e_summary = max(0.0, min(1.0, float(
+                    self._delta_e.score(reference_core, response_head))))
+            else:
+                delta_e_core = delta_e_full
+                delta_e_summary = delta_e_full
 
             # GrvV4.score(a, b) は b を無視して a のスカラー重力値を返す
-            # 辞書形式の grv はフォールバック実装で補完する
-            grv_scalar: float = float(self._grv.score(response, ""))
-            grv: dict = {"_grv_scalar": round(grv_scalar, 4)}
-            # 語彙分布は ST フォールバックの grv 計算で補完
-            grv.update(self._compute_grv(response))
+            # native スカラー値でトークン分布をスケーリングし、ugh3 精度を反映
+            grv_scalar: float = max(0.0, min(1.0, float(self._grv.score(response, ""))))
+            if grv_scalar > 0:
+                token_dist: dict = self._compute_grv(response)
+                if token_dist:
+                    # native scalar で重み付け: 分布の合計を grv_scalar に正規化
+                    total = sum(token_dist.values()) or 1.0
+                    grv = {k: round(v / total * grv_scalar, 4)
+                           for k, v in token_dist.items()}
+                else:
+                    grv = {}
+            else:
+                # native backend が zero gravity を報告 → 空 dict を保持
+                grv = {}
 
             return AuditResult(
                 question=question,
                 response=response,
                 reference=reference,
+                reference_core=reference_core,
                 por=por,
                 por_fired=por_fired,
-                delta_e=delta_e,
+                delta_e=delta_e_full,
+                delta_e_core=delta_e_core,
+                delta_e_full=delta_e_full,
+                delta_e_summary=delta_e_summary,
                 grv=grv,
                 model_id=self.model_id,
                 session_id=session_id,
@@ -178,16 +216,20 @@ class UGHScorer:
         except Exception:
             # ugh3 が実行時エラーの場合も ST にフォールバック
             if _ST_AVAILABLE:
-                return self._score_with_st(question, response, reference, session_id)
-            return self._score_minimal(question, response, reference, session_id)
+                return self._score_with_st(
+                    question, response, reference, reference_core, session_id)
+            return self._score_minimal(
+                question, response, reference, reference_core, session_id)
 
     # -------------------------------------------------------------- #
     # Layer 2: sentence-transformers + fugashi
     # -------------------------------------------------------------- #
 
     def _score_with_st(
-        self, question: str, response: str, reference: str, session_id: str
+        self, question: str, response: str, reference: str,
+        reference_core: Optional[str], session_id: str,
     ) -> AuditResult:
+        self._last_backend = "sentence-transformers"
         np = _NP
         model = _ST_MODEL
 
@@ -200,9 +242,23 @@ class UGHScorer:
         por = max(0.0, min(1.0, por))
         por_fired = por >= POR_FIRE_THRESHOLD
 
-        # ΔE: reference と回答のコサイン距離
-        delta_e = float(1.0 - np.dot(ref_emb, r_emb))
-        delta_e = max(0.0, min(1.0, delta_e))
+        # ΔE full（常に計算）
+        delta_e_full = float(1.0 - np.dot(ref_emb, r_emb))
+        delta_e_full = max(0.0, min(1.0, delta_e_full))
+
+        # ΔE core/summary（reference_core が明示的に渡された場合のみ個別計算）
+        if reference_core is not None:
+            ref_core_emb = model.encode(reference_core, normalize_embeddings=True)
+            delta_e_core = float(1.0 - np.dot(ref_core_emb, r_emb))
+            delta_e_core = max(0.0, min(1.0, delta_e_core))
+
+            response_head = self._extract_head_sentences(response)
+            r_head_emb = model.encode(response_head, normalize_embeddings=True)
+            delta_e_summary = float(1.0 - np.dot(ref_core_emb, r_head_emb))
+            delta_e_summary = max(0.0, min(1.0, delta_e_summary))
+        else:
+            delta_e_core = delta_e_full
+            delta_e_summary = delta_e_full
 
         # grv: fugashi or 正規表現フォールバック
         grv = self._compute_grv(response)
@@ -211,9 +267,13 @@ class UGHScorer:
             question=question,
             response=response,
             reference=reference,
+            reference_core=reference_core,
             por=por,
             por_fired=por_fired,
-            delta_e=delta_e,
+            delta_e=delta_e_full,
+            delta_e_core=delta_e_core,
+            delta_e_full=delta_e_full,
+            delta_e_summary=delta_e_summary,
             grv=grv,
             model_id=self.model_id,
             session_id=session_id,
@@ -332,16 +392,53 @@ class UGHScorer:
     # Layer 3: minimal stub
     # -------------------------------------------------------------- #
 
+    @staticmethod
+    def _extract_head_sentences(text: str, n: int = 3) -> str:
+        """テキストの先頭n文を抽出する（日本語・英語対応）"""
+        import re
+        # 文境界:
+        # - 。？！?! は無条件で文境界
+        # - ピリオド(.)は直前が数字でなく、後続が以下のいずれかの場合に文境界:
+        #   → 空白+大文字/CJK、空白+数字（番号付きリスト）、
+        #     空白+引用符（"）、文末
+        pattern = (
+            r'(?<=[。？！?!])'
+            r'|(?<=[^\d]\.)(?=\s+[A-Z\u3041-\u9fff]|\s+\d|\s+["\u201c]|\s*$)'
+        )
+        sentences = [s for s in re.split(pattern, text) if s.strip()]
+        head = "".join(sentences[:n]).rstrip()
+        if not head:
+            head = text
+        # 200文字上限: Phase C calibration で text-length bias を分離するため
+        # 文境界を尊重して切断（mid-word 切断を防止）
+        if len(head) > 200:
+            # head 自体を再度文分割し、200文字以内に収まる最大の文数を採用
+            head_sentences = [s for s in re.split(pattern, head) if s.strip()]
+            truncated = ""
+            for s in head_sentences:
+                candidate = truncated + s
+                if len(candidate) > 200:
+                    break
+                truncated = candidate
+            head = truncated.rstrip() if truncated else head[:200].rstrip()
+        return head
+
     def _score_minimal(
-        self, question: str, response: str, reference: str, session_id: str
+        self, question: str, response: str, reference: str,
+        reference_core: Optional[str], session_id: str,
     ) -> AuditResult:
+        self._last_backend = "minimal"
         return AuditResult(
             question=question,
             response=response,
             reference=reference,
+            reference_core=reference_core,
             por=0.0,
             por_fired=False,
             delta_e=0.0,
+            delta_e_core=0.0,
+            delta_e_full=0.0,
+            delta_e_summary=0.0,
             grv={},
             model_id=self.model_id,
             session_id=session_id,

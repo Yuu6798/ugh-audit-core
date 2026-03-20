@@ -38,13 +38,37 @@ class AuditDB:
                     question    TEXT NOT NULL,
                     response    TEXT NOT NULL,
                     reference   TEXT,
+                    reference_core TEXT,
                     por         REAL NOT NULL,
                     por_fired   INTEGER NOT NULL,
                     delta_e     REAL NOT NULL,
+                    delta_e_core    REAL NOT NULL DEFAULT 0.0,
+                    delta_e_full    REAL NOT NULL DEFAULT 0.0,
+                    delta_e_summary REAL NOT NULL DEFAULT 0.0,
                     grv_json    TEXT NOT NULL DEFAULT '{}',
                     meaning_drift TEXT NOT NULL,
                     created_at  TEXT NOT NULL
                 )
+            """)
+            # 既存DBへのマイグレーション（カラム追加）
+            try:
+                conn.execute(
+                    "ALTER TABLE audit_runs ADD COLUMN reference_core TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass  # カラムが既に存在する場合はスキップ
+            for col in ("delta_e_core", "delta_e_full", "delta_e_summary"):
+                try:
+                    conn.execute(
+                        f"ALTER TABLE audit_runs ADD COLUMN {col} REAL DEFAULT 0.0"
+                    )
+                except sqlite3.OperationalError:
+                    continue  # カラムが既に存在する場合はスキップ
+            # 既存行の delta_e_full をレガシー delta_e から backfill
+            conn.execute("""
+                UPDATE audit_runs
+                SET delta_e_full = delta_e
+                WHERE delta_e_full = 0.0 AND delta_e != 0.0
             """)
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_session
@@ -64,17 +88,24 @@ class AuditDB:
             cursor = conn.execute("""
                 INSERT INTO audit_runs
                     (session_id, model_id, question, response, reference,
-                     por, por_fired, delta_e, grv_json, meaning_drift, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     reference_core,
+                     por, por_fired, delta_e,
+                     delta_e_core, delta_e_full, delta_e_summary,
+                     grv_json, meaning_drift, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 result.session_id,
                 result.model_id,
                 result.question,
                 result.response,
                 result.reference,
+                result.reference_core,
                 result.por,
                 int(result.por_fired),
                 result.delta_e,
+                result.delta_e_core,
+                result.delta_e_full,
+                result.delta_e_summary,
                 json.dumps(result.grv, ensure_ascii=False),
                 result.meaning_drift,
                 result.created_at.isoformat(),

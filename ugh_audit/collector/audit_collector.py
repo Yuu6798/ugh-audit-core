@@ -60,6 +60,8 @@ class AuditCollector:
         response: str,
         reference: Optional[str] = None,
         session_id: Optional[str] = None,
+        *,
+        reference_core: Optional[str] = None,
     ) -> AuditResult:
         """
         Q&A ペアをスコアリングして DB に保存する。
@@ -74,6 +76,7 @@ class AuditCollector:
             question=question,
             response=response,
             reference=ref,
+            reference_core=reference_core,
             session_id=session_id,
         )
         self._db.save(result)
@@ -96,6 +99,7 @@ class AuditCollector:
                 question=pair["question"],
                 response=pair["response"],
                 reference=pair.get("reference"),
+                reference_core=pair.get("reference_core"),
                 session_id=session_id,
             )
             results.append(result)
@@ -127,11 +131,14 @@ class SessionCollector:
         question: str,
         response: str,
         reference: Optional[str] = None,
+        *,
+        reference_core: Optional[str] = None,
     ) -> AuditResult:
         result = self._collector.collect(
             question=question,
             response=response,
             reference=reference,
+            reference_core=reference_core,
             session_id=self.session_id,
         )
         self._results.append(result)
