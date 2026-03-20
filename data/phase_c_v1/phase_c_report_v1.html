@@ -1,0 +1,2580 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Phase C v1 Report</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f5f5f5; }
+  h1, h2, h3 { color: #333; }
+  .meta { background: #e8f0fe; border: 1px solid #c2d7f2; padding: 12px; border-radius: 6px; margin-bottom: 20px; }
+  .meta dt { font-weight: bold; display: inline; }
+  .meta dd { display: inline; margin-right: 20px; }
+  table { border-collapse: collapse; margin: 10px 0; }
+  table.stats { width: auto; }
+  table.stats th, table.stats td { padding: 4px 12px; border: 1px solid #ccc; text-align: left; }
+  table.data { width: 100%; font-size: 0.85em; }
+  table.data th { background: #4a7dbd; color: white; padding: 6px 8px; position: sticky; top: 0; }
+  table.data td { padding: 4px 8px; border-bottom: 1px solid #ddd; }
+  table.data tr:nth-child(even) { background: #f9f9f9; }
+  table.data tr:hover { background: #e8f0fe; }
+  .section { background: white; padding: 16px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+</style>
+</head>
+<body>
+<h1>Phase C v1 — UGH Audit Report</h1>
+
+<div class="meta">
+  <dl>
+    <dt>run_id:</dt><dd>phase_c_v1</dd>
+    <dt>model:</dt><dd>gpt-4o</dd>
+    <dt>scorer_backend:</dt><dd>tfidf-char-ngram</dd>
+    <dt>tokenizer_mode:</dt><dd>regex_fallback</dd>
+    <dt>por_threshold:</dt><dd>0.82 (>=)</dd>
+    <dt>delta_e_primary:</dt><dd>delta_e_full</dd>
+  </dl>
+</div>
+
+<div class="section">
+<h2>全件集計（306件）</h2>
+
+    <table class="stats">
+      <tr><th>指標</th><th>値</th></tr>
+      <tr><td>件数</td><td>306</td></tr>
+      <tr><td>PoR 平均</td><td>0.3964</td></tr>
+      <tr><td>PoR 発火数</td><td>0/306</td></tr>
+      <tr><td>ΔE core 平均</td><td>0.8647</td></tr>
+      <tr><td>ΔE full 平均</td><td>0.7020</td></tr>
+      <tr><td>ΔE summary 平均</td><td>0.8891</td></tr>
+    </table>
+
+<h3>ΔE full 四分位</h3>
+<table class="stats">
+  <tr><th>四分位</th><th>値</th></tr>
+  <tr><td>Q1 (25%)</td><td>0.6147</td></tr>
+  <tr><td>Q2 (50%)</td><td>0.7244</td></tr>
+  <tr><td>Q3 (75%)</td><td>0.8026</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>温度別集計</h2>
+<table class="stats">
+  <tr><th>temperature</th><th>件数</th><th>PoR平均</th><th>ΔE full平均</th></tr>
+  <tr><td>0.0</td><td>102</td><td>0.4067</td><td>0.6997</td></tr><tr><td>0.7</td><td>102</td><td>0.4002</td><td>0.7003</td></tr><tr><td>1.0</td><td>102</td><td>0.3822</td><td>0.7060</td></tr>
+</table>
+
+<h3>温度間分散（同一問の3温度でのPoR/ΔE標準偏差平均）</h3>
+<table class="stats">
+  <tr><th>指標</th><th>平均標準偏差</th></tr>
+  <tr><td>PoR</td><td>0.0352</td></tr>
+  <tr><td>ΔE full</td><td>0.0245</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>role="test" 主表（288件）</h2>
+
+    <table class="stats">
+      <tr><th>指標</th><th>値</th></tr>
+      <tr><td>件数</td><td>288</td></tr>
+      <tr><td>PoR 平均</td><td>0.3906</td></tr>
+      <tr><td>PoR 発火数</td><td>0/288</td></tr>
+      <tr><td>ΔE core 平均</td><td>0.8694</td></tr>
+      <tr><td>ΔE full 平均</td><td>0.7043</td></tr>
+      <tr><td>ΔE summary 平均</td><td>0.8936</td></tr>
+    </table>
+<table id="test-table" class="data">
+      <thead><tr>
+        <th>#</th><th>id</th><th>category</th><th>difficulty</th><th>temp</th>
+        <th>PoR</th><th>fired</th><th>ΔE core</th><th>ΔE full</th><th>ΔE summary</th>
+        <th>ΔE位置</th><th>grv_top</th><th>backend</th>
+      </tr></thead><tbody><tr>
+      <td>1</td><td>q001</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.2132</td>
+      <td></td>
+      <td>0.8468</td><td>0.8098</td>
+      <td>0.8547</td><td>Q4 (高ズレ)</td>
+      <td>誠実</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>2</td><td>q001</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.2341</td>
+      <td></td>
+      <td>0.8261</td><td>0.8177</td>
+      <td>0.8360</td><td>Q4 (高ズレ)</td>
+      <td>誠実</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>3</td><td>q001</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.1855</td>
+      <td></td>
+      <td>0.8274</td><td>0.7688</td>
+      <td>0.8776</td><td>Q3</td>
+      <td>誠実</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>4</td><td>q002</td><td>ugh_theory</td><td>hard</td>
+      <td>0.0</td><td>0.2073</td>
+      <td></td>
+      <td>0.9355</td><td>0.8452</td>
+      <td>0.9223</td><td>Q4 (高ズレ)</td>
+      <td>表現</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>5</td><td>q002</td><td>ugh_theory</td><td>hard</td>
+      <td>0.7</td><td>0.1759</td>
+      <td></td>
+      <td>0.8582</td><td>0.7809</td>
+      <td>0.8907</td><td>Q3</td>
+      <td>特定</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>6</td><td>q002</td><td>ugh_theory</td><td>hard</td>
+      <td>1.0</td><td>0.1579</td>
+      <td></td>
+      <td>0.9405</td><td>0.8637</td>
+      <td>0.9047</td><td>Q4 (高ズレ)</td>
+      <td>特定</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>7</td><td>q003</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.3018</td>
+      <td></td>
+      <td>0.9076</td><td>0.9568</td>
+      <td>0.9249</td><td>Q4 (高ズレ)</td>
+      <td>ずしも</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>8</td><td>q003</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.2035</td>
+      <td></td>
+      <td>0.8912</td><td>0.9406</td>
+      <td>0.9180</td><td>Q4 (高ズレ)</td>
+      <td>正確</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>9</td><td>q003</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.2786</td>
+      <td></td>
+      <td>0.9009</td><td>0.9359</td>
+      <td>0.8909</td><td>Q4 (高ズレ)</td>
+      <td>ズレ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>10</td><td>q004</td><td>ugh_theory</td><td>hard</td>
+      <td>0.0</td><td>0.5421</td>
+      <td></td>
+      <td>0.6994</td><td>0.7928</td>
+      <td>0.7782</td><td>Q3</td>
+      <td>UGHer</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>11</td><td>q004</td><td>ugh_theory</td><td>hard</td>
+      <td>0.7</td><td>0.5596</td>
+      <td></td>
+      <td>0.6793</td><td>0.7701</td>
+      <td>0.8852</td><td>Q3</td>
+      <td>UGHer</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>12</td><td>q004</td><td>ugh_theory</td><td>hard</td>
+      <td>1.0</td><td>0.5420</td>
+      <td></td>
+      <td>0.7252</td><td>0.7987</td>
+      <td>0.7694</td><td>Q3</td>
+      <td>必要</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>13</td><td>q023</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.5050</td>
+      <td></td>
+      <td>0.3961</td><td>0.4929</td>
+      <td>0.6133</td><td>Q1 (低ズレ)</td>
+      <td>類似性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>14</td><td>q023</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.5459</td>
+      <td></td>
+      <td>0.4150</td><td>0.5270</td>
+      <td>0.6579</td><td>Q1 (低ズレ)</td>
+      <td>テキスト</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>15</td><td>q023</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.4654</td>
+      <td></td>
+      <td>0.4736</td><td>0.5222</td>
+      <td>0.6030</td><td>Q1 (低ズレ)</td>
+      <td>テキスト</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>16</td><td>q024</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.5603</td>
+      <td></td>
+      <td>0.8532</td><td>0.8838</td>
+      <td>0.9092</td><td>Q4 (高ズレ)</td>
+      <td>プロンプト</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>17</td><td>q024</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.5616</td>
+      <td></td>
+      <td>0.8181</td><td>0.8589</td>
+      <td>0.8935</td><td>Q4 (高ズレ)</td>
+      <td>プロンプト</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>18</td><td>q024</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.4023</td>
+      <td></td>
+      <td>0.8268</td><td>0.8027</td>
+      <td>0.7324</td><td>Q4 (高ズレ)</td>
+      <td>構造化</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>19</td><td>q025</td><td>ugh_theory</td><td>hard</td>
+      <td>0.0</td><td>0.4018</td>
+      <td></td>
+      <td>0.8298</td><td>0.6651</td>
+      <td>0.7662</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>20</td><td>q025</td><td>ugh_theory</td><td>hard</td>
+      <td>0.7</td><td>0.4733</td>
+      <td></td>
+      <td>0.8376</td><td>0.7273</td>
+      <td>0.7820</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>21</td><td>q025</td><td>ugh_theory</td><td>hard</td>
+      <td>1.0</td><td>0.3384</td>
+      <td></td>
+      <td>0.8349</td><td>0.6786</td>
+      <td>0.8521</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>22</td><td>q026</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.2307</td>
+      <td></td>
+      <td>0.9168</td><td>0.8787</td>
+      <td>0.9931</td><td>Q4 (高ズレ)</td>
+      <td>閾値</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>23</td><td>q026</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.2521</td>
+      <td></td>
+      <td>0.9124</td><td>0.8898</td>
+      <td>0.9111</td><td>Q4 (高ズレ)</td>
+      <td>閾値</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>24</td><td>q026</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.3103</td>
+      <td></td>
+      <td>0.8548</td><td>0.8780</td>
+      <td>0.8427</td><td>Q4 (高ズレ)</td>
+      <td>必要</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>25</td><td>q027</td><td>ugh_theory</td><td>hard</td>
+      <td>0.0</td><td>0.3502</td>
+      <td></td>
+      <td>0.9665</td><td>0.7661</td>
+      <td>0.9557</td><td>Q3</td>
+      <td>Mesh</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>26</td><td>q027</td><td>ugh_theory</td><td>hard</td>
+      <td>0.7</td><td>0.3256</td>
+      <td></td>
+      <td>0.9565</td><td>0.8175</td>
+      <td>0.9784</td><td>Q4 (高ズレ)</td>
+      <td>説明</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>27</td><td>q027</td><td>ugh_theory</td><td>hard</td>
+      <td>1.0</td><td>0.3168</td>
+      <td></td>
+      <td>0.9655</td><td>0.8080</td>
+      <td>0.9928</td><td>Q4 (高ズレ)</td>
+      <td>Mesh</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>28</td><td>q028</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.6689</td>
+      <td></td>
+      <td>0.9873</td><td>0.7727</td>
+      <td>1.0000</td><td>Q3</td>
+      <td>要約</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>29</td><td>q028</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.4297</td>
+      <td></td>
+      <td>0.9956</td><td>0.7067</td>
+      <td>1.0000</td><td>Q2</td>
+      <td>要約</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>30</td><td>q028</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.6406</td>
+      <td></td>
+      <td>1.0000</td><td>0.7772</td>
+      <td>1.0000</td><td>Q3</td>
+      <td>要約</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>31</td><td>q029</td><td>ugh_theory</td><td>hard</td>
+      <td>0.0</td><td>0.2973</td>
+      <td></td>
+      <td>0.9326</td><td>0.7005</td>
+      <td>0.9264</td><td>Q2</td>
+      <td>意味</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>32</td><td>q029</td><td>ugh_theory</td><td>hard</td>
+      <td>0.7</td><td>0.2991</td>
+      <td></td>
+      <td>0.9181</td><td>0.6733</td>
+      <td>0.9397</td><td>Q2</td>
+      <td>意味</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>33</td><td>q029</td><td>ugh_theory</td><td>hard</td>
+      <td>1.0</td><td>0.2606</td>
+      <td></td>
+      <td>0.9177</td><td>0.6771</td>
+      <td>0.9562</td><td>Q2</td>
+      <td>概念</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>34</td><td>q030</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.1923</td>
+      <td></td>
+      <td>0.9251</td><td>0.8607</td>
+      <td>0.9311</td><td>Q4 (高ズレ)</td>
+      <td>安全性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>35</td><td>q030</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.2289</td>
+      <td></td>
+      <td>0.9414</td><td>0.8437</td>
+      <td>0.9283</td><td>Q4 (高ズレ)</td>
+      <td>組織</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>36</td><td>q030</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.1780</td>
+      <td></td>
+      <td>0.9561</td><td>0.8882</td>
+      <td>0.9464</td><td>Q4 (高ズレ)</td>
+      <td>安全性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>37</td><td>q032</td><td>ugh_theory</td><td>hard</td>
+      <td>0.0</td><td>0.3401</td>
+      <td></td>
+      <td>0.9361</td><td>0.7876</td>
+      <td>0.9511</td><td>Q3</td>
+      <td>言語</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>38</td><td>q032</td><td>ugh_theory</td><td>hard</td>
+      <td>0.7</td><td>0.3406</td>
+      <td></td>
+      <td>0.9444</td><td>0.8293</td>
+      <td>0.9921</td><td>Q4 (高ズレ)</td>
+      <td>指標</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>39</td><td>q032</td><td>ugh_theory</td><td>hard</td>
+      <td>1.0</td><td>0.2810</td>
+      <td></td>
+      <td>0.9013</td><td>0.8351</td>
+      <td>0.8877</td><td>Q4 (高ズレ)</td>
+      <td>指標</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>40</td><td>q033</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.2920</td>
+      <td></td>
+      <td>0.8845</td><td>0.6707</td>
+      <td>0.9194</td><td>Q2</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>41</td><td>q033</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.3292</td>
+      <td></td>
+      <td>0.7754</td><td>0.6594</td>
+      <td>0.8924</td><td>Q2</td>
+      <td>共振</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>42</td><td>q033</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.2519</td>
+      <td></td>
+      <td>0.8183</td><td>0.6829</td>
+      <td>0.8720</td><td>Q2</td>
+      <td>共振</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>43</td><td>q034</td><td>ugh_theory</td><td>hard</td>
+      <td>0.0</td><td>0.5048</td>
+      <td></td>
+      <td>0.6868</td><td>0.7053</td>
+      <td>0.8724</td><td>Q2</td>
+      <td>監査</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>44</td><td>q034</td><td>ugh_theory</td><td>hard</td>
+      <td>0.7</td><td>0.5261</td>
+      <td></td>
+      <td>0.7146</td><td>0.7007</td>
+      <td>0.8527</td><td>Q2</td>
+      <td>監査</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>45</td><td>q034</td><td>ugh_theory</td><td>hard</td>
+      <td>1.0</td><td>0.4120</td>
+      <td></td>
+      <td>0.7141</td><td>0.7439</td>
+      <td>0.9062</td><td>Q3</td>
+      <td>監査</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>46</td><td>q035</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.4347</td>
+      <td></td>
+      <td>0.9117</td><td>0.7757</td>
+      <td>0.9367</td><td>Q3</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>47</td><td>q035</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.3456</td>
+      <td></td>
+      <td>0.8507</td><td>0.7612</td>
+      <td>0.9253</td><td>Q3</td>
+      <td>PoR</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>48</td><td>q035</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.3558</td>
+      <td></td>
+      <td>0.9778</td><td>0.8328</td>
+      <td>0.9656</td><td>Q4 (高ズレ)</td>
+      <td>限界</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>49</td><td>q036</td><td>ugh_theory</td><td>medium</td>
+      <td>0.0</td><td>0.3835</td>
+      <td></td>
+      <td>0.9544</td><td>0.9264</td>
+      <td>0.9672</td><td>Q4 (高ズレ)</td>
+      <td>生成</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>50</td><td>q036</td><td>ugh_theory</td><td>medium</td>
+      <td>0.7</td><td>0.3981</td>
+      <td></td>
+      <td>0.9724</td><td>0.9420</td>
+      <td>0.9332</td><td>Q4 (高ズレ)</td>
+      <td>評価</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>51</td><td>q036</td><td>ugh_theory</td><td>medium</td>
+      <td>1.0</td><td>0.5947</td>
+      <td></td>
+      <td>0.9109</td><td>0.9033</td>
+      <td>0.9325</td><td>Q4 (高ズレ)</td>
+      <td>フレームワーク</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>52</td><td>q006</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.3630</td>
+      <td></td>
+      <td>0.8619</td><td>0.7462</td>
+      <td>0.9276</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>53</td><td>q006</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.5116</td>
+      <td></td>
+      <td>0.8481</td><td>0.7218</td>
+      <td>0.8669</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>54</td><td>q006</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.3449</td>
+      <td></td>
+      <td>0.8582</td><td>0.7583</td>
+      <td>0.8836</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>55</td><td>q007</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.5657</td>
+      <td></td>
+      <td>0.8677</td><td>0.7905</td>
+      <td>0.9588</td><td>Q3</td>
+      <td>意味</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>56</td><td>q007</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.6183</td>
+      <td></td>
+      <td>0.9067</td><td>0.8000</td>
+      <td>0.9242</td><td>Q3</td>
+      <td>意味</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>57</td><td>q007</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.6361</td>
+      <td></td>
+      <td>0.8633</td><td>0.7672</td>
+      <td>0.8985</td><td>Q3</td>
+      <td>意味</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>58</td><td>q008</td><td>technical_ai</td><td>hard</td>
+      <td>0.0</td><td>0.5870</td>
+      <td></td>
+      <td>0.9790</td><td>0.5874</td>
+      <td>0.9967</td><td>Q1 (低ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>59</td><td>q008</td><td>technical_ai</td><td>hard</td>
+      <td>0.7</td><td>0.5345</td>
+      <td></td>
+      <td>0.9812</td><td>0.6003</td>
+      <td>1.0000</td><td>Q1 (低ズレ)</td>
+      <td>スケーリング</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>60</td><td>q008</td><td>technical_ai</td><td>hard</td>
+      <td>1.0</td><td>0.4775</td>
+      <td></td>
+      <td>0.9845</td><td>0.6799</td>
+      <td>0.9930</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>61</td><td>q037</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.7116</td>
+      <td></td>
+      <td>0.8406</td><td>0.2551</td>
+      <td>0.8552</td><td>Q1 (低ズレ)</td>
+      <td>トークナイゼーション</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>62</td><td>q037</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.6871</td>
+      <td></td>
+      <td>0.8221</td><td>0.2660</td>
+      <td>0.8699</td><td>Q1 (低ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>63</td><td>q037</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.6838</td>
+      <td></td>
+      <td>0.8058</td><td>0.2852</td>
+      <td>0.8701</td><td>Q1 (低ズレ)</td>
+      <td>トークナイゼーション</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>64</td><td>q038</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.5752</td>
+      <td></td>
+      <td>0.8845</td><td>0.7693</td>
+      <td>0.9087</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>65</td><td>q038</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.5275</td>
+      <td></td>
+      <td>0.8322</td><td>0.7836</td>
+      <td>0.8869</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>66</td><td>q038</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.4120</td>
+      <td></td>
+      <td>0.8591</td><td>0.7799</td>
+      <td>0.9633</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>67</td><td>q039</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.2912</td>
+      <td></td>
+      <td>0.9338</td><td>0.7345</td>
+      <td>0.9470</td><td>Q3</td>
+      <td>MoE</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>68</td><td>q039</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.2386</td>
+      <td></td>
+      <td>0.9415</td><td>0.7566</td>
+      <td>0.9505</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>69</td><td>q039</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.2715</td>
+      <td></td>
+      <td>0.9393</td><td>0.6714</td>
+      <td>0.9607</td><td>Q2</td>
+      <td>専門家</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>70</td><td>q040</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.4075</td>
+      <td></td>
+      <td>0.9659</td><td>0.7971</td>
+      <td>0.9964</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>71</td><td>q040</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.4661</td>
+      <td></td>
+      <td>0.9850</td><td>0.8491</td>
+      <td>0.9965</td><td>Q4 (高ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>72</td><td>q040</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.3793</td>
+      <td></td>
+      <td>0.9732</td><td>0.7970</td>
+      <td>0.9966</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>73</td><td>q041</td><td>technical_ai</td><td>hard</td>
+      <td>0.0</td><td>0.2846</td>
+      <td></td>
+      <td>0.8782</td><td>0.8343</td>
+      <td>0.8280</td><td>Q4 (高ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>74</td><td>q041</td><td>technical_ai</td><td>hard</td>
+      <td>0.7</td><td>0.2930</td>
+      <td></td>
+      <td>0.9015</td><td>0.8543</td>
+      <td>0.9695</td><td>Q4 (高ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>75</td><td>q041</td><td>technical_ai</td><td>hard</td>
+      <td>1.0</td><td>0.3200</td>
+      <td></td>
+      <td>0.7740</td><td>0.7827</td>
+      <td>0.8555</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>76</td><td>q042</td><td>technical_ai</td><td>hard</td>
+      <td>0.0</td><td>0.4550</td>
+      <td></td>
+      <td>0.8366</td><td>0.7506</td>
+      <td>0.8321</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>77</td><td>q042</td><td>technical_ai</td><td>hard</td>
+      <td>0.7</td><td>0.2834</td>
+      <td></td>
+      <td>0.8472</td><td>0.8103</td>
+      <td>0.8612</td><td>Q4 (高ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>78</td><td>q042</td><td>technical_ai</td><td>hard</td>
+      <td>1.0</td><td>0.4175</td>
+      <td></td>
+      <td>0.7563</td><td>0.7587</td>
+      <td>0.8164</td><td>Q3</td>
+      <td>LLM</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>79</td><td>q044</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.4153</td>
+      <td></td>
+      <td>0.9433</td><td>0.7155</td>
+      <td>0.9609</td><td>Q2</td>
+      <td>理解</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>80</td><td>q044</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.3889</td>
+      <td></td>
+      <td>0.9325</td><td>0.7713</td>
+      <td>0.9634</td><td>Q3</td>
+      <td>理解</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>81</td><td>q044</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.4217</td>
+      <td></td>
+      <td>0.9553</td><td>0.7505</td>
+      <td>0.9671</td><td>Q3</td>
+      <td>テキスト</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>82</td><td>q045</td><td>technical_ai</td><td>hard</td>
+      <td>0.0</td><td>0.5864</td>
+      <td></td>
+      <td>0.9304</td><td>0.5528</td>
+      <td>0.9550</td><td>Q1 (低ズレ)</td>
+      <td>情報</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>83</td><td>q045</td><td>technical_ai</td><td>hard</td>
+      <td>0.7</td><td>0.6389</td>
+      <td></td>
+      <td>0.8942</td><td>0.5604</td>
+      <td>0.9548</td><td>Q1 (低ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>84</td><td>q045</td><td>technical_ai</td><td>hard</td>
+      <td>1.0</td><td>0.5629</td>
+      <td></td>
+      <td>0.9606</td><td>0.6505</td>
+      <td>0.9788</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>85</td><td>q046</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.3377</td>
+      <td></td>
+      <td>0.9395</td><td>0.7680</td>
+      <td>0.9321</td><td>Q3</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>86</td><td>q046</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.3593</td>
+      <td></td>
+      <td>0.8861</td><td>0.7203</td>
+      <td>0.9353</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>87</td><td>q046</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.4043</td>
+      <td></td>
+      <td>0.8770</td><td>0.6870</td>
+      <td>0.9346</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>88</td><td>q047</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.7006</td>
+      <td></td>
+      <td>0.9419</td><td>0.5351</td>
+      <td>0.9810</td><td>Q1 (低ズレ)</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>89</td><td>q047</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.5908</td>
+      <td></td>
+      <td>0.9801</td><td>0.4807</td>
+      <td>0.9531</td><td>Q1 (低ズレ)</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>90</td><td>q047</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.5096</td>
+      <td></td>
+      <td>0.9637</td><td>0.5044</td>
+      <td>1.0000</td><td>Q1 (低ズレ)</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>91</td><td>q048</td><td>technical_ai</td><td>hard</td>
+      <td>0.0</td><td>0.4099</td>
+      <td></td>
+      <td>0.9747</td><td>0.6350</td>
+      <td>1.0000</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>92</td><td>q048</td><td>technical_ai</td><td>hard</td>
+      <td>0.7</td><td>0.4279</td>
+      <td></td>
+      <td>0.9735</td><td>0.6311</td>
+      <td>0.9839</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>93</td><td>q048</td><td>technical_ai</td><td>hard</td>
+      <td>1.0</td><td>0.5033</td>
+      <td></td>
+      <td>0.9614</td><td>0.6121</td>
+      <td>0.9925</td><td>Q1 (低ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>94</td><td>q049</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.4582</td>
+      <td></td>
+      <td>0.6297</td><td>0.5845</td>
+      <td>0.7319</td><td>Q1 (低ズレ)</td>
+      <td>注意重</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>95</td><td>q049</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.4486</td>
+      <td></td>
+      <td>0.6298</td><td>0.5676</td>
+      <td>0.7558</td><td>Q1 (低ズレ)</td>
+      <td>注意重</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>96</td><td>q049</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.4521</td>
+      <td></td>
+      <td>0.6609</td><td>0.6027</td>
+      <td>0.8540</td><td>Q1 (低ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>97</td><td>q050</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.6766</td>
+      <td></td>
+      <td>0.9522</td><td>0.4990</td>
+      <td>0.9697</td><td>Q1 (低ズレ)</td>
+      <td>スパースアテンション</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>98</td><td>q050</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.5932</td>
+      <td></td>
+      <td>0.9555</td><td>0.5268</td>
+      <td>0.9614</td><td>Q1 (低ズレ)</td>
+      <td>スパースアテンション</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>99</td><td>q050</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.5765</td>
+      <td></td>
+      <td>0.9566</td><td>0.5241</td>
+      <td>0.9699</td><td>Q1 (低ズレ)</td>
+      <td>スパースアテンション</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>100</td><td>q009</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.4495</td>
+      <td></td>
+      <td>0.9652</td><td>0.7213</td>
+      <td>0.8995</td><td>Q2</td>
+      <td>創造性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>101</td><td>q009</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.3915</td>
+      <td></td>
+      <td>0.9944</td><td>0.7351</td>
+      <td>1.0000</td><td>Q3</td>
+      <td>創造性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>102</td><td>q009</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.4300</td>
+      <td></td>
+      <td>0.9638</td><td>0.7021</td>
+      <td>0.9082</td><td>Q2</td>
+      <td>人間</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>103</td><td>q010</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.0</td><td>0.3343</td>
+      <td></td>
+      <td>0.8350</td><td>0.6549</td>
+      <td>0.8527</td><td>Q2</td>
+      <td>理解</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>104</td><td>q010</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.7</td><td>0.2828</td>
+      <td></td>
+      <td>0.7986</td><td>0.5871</td>
+      <td>0.8777</td><td>Q1 (低ズレ)</td>
+      <td>理解</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>105</td><td>q010</td><td>ai_philosophy</td><td>hard</td>
+      <td>1.0</td><td>0.2527</td>
+      <td></td>
+      <td>0.7477</td><td>0.5767</td>
+      <td>0.9161</td><td>Q1 (低ズレ)</td>
+      <td>理解</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>106</td><td>q011</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.3644</td>
+      <td></td>
+      <td>0.9106</td><td>0.7511</td>
+      <td>0.9168</td><td>Q3</td>
+      <td>意図</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>107</td><td>q011</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.3104</td>
+      <td></td>
+      <td>0.9015</td><td>0.7232</td>
+      <td>0.9020</td><td>Q2</td>
+      <td>意図</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>108</td><td>q011</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.2597</td>
+      <td></td>
+      <td>0.8926</td><td>0.7849</td>
+      <td>0.9022</td><td>Q3</td>
+      <td>意図</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>109</td><td>q012</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.0</td><td>0.3016</td>
+      <td></td>
+      <td>0.9197</td><td>0.8035</td>
+      <td>0.9351</td><td>Q4 (高ズレ)</td>
+      <td>道具</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>110</td><td>q012</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.7</td><td>0.2801</td>
+      <td></td>
+      <td>0.8886</td><td>0.7836</td>
+      <td>0.8949</td><td>Q3</td>
+      <td>道具</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>111</td><td>q012</td><td>ai_philosophy</td><td>hard</td>
+      <td>1.0</td><td>0.3141</td>
+      <td></td>
+      <td>0.8797</td><td>0.7774</td>
+      <td>0.9305</td><td>Q3</td>
+      <td>道具</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>112</td><td>q051</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.0</td><td>0.5417</td>
+      <td></td>
+      <td>0.8379</td><td>0.6506</td>
+      <td>0.8235</td><td>Q2</td>
+      <td>意識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>113</td><td>q051</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.7</td><td>0.5203</td>
+      <td></td>
+      <td>0.9240</td><td>0.7065</td>
+      <td>0.9725</td><td>Q2</td>
+      <td>意識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>114</td><td>q051</td><td>ai_philosophy</td><td>hard</td>
+      <td>1.0</td><td>0.4660</td>
+      <td></td>
+      <td>0.8352</td><td>0.5525</td>
+      <td>0.8544</td><td>Q1 (低ズレ)</td>
+      <td>意識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>115</td><td>q052</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.4310</td>
+      <td></td>
+      <td>0.9435</td><td>0.6575</td>
+      <td>0.9926</td><td>Q2</td>
+      <td>機能主義</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>116</td><td>q052</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.4163</td>
+      <td></td>
+      <td>0.9099</td><td>0.6726</td>
+      <td>0.9843</td><td>Q2</td>
+      <td>機能主義</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>117</td><td>q052</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.3146</td>
+      <td></td>
+      <td>0.9645</td><td>0.7486</td>
+      <td>0.9847</td><td>Q3</td>
+      <td>人間</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>118</td><td>q053</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.0</td><td>0.5625</td>
+      <td></td>
+      <td>0.4963</td><td>0.4434</td>
+      <td>0.5225</td><td>Q1 (低ズレ)</td>
+      <td>意識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>119</td><td>q053</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.7</td><td>0.5625</td>
+      <td></td>
+      <td>0.4776</td><td>0.4147</td>
+      <td>0.3532</td><td>Q1 (低ズレ)</td>
+      <td>意識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>120</td><td>q053</td><td>ai_philosophy</td><td>hard</td>
+      <td>1.0</td><td>0.6253</td>
+      <td></td>
+      <td>0.4148</td><td>0.3391</td>
+      <td>0.4935</td><td>Q1 (低ズレ)</td>
+      <td>ハードプロブレム</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>121</td><td>q054</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.5637</td>
+      <td></td>
+      <td>0.5471</td><td>0.6240</td>
+      <td>0.6089</td><td>Q2</td>
+      <td>道徳的地位</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>122</td><td>q054</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.6048</td>
+      <td></td>
+      <td>0.5306</td><td>0.6147</td>
+      <td>0.5801</td><td>Q1 (低ズレ)</td>
+      <td>道徳的地位</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>123</td><td>q054</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.5022</td>
+      <td></td>
+      <td>0.5582</td><td>0.6226</td>
+      <td>0.4572</td><td>Q2</td>
+      <td>道徳的地位</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>124</td><td>q055</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.0</td><td>0.3130</td>
+      <td></td>
+      <td>0.5152</td><td>0.4930</td>
+      <td>0.8975</td><td>Q1 (低ズレ)</td>
+      <td>同一性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>125</td><td>q055</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.7</td><td>0.3921</td>
+      <td></td>
+      <td>0.6673</td><td>0.5848</td>
+      <td>0.7869</td><td>Q1 (低ズレ)</td>
+      <td>存在</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>126</td><td>q055</td><td>ai_philosophy</td><td>hard</td>
+      <td>1.0</td><td>0.3508</td>
+      <td></td>
+      <td>0.7783</td><td>0.6442</td>
+      <td>0.6697</td><td>Q2</td>
+      <td>存在</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>127</td><td>q056</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.4545</td>
+      <td></td>
+      <td>0.6043</td><td>0.4927</td>
+      <td>0.6967</td><td>Q1 (低ズレ)</td>
+      <td>自由意志</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>128</td><td>q056</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.4175</td>
+      <td></td>
+      <td>0.5939</td><td>0.4760</td>
+      <td>0.7034</td><td>Q1 (低ズレ)</td>
+      <td>自由意志</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>129</td><td>q056</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.4165</td>
+      <td></td>
+      <td>0.6192</td><td>0.4843</td>
+      <td>0.6513</td><td>Q1 (低ズレ)</td>
+      <td>自由意志</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>130</td><td>q057</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.4386</td>
+      <td></td>
+      <td>0.9111</td><td>0.7292</td>
+      <td>0.9443</td><td>Q3</td>
+      <td>理解</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>131</td><td>q057</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.4391</td>
+      <td></td>
+      <td>0.8733</td><td>0.7082</td>
+      <td>0.9109</td><td>Q2</td>
+      <td>理解</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>132</td><td>q057</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.4011</td>
+      <td></td>
+      <td>0.8974</td><td>0.7210</td>
+      <td>0.9093</td><td>Q2</td>
+      <td>概念</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>133</td><td>q058</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.3526</td>
+      <td></td>
+      <td>0.8589</td><td>0.6397</td>
+      <td>0.9064</td><td>Q2</td>
+      <td>意味</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>134</td><td>q058</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.4530</td>
+      <td></td>
+      <td>0.9069</td><td>0.7228</td>
+      <td>0.9009</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>135</td><td>q058</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.4560</td>
+      <td></td>
+      <td>0.8852</td><td>0.6700</td>
+      <td>0.8412</td><td>Q2</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>136</td><td>q059</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.0</td><td>0.4865</td>
+      <td></td>
+      <td>0.9660</td><td>0.7256</td>
+      <td>0.9686</td><td>Q3</td>
+      <td>他者</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>137</td><td>q059</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.7</td><td>0.4218</td>
+      <td></td>
+      <td>0.9774</td><td>0.7307</td>
+      <td>0.9763</td><td>Q3</td>
+      <td>他者</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>138</td><td>q059</td><td>ai_philosophy</td><td>hard</td>
+      <td>1.0</td><td>0.4602</td>
+      <td></td>
+      <td>0.9588</td><td>0.7376</td>
+      <td>0.9818</td><td>Q3</td>
+      <td>他者</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>139</td><td>q060</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.4390</td>
+      <td></td>
+      <td>0.8385</td><td>0.6854</td>
+      <td>0.8949</td><td>Q2</td>
+      <td>美的判断</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>140</td><td>q060</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.5220</td>
+      <td></td>
+      <td>0.8370</td><td>0.7311</td>
+      <td>0.9035</td><td>Q3</td>
+      <td>美的判断</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>141</td><td>q060</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.4892</td>
+      <td></td>
+      <td>0.8680</td><td>0.7408</td>
+      <td>0.8477</td><td>Q3</td>
+      <td>美的判断</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>142</td><td>q061</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.3782</td>
+      <td></td>
+      <td>0.8578</td><td>0.6650</td>
+      <td>0.7865</td><td>Q2</td>
+      <td>言語</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>143</td><td>q061</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.4100</td>
+      <td></td>
+      <td>0.8213</td><td>0.6080</td>
+      <td>0.8506</td><td>Q1 (低ズレ)</td>
+      <td>思考</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>144</td><td>q061</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.3316</td>
+      <td></td>
+      <td>0.8371</td><td>0.6400</td>
+      <td>0.9021</td><td>Q2</td>
+      <td>思考</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>145</td><td>q062</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.0</td><td>0.6147</td>
+      <td></td>
+      <td>0.7655</td><td>0.6788</td>
+      <td>0.7859</td><td>Q2</td>
+      <td>心的状態</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>146</td><td>q062</td><td>ai_philosophy</td><td>hard</td>
+      <td>0.7</td><td>0.5610</td>
+      <td></td>
+      <td>0.7905</td><td>0.6451</td>
+      <td>0.7300</td><td>Q2</td>
+      <td>心的状態</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>147</td><td>q062</td><td>ai_philosophy</td><td>hard</td>
+      <td>1.0</td><td>0.5436</td>
+      <td></td>
+      <td>0.8127</td><td>0.6756</td>
+      <td>0.7402</td><td>Q2</td>
+      <td>心的状態</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>148</td><td>q063</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.5490</td>
+      <td></td>
+      <td>0.8615</td><td>0.5194</td>
+      <td>0.9348</td><td>Q1 (低ズレ)</td>
+      <td>チューリングテスト</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>149</td><td>q063</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.5059</td>
+      <td></td>
+      <td>0.8983</td><td>0.5955</td>
+      <td>0.9088</td><td>Q1 (低ズレ)</td>
+      <td>知性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>150</td><td>q063</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.5509</td>
+      <td></td>
+      <td>0.8687</td><td>0.5201</td>
+      <td>0.8728</td><td>Q1 (低ズレ)</td>
+      <td>チューリングテスト</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>151</td><td>q064</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.0</td><td>0.2989</td>
+      <td></td>
+      <td>0.8769</td><td>0.8038</td>
+      <td>0.8958</td><td>Q4 (高ズレ)</td>
+      <td>情報</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>152</td><td>q064</td><td>ai_philosophy</td><td>medium</td>
+      <td>0.7</td><td>0.3626</td>
+      <td></td>
+      <td>0.8765</td><td>0.7283</td>
+      <td>0.8858</td><td>Q3</td>
+      <td>をつく</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>153</td><td>q064</td><td>ai_philosophy</td><td>medium</td>
+      <td>1.0</td><td>0.2671</td>
+      <td></td>
+      <td>0.9232</td><td>0.8314</td>
+      <td>0.9368</td><td>Q4 (高ズレ)</td>
+      <td>をつく</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>154</td><td>q014</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.3572</td>
+      <td></td>
+      <td>0.7209</td><td>0.7729</td>
+      <td>0.8604</td><td>Q3</td>
+      <td>信頼性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>155</td><td>q014</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.2721</td>
+      <td></td>
+      <td>0.8297</td><td>0.7053</td>
+      <td>0.8449</td><td>Q2</td>
+      <td>透明性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>156</td><td>q014</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.2697</td>
+      <td></td>
+      <td>0.7894</td><td>0.6878</td>
+      <td>0.7604</td><td>Q2</td>
+      <td>透明性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>157</td><td>q015</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.3012</td>
+      <td></td>
+      <td>0.9315</td><td>0.8530</td>
+      <td>0.9725</td><td>Q4 (高ズレ)</td>
+      <td>責任</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>158</td><td>q015</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.2458</td>
+      <td></td>
+      <td>0.8929</td><td>0.8025</td>
+      <td>0.9134</td><td>Q3</td>
+      <td>責任</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>159</td><td>q015</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.2919</td>
+      <td></td>
+      <td>0.8754</td><td>0.8248</td>
+      <td>0.8875</td><td>Q4 (高ズレ)</td>
+      <td>責任</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>160</td><td>q016</td><td>ai_ethics</td><td>hard</td>
+      <td>0.0</td><td>0.5506</td>
+      <td></td>
+      <td>0.9300</td><td>0.5569</td>
+      <td>0.9252</td><td>Q1 (低ズレ)</td>
+      <td>パターナリスティック</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>161</td><td>q016</td><td>ai_ethics</td><td>hard</td>
+      <td>0.7</td><td>0.5314</td>
+      <td></td>
+      <td>0.9442</td><td>0.4970</td>
+      <td>0.9138</td><td>Q1 (低ズレ)</td>
+      <td>アライメント</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>162</td><td>q016</td><td>ai_ethics</td><td>hard</td>
+      <td>1.0</td><td>0.5313</td>
+      <td></td>
+      <td>0.9331</td><td>0.4882</td>
+      <td>0.9543</td><td>Q1 (低ズレ)</td>
+      <td>アライメント</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>163</td><td>q065</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.1582</td>
+      <td></td>
+      <td>0.9479</td><td>0.8944</td>
+      <td>0.9635</td><td>Q4 (高ズレ)</td>
+      <td>技術</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>164</td><td>q065</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.1262</td>
+      <td></td>
+      <td>0.9267</td><td>0.8718</td>
+      <td>0.9699</td><td>Q4 (高ズレ)</td>
+      <td>技術</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>165</td><td>q065</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.1626</td>
+      <td></td>
+      <td>0.9824</td><td>0.9008</td>
+      <td>0.9605</td><td>Q4 (高ズレ)</td>
+      <td>技術</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>166</td><td>q066</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.1734</td>
+      <td></td>
+      <td>0.9936</td><td>0.8194</td>
+      <td>0.9844</td><td>Q4 (高ズレ)</td>
+      <td>判断</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>167</td><td>q066</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.1790</td>
+      <td></td>
+      <td>0.9901</td><td>0.8494</td>
+      <td>0.9899</td><td>Q4 (高ズレ)</td>
+      <td>システム</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>168</td><td>q066</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.1954</td>
+      <td></td>
+      <td>0.9839</td><td>0.8169</td>
+      <td>0.9919</td><td>Q4 (高ズレ)</td>
+      <td>判断</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>169</td><td>q067</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.3974</td>
+      <td></td>
+      <td>0.8823</td><td>0.7902</td>
+      <td>0.8949</td><td>Q3</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>170</td><td>q067</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.2957</td>
+      <td></td>
+      <td>0.9149</td><td>0.8333</td>
+      <td>0.8845</td><td>Q4 (高ズレ)</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>171</td><td>q067</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.3598</td>
+      <td></td>
+      <td>0.8698</td><td>0.8127</td>
+      <td>0.8994</td><td>Q4 (高ズレ)</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>172</td><td>q068</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.3103</td>
+      <td></td>
+      <td>0.9282</td><td>0.7527</td>
+      <td>0.9496</td><td>Q3</td>
+      <td>産業革命期</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>173</td><td>q068</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.3342</td>
+      <td></td>
+      <td>0.9358</td><td>0.7604</td>
+      <td>0.9138</td><td>Q3</td>
+      <td>雇用</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>174</td><td>q068</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.3008</td>
+      <td></td>
+      <td>0.9270</td><td>0.8042</td>
+      <td>0.9182</td><td>Q4 (高ズレ)</td>
+      <td>雇用</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>175</td><td>q069</td><td>ai_ethics</td><td>hard</td>
+      <td>0.0</td><td>0.4276</td>
+      <td></td>
+      <td>0.9879</td><td>0.9266</td>
+      <td>0.9906</td><td>Q4 (高ズレ)</td>
+      <td>自律型兵器</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>176</td><td>q069</td><td>ai_ethics</td><td>hard</td>
+      <td>0.7</td><td>0.4336</td>
+      <td></td>
+      <td>0.9917</td><td>0.8994</td>
+      <td>0.9906</td><td>Q4 (高ズレ)</td>
+      <td>自律型兵器</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>177</td><td>q069</td><td>ai_ethics</td><td>hard</td>
+      <td>1.0</td><td>0.4469</td>
+      <td></td>
+      <td>0.9873</td><td>0.9146</td>
+      <td>0.9906</td><td>Q4 (高ズレ)</td>
+      <td>自律型兵器</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>178</td><td>q070</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.3371</td>
+      <td></td>
+      <td>0.8609</td><td>0.8115</td>
+      <td>0.9103</td><td>Q4 (高ズレ)</td>
+      <td>各国</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>179</td><td>q070</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.2991</td>
+      <td></td>
+      <td>0.8200</td><td>0.8123</td>
+      <td>0.8907</td><td>Q4 (高ズレ)</td>
+      <td>各国</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>180</td><td>q070</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.1671</td>
+      <td></td>
+      <td>0.8875</td><td>0.8646</td>
+      <td>0.9331</td><td>Q4 (高ズレ)</td>
+      <td>各国</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>181</td><td>q071</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.1838</td>
+      <td></td>
+      <td>0.9463</td><td>0.5688</td>
+      <td>0.9827</td><td>Q1 (低ズレ)</td>
+      <td>エネルギー</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>182</td><td>q071</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.1666</td>
+      <td></td>
+      <td>0.9345</td><td>0.6104</td>
+      <td>0.9685</td><td>Q1 (低ズレ)</td>
+      <td>環境負荷</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>183</td><td>q071</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.2047</td>
+      <td></td>
+      <td>0.9319</td><td>0.6321</td>
+      <td>0.9746</td><td>Q2</td>
+      <td>環境</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>184</td><td>q072</td><td>ai_ethics</td><td>hard</td>
+      <td>0.0</td><td>0.4090</td>
+      <td></td>
+      <td>0.9686</td><td>0.7323</td>
+      <td>0.9489</td><td>Q3</td>
+      <td>民主主義</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>185</td><td>q072</td><td>ai_ethics</td><td>hard</td>
+      <td>0.7</td><td>0.3746</td>
+      <td></td>
+      <td>0.9750</td><td>0.7199</td>
+      <td>0.9772</td><td>Q2</td>
+      <td>民主主義</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>186</td><td>q072</td><td>ai_ethics</td><td>hard</td>
+      <td>1.0</td><td>0.2687</td>
+      <td></td>
+      <td>0.9234</td><td>0.7608</td>
+      <td>0.9600</td><td>Q3</td>
+      <td>民主主義</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>187</td><td>q073</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.5172</td>
+      <td></td>
+      <td>1.0000</td><td>0.8676</td>
+      <td>1.0000</td><td>Q4 (高ズレ)</td>
+      <td>監視技術</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>188</td><td>q073</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.5071</td>
+      <td></td>
+      <td>1.0000</td><td>0.8950</td>
+      <td>1.0000</td><td>Q4 (高ズレ)</td>
+      <td>監視技術</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>189</td><td>q073</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.4889</td>
+      <td></td>
+      <td>1.0000</td><td>0.8945</td>
+      <td>1.0000</td><td>Q4 (高ズレ)</td>
+      <td>監視技術</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>190</td><td>q074</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.2499</td>
+      <td></td>
+      <td>0.9497</td><td>0.8388</td>
+      <td>0.9415</td><td>Q4 (高ズレ)</td>
+      <td>可能性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>191</td><td>q074</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.2462</td>
+      <td></td>
+      <td>0.9427</td><td>0.8536</td>
+      <td>0.9614</td><td>Q4 (高ズレ)</td>
+      <td>拡大</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>192</td><td>q074</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.2423</td>
+      <td></td>
+      <td>0.9491</td><td>0.8515</td>
+      <td>0.9477</td><td>Q4 (高ズレ)</td>
+      <td>技術</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>193</td><td>q075</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.6362</td>
+      <td></td>
+      <td>0.9438</td><td>0.4852</td>
+      <td>1.0000</td><td>Q1 (低ズレ)</td>
+      <td>オープンソース</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>194</td><td>q075</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.5731</td>
+      <td></td>
+      <td>0.9501</td><td>0.5690</td>
+      <td>1.0000</td><td>Q1 (低ズレ)</td>
+      <td>倫理的</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>195</td><td>q075</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.5788</td>
+      <td></td>
+      <td>0.9818</td><td>0.5457</td>
+      <td>0.9958</td><td>Q1 (低ズレ)</td>
+      <td>オープンソース</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>196</td><td>q076</td><td>ai_ethics</td><td>hard</td>
+      <td>0.0</td><td>0.6942</td>
+      <td></td>
+      <td>0.9746</td><td>0.4128</td>
+      <td>0.9434</td><td>Q1 (低ズレ)</td>
+      <td>レッドチーミング</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>197</td><td>q076</td><td>ai_ethics</td><td>hard</td>
+      <td>0.7</td><td>0.6615</td>
+      <td></td>
+      <td>0.9881</td><td>0.3876</td>
+      <td>0.9864</td><td>Q1 (低ズレ)</td>
+      <td>レッドチーミング</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>198</td><td>q076</td><td>ai_ethics</td><td>hard</td>
+      <td>1.0</td><td>0.6468</td>
+      <td></td>
+      <td>0.9115</td><td>0.4346</td>
+      <td>0.9606</td><td>Q1 (低ズレ)</td>
+      <td>レッドチーミング</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>199</td><td>q077</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.4283</td>
+      <td></td>
+      <td>0.9864</td><td>0.7779</td>
+      <td>1.0000</td><td>Q3</td>
+      <td>企業</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>200</td><td>q077</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.3756</td>
+      <td></td>
+      <td>0.9835</td><td>0.7627</td>
+      <td>1.0000</td><td>Q3</td>
+      <td>企業</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>201</td><td>q077</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.3354</td>
+      <td></td>
+      <td>0.9753</td><td>0.7473</td>
+      <td>1.0000</td><td>Q3</td>
+      <td>企業</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>202</td><td>q078</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.5783</td>
+      <td></td>
+      <td>0.8814</td><td>0.4412</td>
+      <td>0.8882</td><td>Q1 (低ズレ)</td>
+      <td>規制</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>203</td><td>q078</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.4674</td>
+      <td></td>
+      <td>0.8845</td><td>0.4980</td>
+      <td>0.9001</td><td>Q1 (低ズレ)</td>
+      <td>規制</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>204</td><td>q078</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.4226</td>
+      <td></td>
+      <td>0.8853</td><td>0.5424</td>
+      <td>0.8884</td><td>Q1 (低ズレ)</td>
+      <td>規制</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>205</td><td>q017</td><td>epistemology</td><td>medium</td>
+      <td>0.0</td><td>0.3850</td>
+      <td></td>
+      <td>0.8563</td><td>0.7700</td>
+      <td>0.9424</td><td>Q3</td>
+      <td>知識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>206</td><td>q017</td><td>epistemology</td><td>medium</td>
+      <td>0.7</td><td>0.4469</td>
+      <td></td>
+      <td>0.8855</td><td>0.7516</td>
+      <td>0.9764</td><td>Q3</td>
+      <td>知識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>207</td><td>q017</td><td>epistemology</td><td>medium</td>
+      <td>1.0</td><td>0.4427</td>
+      <td></td>
+      <td>0.9053</td><td>0.7998</td>
+      <td>0.9723</td><td>Q3</td>
+      <td>知識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>208</td><td>q018</td><td>epistemology</td><td>hard</td>
+      <td>0.0</td><td>0.3537</td>
+      <td></td>
+      <td>0.9191</td><td>0.7464</td>
+      <td>0.7651</td><td>Q3</td>
+      <td>出力</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>209</td><td>q018</td><td>epistemology</td><td>hard</td>
+      <td>0.7</td><td>0.5436</td>
+      <td></td>
+      <td>0.9198</td><td>0.6932</td>
+      <td>0.8669</td><td>Q2</td>
+      <td>知識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>210</td><td>q018</td><td>epistemology</td><td>hard</td>
+      <td>1.0</td><td>0.5144</td>
+      <td></td>
+      <td>0.9322</td><td>0.7717</td>
+      <td>0.8737</td><td>Q3</td>
+      <td>知識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>211</td><td>q019</td><td>epistemology</td><td>medium</td>
+      <td>0.0</td><td>0.6542</td>
+      <td></td>
+      <td>0.9273</td><td>0.3872</td>
+      <td>0.9216</td><td>Q1 (低ズレ)</td>
+      <td>コンセンサス</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>212</td><td>q019</td><td>epistemology</td><td>medium</td>
+      <td>0.7</td><td>0.6834</td>
+      <td></td>
+      <td>0.9297</td><td>0.3592</td>
+      <td>0.9733</td><td>Q1 (低ズレ)</td>
+      <td>コンセンサス</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>213</td><td>q019</td><td>epistemology</td><td>medium</td>
+      <td>1.0</td><td>0.6068</td>
+      <td></td>
+      <td>0.8991</td><td>0.4440</td>
+      <td>0.9569</td><td>Q1 (低ズレ)</td>
+      <td>真実</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>214</td><td>q020</td><td>epistemology</td><td>hard</td>
+      <td>0.0</td><td>0.2877</td>
+      <td></td>
+      <td>0.5937</td><td>0.5053</td>
+      <td>0.6844</td><td>Q1 (低ズレ)</td>
+      <td>客観性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>215</td><td>q020</td><td>epistemology</td><td>hard</td>
+      <td>0.7</td><td>0.2527</td>
+      <td></td>
+      <td>0.7154</td><td>0.5908</td>
+      <td>0.7970</td><td>Q1 (低ズレ)</td>
+      <td>客観性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>216</td><td>q020</td><td>epistemology</td><td>hard</td>
+      <td>1.0</td><td>0.2449</td>
+      <td></td>
+      <td>0.7095</td><td>0.5860</td>
+      <td>0.7412</td><td>Q1 (低ズレ)</td>
+      <td>客観性</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>217</td><td>q079</td><td>epistemology</td><td>medium</td>
+      <td>0.0</td><td>0.2684</td>
+      <td></td>
+      <td>0.8701</td><td>0.7426</td>
+      <td>0.9026</td><td>Q3</td>
+      <td>判断</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>218</td><td>q079</td><td>epistemology</td><td>medium</td>
+      <td>0.7</td><td>0.3737</td>
+      <td></td>
+      <td>0.8488</td><td>0.7503</td>
+      <td>0.8920</td><td>Q3</td>
+      <td>信頼</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>219</td><td>q079</td><td>epistemology</td><td>medium</td>
+      <td>1.0</td><td>0.2789</td>
+      <td></td>
+      <td>0.8781</td><td>0.8218</td>
+      <td>0.9344</td><td>Q4 (高ズレ)</td>
+      <td>信頼</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>220</td><td>q080</td><td>epistemology</td><td>hard</td>
+      <td>0.0</td><td>0.3589</td>
+      <td></td>
+      <td>0.7468</td><td>0.6885</td>
+      <td>0.6889</td><td>Q2</td>
+      <td>証言</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>221</td><td>q080</td><td>epistemology</td><td>hard</td>
+      <td>0.7</td><td>0.4171</td>
+      <td></td>
+      <td>0.7413</td><td>0.6667</td>
+      <td>0.8052</td><td>Q2</td>
+      <td>証言</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>222</td><td>q080</td><td>epistemology</td><td>hard</td>
+      <td>1.0</td><td>0.3956</td>
+      <td></td>
+      <td>0.8090</td><td>0.7319</td>
+      <td>0.7635</td><td>Q3</td>
+      <td>出力</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>223</td><td>q081</td><td>epistemology</td><td>medium</td>
+      <td>0.0</td><td>0.1799</td>
+      <td></td>
+      <td>0.8311</td><td>0.8104</td>
+      <td>0.8488</td><td>Q4 (高ズレ)</td>
+      <td>情報</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>224</td><td>q081</td><td>epistemology</td><td>medium</td>
+      <td>0.7</td><td>0.2547</td>
+      <td></td>
+      <td>0.9581</td><td>0.8363</td>
+      <td>0.9759</td><td>Q4 (高ズレ)</td>
+      <td>過信</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>225</td><td>q081</td><td>epistemology</td><td>medium</td>
+      <td>1.0</td><td>0.1939</td>
+      <td></td>
+      <td>0.8744</td><td>0.7854</td>
+      <td>0.9341</td><td>Q3</td>
+      <td>問題</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>226</td><td>q082</td><td>epistemology</td><td>medium</td>
+      <td>0.0</td><td>0.3811</td>
+      <td></td>
+      <td>0.8568</td><td>0.6407</td>
+      <td>0.9415</td><td>Q2</td>
+      <td>認識的</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>227</td><td>q082</td><td>epistemology</td><td>medium</td>
+      <td>0.7</td><td>0.4209</td>
+      <td></td>
+      <td>0.8927</td><td>0.6433</td>
+      <td>0.9484</td><td>Q2</td>
+      <td>認識的</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>228</td><td>q082</td><td>epistemology</td><td>medium</td>
+      <td>1.0</td><td>0.3903</td>
+      <td></td>
+      <td>0.9356</td><td>0.6851</td>
+      <td>0.9187</td><td>Q2</td>
+      <td>バブル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>229</td><td>q083</td><td>epistemology</td><td>medium</td>
+      <td>0.0</td><td>0.6247</td>
+      <td></td>
+      <td>0.7723</td><td>0.5499</td>
+      <td>0.8116</td><td>Q1 (低ズレ)</td>
+      <td>正当化</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>230</td><td>q083</td><td>epistemology</td><td>medium</td>
+      <td>0.7</td><td>0.6166</td>
+      <td></td>
+      <td>0.7830</td><td>0.5704</td>
+      <td>0.8899</td><td>Q1 (低ズレ)</td>
+      <td>正当化</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>231</td><td>q083</td><td>epistemology</td><td>medium</td>
+      <td>1.0</td><td>0.6390</td>
+      <td></td>
+      <td>0.7867</td><td>0.6253</td>
+      <td>0.9053</td><td>Q2</td>
+      <td>正当化</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>232</td><td>q084</td><td>epistemology</td><td>hard</td>
+      <td>0.0</td><td>0.2342</td>
+      <td></td>
+      <td>0.8766</td><td>0.7085</td>
+      <td>0.8192</td><td>Q2</td>
+      <td>知識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>233</td><td>q084</td><td>epistemology</td><td>hard</td>
+      <td>0.7</td><td>0.2034</td>
+      <td></td>
+      <td>0.8848</td><td>0.7597</td>
+      <td>0.8525</td><td>Q3</td>
+      <td>情報</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>234</td><td>q084</td><td>epistemology</td><td>hard</td>
+      <td>1.0</td><td>0.2918</td>
+      <td></td>
+      <td>0.7976</td><td>0.6589</td>
+      <td>0.7901</td><td>Q2</td>
+      <td>情報</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>235</td><td>q085</td><td>epistemology</td><td>medium</td>
+      <td>0.0</td><td>0.3647</td>
+      <td></td>
+      <td>0.9007</td><td>0.6290</td>
+      <td>0.8971</td><td>Q2</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>236</td><td>q085</td><td>epistemology</td><td>medium</td>
+      <td>0.7</td><td>0.3303</td>
+      <td></td>
+      <td>0.9082</td><td>0.6724</td>
+      <td>0.8726</td><td>Q2</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>237</td><td>q085</td><td>epistemology</td><td>medium</td>
+      <td>1.0</td><td>0.5035</td>
+      <td></td>
+      <td>0.8763</td><td>0.5911</td>
+      <td>0.9377</td><td>Q1 (低ズレ)</td>
+      <td>問題</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>238</td><td>q086</td><td>epistemology</td><td>medium</td>
+      <td>0.0</td><td>0.4559</td>
+      <td></td>
+      <td>0.9760</td><td>0.5989</td>
+      <td>0.9654</td><td>Q1 (低ズレ)</td>
+      <td>ベイズ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>239</td><td>q086</td><td>epistemology</td><td>medium</td>
+      <td>0.7</td><td>0.5081</td>
+      <td></td>
+      <td>0.9541</td><td>0.5387</td>
+      <td>0.9663</td><td>Q1 (低ズレ)</td>
+      <td>ベイズ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>240</td><td>q086</td><td>epistemology</td><td>medium</td>
+      <td>1.0</td><td>0.3446</td>
+      <td></td>
+      <td>0.9614</td><td>0.7016</td>
+      <td>0.9883</td><td>Q2</td>
+      <td>ベイズ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>241</td><td>q087</td><td>epistemology</td><td>hard</td>
+      <td>0.0</td><td>0.3213</td>
+      <td></td>
+      <td>0.7061</td><td>0.6251</td>
+      <td>0.7820</td><td>Q2</td>
+      <td>暗黙知</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>242</td><td>q087</td><td>epistemology</td><td>hard</td>
+      <td>0.7</td><td>0.3097</td>
+      <td></td>
+      <td>0.7202</td><td>0.6237</td>
+      <td>0.7564</td><td>Q2</td>
+      <td>暗黙知</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>243</td><td>q087</td><td>epistemology</td><td>hard</td>
+      <td>1.0</td><td>0.2998</td>
+      <td></td>
+      <td>0.7207</td><td>0.6084</td>
+      <td>0.7877</td><td>Q1 (低ズレ)</td>
+      <td>暗黙知</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>244</td><td>q088</td><td>epistemology</td><td>medium</td>
+      <td>0.0</td><td>0.2582</td>
+      <td></td>
+      <td>0.7971</td><td>0.6841</td>
+      <td>0.7077</td><td>Q2</td>
+      <td>づいて</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>245</td><td>q088</td><td>epistemology</td><td>medium</td>
+      <td>0.7</td><td>0.3469</td>
+      <td></td>
+      <td>0.7209</td><td>0.5880</td>
+      <td>0.7350</td><td>Q1 (低ズレ)</td>
+      <td>限界</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>246</td><td>q088</td><td>epistemology</td><td>medium</td>
+      <td>1.0</td><td>0.2895</td>
+      <td></td>
+      <td>0.7080</td><td>0.6156</td>
+      <td>0.7374</td><td>Q2</td>
+      <td>認識的謙虚</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>247</td><td>q021</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.1341</td>
+      <td></td>
+      <td>0.8901</td><td>0.8493</td>
+      <td>0.9002</td><td>Q4 (高ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>248</td><td>q021</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.1724</td>
+      <td></td>
+      <td>0.9509</td><td>0.8874</td>
+      <td>0.9467</td><td>Q4 (高ズレ)</td>
+      <td>幻覚</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>249</td><td>q021</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.1953</td>
+      <td></td>
+      <td>0.9712</td><td>0.9202</td>
+      <td>0.9829</td><td>Q4 (高ズレ)</td>
+      <td>幻覚</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>250</td><td>q022</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.5802</td>
+      <td></td>
+      <td>0.9960</td><td>0.5981</td>
+      <td>0.9954</td><td>Q1 (低ズレ)</td>
+      <td>ディープラーニング</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>251</td><td>q022</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.5706</td>
+      <td></td>
+      <td>0.9953</td><td>0.6148</td>
+      <td>1.0000</td><td>Q2</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>252</td><td>q022</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.4579</td>
+      <td></td>
+      <td>0.9951</td><td>0.6843</td>
+      <td>1.0000</td><td>Q2</td>
+      <td>データ</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>253</td><td>q089</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.4518</td>
+      <td></td>
+      <td>0.6281</td><td>0.7095</td>
+      <td>0.5943</td><td>Q2</td>
+      <td>説明責任</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>254</td><td>q089</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.4088</td>
+      <td></td>
+      <td>0.6552</td><td>0.6462</td>
+      <td>0.7587</td><td>Q2</td>
+      <td>説明責任</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>255</td><td>q089</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.2951</td>
+      <td></td>
+      <td>0.7608</td><td>0.7221</td>
+      <td>0.7064</td><td>Q2</td>
+      <td>説明責任</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>256</td><td>q090</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.3813</td>
+      <td></td>
+      <td>0.9052</td><td>0.7180</td>
+      <td>0.9668</td><td>Q2</td>
+      <td>意識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>257</td><td>q090</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.2433</td>
+      <td></td>
+      <td>0.9189</td><td>0.7543</td>
+      <td>0.9553</td><td>Q3</td>
+      <td>意識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>258</td><td>q090</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.2457</td>
+      <td></td>
+      <td>0.9560</td><td>0.6923</td>
+      <td>0.9545</td><td>Q2</td>
+      <td>意識</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>259</td><td>q091</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.6035</td>
+      <td></td>
+      <td>0.7434</td><td>0.4503</td>
+      <td>0.7814</td><td>Q1 (低ズレ)</td>
+      <td>オープンソース</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>260</td><td>q091</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.6253</td>
+      <td></td>
+      <td>0.7316</td><td>0.4377</td>
+      <td>0.7903</td><td>Q1 (低ズレ)</td>
+      <td>オープンソース</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>261</td><td>q091</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.6000</td>
+      <td></td>
+      <td>0.7729</td><td>0.4661</td>
+      <td>0.7898</td><td>Q1 (低ズレ)</td>
+      <td>オープンソース</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>262</td><td>q092</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.2234</td>
+      <td></td>
+      <td>0.9068</td><td>0.7965</td>
+      <td>0.8296</td><td>Q3</td>
+      <td>権利</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>263</td><td>q092</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.1948</td>
+      <td></td>
+      <td>0.8885</td><td>0.7890</td>
+      <td>0.7969</td><td>Q3</td>
+      <td>人間</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>264</td><td>q092</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.1529</td>
+      <td></td>
+      <td>0.9287</td><td>0.7950</td>
+      <td>0.9573</td><td>Q3</td>
+      <td>人間</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>265</td><td>q093</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.3217</td>
+      <td></td>
+      <td>0.6362</td><td>0.6411</td>
+      <td>0.6800</td><td>Q2</td>
+      <td>規制</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>266</td><td>q093</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.3126</td>
+      <td></td>
+      <td>0.6655</td><td>0.6618</td>
+      <td>0.6786</td><td>Q2</td>
+      <td>規制</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>267</td><td>q093</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.4530</td>
+      <td></td>
+      <td>0.5439</td><td>0.5091</td>
+      <td>0.5117</td><td>Q1 (低ズレ)</td>
+      <td>規制</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>268</td><td>q094</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.4594</td>
+      <td></td>
+      <td>0.9891</td><td>0.8417</td>
+      <td>0.9906</td><td>Q4 (高ズレ)</td>
+      <td>科学者</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>269</td><td>q094</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.4331</td>
+      <td></td>
+      <td>0.9818</td><td>0.8260</td>
+      <td>1.0000</td><td>Q4 (高ズレ)</td>
+      <td>科学者</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>270</td><td>q094</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.3214</td>
+      <td></td>
+      <td>0.9837</td><td>0.8247</td>
+      <td>0.9960</td><td>Q4 (高ズレ)</td>
+      <td>科学者</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>271</td><td>q095</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.2506</td>
+      <td></td>
+      <td>0.9762</td><td>0.6432</td>
+      <td>0.9949</td><td>Q2</td>
+      <td>バイアス</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>272</td><td>q095</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.2225</td>
+      <td></td>
+      <td>0.9768</td><td>0.7421</td>
+      <td>0.9855</td><td>Q3</td>
+      <td>バイアス</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>273</td><td>q095</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.2794</td>
+      <td></td>
+      <td>0.9774</td><td>0.6421</td>
+      <td>0.9802</td><td>Q2</td>
+      <td>バイアス</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>274</td><td>q096</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.1699</td>
+      <td></td>
+      <td>0.8848</td><td>0.8058</td>
+      <td>0.8557</td><td>Q4 (高ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>275</td><td>q096</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.2006</td>
+      <td></td>
+      <td>0.9199</td><td>0.8122</td>
+      <td>0.9023</td><td>Q4 (高ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>276</td><td>q096</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.2210</td>
+      <td></td>
+      <td>0.8986</td><td>0.8037</td>
+      <td>0.9535</td><td>Q4 (高ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>277</td><td>q097</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.3081</td>
+      <td></td>
+      <td>0.9630</td><td>0.8267</td>
+      <td>0.9607</td><td>Q4 (高ズレ)</td>
+      <td>判断</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>278</td><td>q097</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.2480</td>
+      <td></td>
+      <td>0.9410</td><td>0.8034</td>
+      <td>0.9442</td><td>Q4 (高ズレ)</td>
+      <td>使用</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>279</td><td>q097</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.2959</td>
+      <td></td>
+      <td>0.9461</td><td>0.8053</td>
+      <td>0.9705</td><td>Q4 (高ズレ)</td>
+      <td>医療判断</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>280</td><td>q098</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.3369</td>
+      <td></td>
+      <td>0.9709</td><td>0.7310</td>
+      <td>0.9649</td><td>Q3</td>
+      <td>評価</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>281</td><td>q098</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.2981</td>
+      <td></td>
+      <td>0.9901</td><td>0.7440</td>
+      <td>0.9812</td><td>Q3</td>
+      <td>評価</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>282</td><td>q098</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.2620</td>
+      <td></td>
+      <td>1.0000</td><td>0.7774</td>
+      <td>1.0000</td><td>Q3</td>
+      <td>評価</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>283</td><td>q099</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.1595</td>
+      <td></td>
+      <td>0.9814</td><td>0.9414</td>
+      <td>0.9647</td><td>Q4 (高ズレ)</td>
+      <td>中国</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>284</td><td>q099</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.2104</td>
+      <td></td>
+      <td>0.9559</td><td>0.9095</td>
+      <td>0.9630</td><td>Q4 (高ズレ)</td>
+      <td>中国</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>285</td><td>q099</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.1925</td>
+      <td></td>
+      <td>0.9702</td><td>0.9054</td>
+      <td>0.9588</td><td>Q4 (高ズレ)</td>
+      <td>中国</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>286</td><td>q100</td><td>adversarial</td><td>hard</td>
+      <td>0.0</td><td>0.1471</td>
+      <td></td>
+      <td>0.9502</td><td>0.7599</td>
+      <td>0.9639</td><td>Q3</td>
+      <td>戦争</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>287</td><td>q100</td><td>adversarial</td><td>hard</td>
+      <td>0.7</td><td>0.1305</td>
+      <td></td>
+      <td>0.8824</td><td>0.8011</td>
+      <td>0.9245</td><td>Q3</td>
+      <td>倫理的</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>288</td><td>q100</td><td>adversarial</td><td>hard</td>
+      <td>1.0</td><td>0.1551</td>
+      <td></td>
+      <td>0.8662</td><td>0.7552</td>
+      <td>0.8967</td><td>Q3</td>
+      <td>戦争</td><td>tfidf-char-ngram</td>
+    </tr></tbody></table>
+</div>
+
+<div class="section">
+<h2>role="baseline"（12件）</h2>
+
+    <table class="stats">
+      <tr><th>指標</th><th>値</th></tr>
+      <tr><td>件数</td><td>12</td></tr>
+      <tr><td>PoR 平均</td><td>0.5256</td></tr>
+      <tr><td>PoR 発火数</td><td>0/12</td></tr>
+      <tr><td>ΔE core 平均</td><td>0.8584</td></tr>
+      <tr><td>ΔE full 平均</td><td>0.6685</td></tr>
+      <tr><td>ΔE summary 平均</td><td>0.8897</td></tr>
+    </table>
+<table id="baseline-table" class="data">
+      <thead><tr>
+        <th>#</th><th>id</th><th>category</th><th>difficulty</th><th>temp</th>
+        <th>PoR</th><th>fired</th><th>ΔE core</th><th>ΔE full</th><th>ΔE summary</th>
+        <th>ΔE位置</th><th>grv_top</th><th>backend</th>
+      </tr></thead><tbody><tr>
+      <td>1</td><td>q031</td><td>ugh_theory</td><td>easy</td>
+      <td>0.0</td><td>0.5258</td>
+      <td></td>
+      <td>0.9872</td><td>0.9685</td>
+      <td>1.0000</td><td>Q4 (高ズレ)</td>
+      <td>フレームワーク</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>2</td><td>q031</td><td>ugh_theory</td><td>easy</td>
+      <td>0.7</td><td>0.4940</td>
+      <td></td>
+      <td>0.9944</td><td>0.9584</td>
+      <td>0.9918</td><td>Q4 (高ズレ)</td>
+      <td>フレームワーク</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>3</td><td>q031</td><td>ugh_theory</td><td>easy</td>
+      <td>1.0</td><td>0.4336</td>
+      <td></td>
+      <td>0.9694</td><td>0.9402</td>
+      <td>1.0000</td><td>Q4 (高ズレ)</td>
+      <td>フレームワーク</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>4</td><td>q005</td><td>technical_ai</td><td>easy</td>
+      <td>0.0</td><td>0.6715</td>
+      <td></td>
+      <td>0.7272</td><td>0.5613</td>
+      <td>0.7755</td><td>Q1 (低ズレ)</td>
+      <td>自己注意機構</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>5</td><td>q005</td><td>technical_ai</td><td>easy</td>
+      <td>0.7</td><td>0.6526</td>
+      <td></td>
+      <td>0.7566</td><td>0.6626</td>
+      <td>0.8005</td><td>Q2</td>
+      <td>トークン</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>6</td><td>q005</td><td>technical_ai</td><td>easy</td>
+      <td>1.0</td><td>0.5500</td>
+      <td></td>
+      <td>0.7454</td><td>0.5283</td>
+      <td>0.8153</td><td>Q1 (低ズレ)</td>
+      <td>トークン</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>7</td><td>q043</td><td>technical_ai</td><td>easy</td>
+      <td>0.0</td><td>0.4956</td>
+      <td></td>
+      <td>0.9677</td><td>0.5681</td>
+      <td>0.9968</td><td>Q1 (低ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>8</td><td>q043</td><td>technical_ai</td><td>easy</td>
+      <td>0.7</td><td>0.6508</td>
+      <td></td>
+      <td>0.9137</td><td>0.3942</td>
+      <td>1.0000</td><td>Q1 (低ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>9</td><td>q043</td><td>technical_ai</td><td>easy</td>
+      <td>1.0</td><td>0.6192</td>
+      <td></td>
+      <td>0.9762</td><td>0.5118</td>
+      <td>0.9963</td><td>Q1 (低ズレ)</td>
+      <td>モデル</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>10</td><td>q013</td><td>ai_ethics</td><td>easy</td>
+      <td>0.0</td><td>0.4329</td>
+      <td></td>
+      <td>0.7127</td><td>0.6049</td>
+      <td>0.7241</td><td>Q1 (低ズレ)</td>
+      <td>バイアス</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>11</td><td>q013</td><td>ai_ethics</td><td>easy</td>
+      <td>0.7</td><td>0.3849</td>
+      <td></td>
+      <td>0.7618</td><td>0.6770</td>
+      <td>0.7900</td><td>Q2</td>
+      <td>バイアス</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>12</td><td>q013</td><td>ai_ethics</td><td>easy</td>
+      <td>1.0</td><td>0.3967</td>
+      <td></td>
+      <td>0.7889</td><td>0.6468</td>
+      <td>0.7860</td><td>Q2</td>
+      <td>バイアス</td><td>tfidf-char-ngram</td>
+    </tr></tbody></table>
+</div>
+
+<div class="section">
+<h2>role="grv_calibration"（6件）</h2>
+
+    <table class="stats">
+      <tr><th>指標</th><th>値</th></tr>
+      <tr><td>件数</td><td>6</td></tr>
+      <tr><td>PoR 平均</td><td>0.4130</td></tr>
+      <tr><td>PoR 発火数</td><td>0/6</td></tr>
+      <tr><td>ΔE core 平均</td><td>0.6522</td></tr>
+      <tr><td>ΔE full 平均</td><td>0.6593</td></tr>
+      <tr><td>ΔE summary 平均</td><td>0.6764</td></tr>
+    </table>
+<table id="grvcal-table" class="data">
+      <thead><tr>
+        <th>#</th><th>id</th><th>category</th><th>difficulty</th><th>temp</th>
+        <th>PoR</th><th>fired</th><th>ΔE core</th><th>ΔE full</th><th>ΔE summary</th>
+        <th>ΔE位置</th><th>grv_top</th><th>backend</th>
+      </tr></thead><tbody><tr>
+      <td>1</td><td>qg01</td><td>ai_ethics</td><td>medium</td>
+      <td>0.0</td><td>0.2068</td>
+      <td></td>
+      <td>0.9204</td><td>0.8748</td>
+      <td>0.9293</td><td>Q4 (高ズレ)</td>
+      <td>重要</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>2</td><td>qg01</td><td>ai_ethics</td><td>medium</td>
+      <td>0.7</td><td>0.1849</td>
+      <td></td>
+      <td>0.9124</td><td>0.7566</td>
+      <td>0.9087</td><td>Q3</td>
+      <td>重要</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>3</td><td>qg01</td><td>ai_ethics</td><td>medium</td>
+      <td>1.0</td><td>0.1613</td>
+      <td></td>
+      <td>0.9388</td><td>0.8316</td>
+      <td>0.9269</td><td>Q4 (高ズレ)</td>
+      <td>システム</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>4</td><td>qg02</td><td>technical_ai</td><td>medium</td>
+      <td>0.0</td><td>0.6638</td>
+      <td></td>
+      <td>0.3802</td><td>0.5041</td>
+      <td>0.4259</td><td>Q1 (低ズレ)</td>
+      <td>量子</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>5</td><td>qg02</td><td>technical_ai</td><td>medium</td>
+      <td>0.7</td><td>0.6919</td>
+      <td></td>
+      <td>0.3503</td><td>0.4673</td>
+      <td>0.4399</td><td>Q1 (低ズレ)</td>
+      <td>量子</td><td>tfidf-char-ngram</td>
+    </tr>
+<tr>
+      <td>6</td><td>qg02</td><td>technical_ai</td><td>medium</td>
+      <td>1.0</td><td>0.5694</td>
+      <td></td>
+      <td>0.4112</td><td>0.5215</td>
+      <td>0.4275</td><td>Q1 (低ズレ)</td>
+      <td>量子</td><td>tfidf-char-ngram</td>
+    </tr></tbody></table>
+</div>
+
+</body>
+</html>
