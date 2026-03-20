@@ -393,9 +393,13 @@ class UGHScorer:
         import re
         # 文境界:
         # - 。？！?! は無条件で文境界
-        # - ピリオド(.)は直前が数字でなく、後続が空白+大文字/CJK または文末の場合のみ
-        #   → 2024. v2. 1. 等の数字ピリオドは文境界にしない
-        pattern = r'(?<=[。？！?!])|(?<=[^\d]\.)(?=\s+[A-Z\u3041-\u9fff]|\s*$)'
+        # - ピリオド(.)は直前が数字でなく、後続が以下のいずれかの場合に文境界:
+        #   → 空白+大文字/CJK、空白+数字（番号付きリスト）、
+        #     空白+引用符（"）、文末
+        pattern = (
+            r'(?<=[。？！?!])'
+            r'|(?<=[^\d]\.)(?=\s+[A-Z\u3041-\u9fff]|\s+\d|\s+["\u201c]|\s*$)'
+        )
         sentences = [s for s in re.split(pattern, text) if s.strip()]
         head = "".join(sentences[:n]).rstrip()
         if not head:

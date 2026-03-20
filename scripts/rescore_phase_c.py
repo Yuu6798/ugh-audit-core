@@ -99,13 +99,20 @@ def main() -> None:
                 reference_core=reference_core,
             )
 
-            # per-row でバックエンドが変わった場合はスキップ（異なるスケール混在防止）
+            # per-row でバックエンドが変わった場合は run 全体を失敗させる
+            # （異なるスケール混在 + 不完全データセットでの calibration 防止）
             if scorer.last_backend != expected_backend:
                 print(
-                    f"Warning: {qid} で {scorer.last_backend} にフォールバック"
-                    f"（期待: {expected_backend}）、スキップ"
+                    f"ERROR: {qid} で {scorer.last_backend} にフォールバック"
+                    f"（期待: {expected_backend}）",
+                    file=sys.stderr,
                 )
-                continue
+                print(
+                    "Phase C calibration には全行が同一バックエンドで"
+                    "スコアリングされる必要があります。中断します。",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
 
             results.append({
                 "id": qid,
