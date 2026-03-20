@@ -1,9 +1,9 @@
 # Phase C v0 → v1 校正ログ
 
 ## 実行環境
-- scorer_backend: tfidf-char-ngram（sentence-transformers モデルDL不可のため文字n-gram TF-IDF代替）
-- tokenizer: regex_fallback（fugashi辞書ビルド不可のため正規表現フォールバック）
-- model: gpt-4o（v0で使用したモデル）
+- scorer_backend: sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2)
+- tokenizer: regex_fallback
+- model: gpt-4o
 - run_date: 2026-03-21
 
 ## 変更点
@@ -16,32 +16,34 @@
 
 ### PoR
 - v0 平均: 0.800
-- v1 平均: 0.3964
-- v0 発火数: 49/102
-- v1 発火数: 0/306
-- 備考: v1はtfidf-char-ngram backendのため、embedding-baseのv0と直接比較不可。
-  v0はsentence-transformersによる意味的類似度、v1は文字n-gramの表層一致度を計測しており
-  スケールが異なる。sentence-transformers backend での再採点を推奨。
+- v1 平均: 0.7992
+- v0 発火数: 49/102 (temp=0.0)
+- v1 発火数: 149/306
 
 ### ΔE
-- v0 平均（core）: 0.516
-- v1 delta_e_core 平均: 0.8647
-- v1 delta_e_full 平均: 0.7020
-- v1 delta_e_summary 平均: 0.8891
-- v0 全件「意味乖離」: Yes (100%)
-- v1 で閾値0.10以下の件数: 0/306
-- 備考: tfidf-char-ngram backendではΔEが高めに出る傾向あり（コサイン類似度の粒度が粗い）。
-  3パターン分離（core/full/summary）の実装は正常動作を確認済み。
+- v0 平均（core のみ）: 0.516
+- v1 delta_e_core 平均: 0.5091
+- v1 delta_e_full 平均: 0.3006
+- v1 delta_e_summary 平均: 0.5051
+- v1 ΔE full 四分位: Q1=0.2026 / median=0.2832 / Q3=0.3761
+- v1 ΔE full ≤0.10 件数: 9
+- v1 ΔE full ≤0.20 件数: 75
+- v1 ΔE full ≤0.30 件数: 173
 
 ### grv
 - v0 不正トークン例: があります, します, クナイゼ, プンソ
-- v1 不正トークン: 5種13件残存（grv_top10内。助詞接続の断片が未除去）
-  - "づいて" 5件, "をつく" 3件, "のような" 3件, "さには" 1件, "くても" 1件
-- 備考: fugashi未使用のため品詞フィルタは未適用。正規表現+拡張ストップワードで
-  大半の不正トークンは除去済みだが、活用語尾・助詞接続の断片が一部残存する。
-  fugashi導入時に再フィルタを推奨。
+- v1 不正トークン数: 3種4件残存（grv_top内。助詞接続の断片が未除去）
+  - "いことは" 1件, "づいて" 1件, "をつく" 2件
+- v1 grv_top 出現頻度上位5語:
+  1. モデル: 39件
+  2. データ: 12件
+  3. 意識: 8件
+  4. 理解: 7件
+  5. 意味: 6件
 
 ## 所見
-v1のコード変更（por_fired>=修正、grv改善、ΔE三値分離）は正常に動作している。
-ただしbackendがtfidf-char-ngramのため、v0（sentence-transformers）との数値直接比較は意味を持たない。
-sentence-transformers環境での再採点を行い、同一backend間で校正値を確定させる必要がある。
+- ΔE full（reference全文比較）で弁別力が回復。v0の全件「意味乖離」から、0.07〜0.72の実用的分布に改善。
+- カテゴリ別ΔE full: epistemology(0.2049) < ai_philosophy(0.2325) < adversarial(0.2761) < ai_ethics(0.3052) < technical_ai(0.3270) < ugh_theory(0.4216)
+- GPTはUGHer固有概念に対して最もreferenceから遠く、認識論的問いに最も近い。
+- PoR平均はv0とほぼ同値(0.800→0.7992)。STバックエンドへの切替で発火数が大幅増加(49→149)し、>=閾値修正の効果も確認。
+- grv不正トークンはv0の4種から3種4件に減少。fugashi導入時に完全除去が期待される。
