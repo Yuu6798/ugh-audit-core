@@ -353,6 +353,13 @@ class UGHScorer:
 
             # フィルタ: ストップワード除外、2文字以上
             if lemma and lemma not in STOPWORDS and len(lemma) >= 2:
+                # 機能語的フレーズの残留を抑制
+                if re.fullmatch(r'.*あり(?:ます)?', lemma):
+                    continue
+                if re.fullmatch(r'.*することが', lemma):
+                    continue
+                if lemma in {'これにより', 'これらの', 'うことを', 'められます', 'するか', 'するかは'}:
+                    continue
                 words.append(lemma)
 
         # バッファ残りを処理
@@ -361,6 +368,14 @@ class UGHScorer:
 
         if not words:
             return self._grv_with_regex(text)  # fallback
+
+        # 最終フィルタ: 形態素結合後にも残る機能語的トークンを除去
+        FINAL_BAN = {
+            "があります", "がある", "である", "します", "について",
+        }
+        words = [w for w in words if w not in FINAL_BAN]
+        if not words:
+            return self._grv_with_regex(text)
 
         counts = Counter(words)
         total = sum(counts.values())
