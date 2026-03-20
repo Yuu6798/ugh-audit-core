@@ -90,3 +90,14 @@ def test_extract_head_sentences_list_markers():
     # 「以下の3点です。」「1. 最初の項目。」「2. 二番目の項目。」の3文
     assert "1." in head
     assert "最初の項目" in head
+
+
+def test_extract_head_sentences_fullwidth_punctuation():
+    """全角？！を文境界として認識する"""
+    text = "最初？二番目。三番目。四番目。"
+    head = UGHScorer._extract_head_sentences(text)
+    assert head == "最初？二番目。三番目。"
+
+    text2 = "すごい！本当？確かに。余分。"
+    head2 = UGHScorer._extract_head_sentences(text2)
+    assert head2 == "すごい！本当？確かに。"
