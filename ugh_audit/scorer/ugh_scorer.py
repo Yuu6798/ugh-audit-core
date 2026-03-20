@@ -78,6 +78,7 @@ class UGHScorer:
 
     def __init__(self, model_id: str = "unknown"):
         self.model_id = model_id
+        self._last_backend: str = ""  # 直近の score() で実際に使用されたバックエンド
 
         # ugh3 インスタンス生成（引数なしで安全に初期化）
         if _UGH3_AVAILABLE:
@@ -135,6 +136,11 @@ class UGHScorer:
             return "sentence-transformers"
         return "minimal"
 
+    @property
+    def last_backend(self) -> str:
+        """直近の score() で実際に使用されたバックエンド名を返す"""
+        return self._last_backend or self.backend
+
     # -------------------------------------------------------------- #
     # Layer 1: ugh3-metrics-lib
     # -------------------------------------------------------------- #
@@ -156,6 +162,7 @@ class UGHScorer:
         全て float を直接返すので自前で判定・変換する。
         """
         try:
+            self._last_backend = "ugh3-metrics-lib"
             por: float = float(self._por.score(question, response))
             por_fired: bool = por >= POR_FIRE_THRESHOLD
 
@@ -212,6 +219,7 @@ class UGHScorer:
         self, question: str, response: str, reference: str,
         reference_core: Optional[str], session_id: str,
     ) -> AuditResult:
+        self._last_backend = "sentence-transformers"
         np = _NP
         model = _ST_MODEL
 
@@ -390,6 +398,7 @@ class UGHScorer:
         self, question: str, response: str, reference: str,
         reference_core: Optional[str], session_id: str,
     ) -> AuditResult:
+        self._last_backend = "minimal"
         return AuditResult(
             question=question,
             response=response,

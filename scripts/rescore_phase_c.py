@@ -80,8 +80,8 @@ def main() -> None:
 
             # reference/reference_core: raw record を優先、無ければ questions からフォールバック
             q = questions.get(qid, {})
-            reference = record.get("reference") or q.get("reference", "")
-            reference_core = record.get("reference_core") or q.get("reference_core", "")
+            reference = record.get("reference") or q.get("reference") or None
+            reference_core = record.get("reference_core") or q.get("reference_core") or None
 
             if not reference and not reference_core:
                 print(f"Warning: {qid} に reference が無いためスキップ")
@@ -112,7 +112,7 @@ def main() -> None:
                 "delta_e_full": round(result.delta_e_full, 4),
                 "delta_e_summary": round(result.delta_e_summary, 4),
                 "grv_top": _get_grv_top(result.grv),
-                "backend": scorer.backend,
+                "backend": scorer.last_backend,
             })
 
     # CSV出力
