@@ -116,8 +116,8 @@ class UGHScorer:
             reference_core : 期待される回答の核心文（ΔE core 計算用、keyword-only）。
                              空なら reference をそのまま使う
         """
-        ref = reference or reference_core or question
-        ref_core = reference_core  # None なら core/summary は個別計算しない
+        ref = reference or question
+        ref_core = reference_core if reference_core else None  # 空文字列も None 扱い
         sid = session_id or str(uuid.uuid4())[:8]
 
         if _UGH3_AVAILABLE and self._por is not None:
