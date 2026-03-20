@@ -390,7 +390,12 @@ class UGHScorer:
         pattern = r'(?<=[。？！?!])|(?<=[^\d]\.)(?=\s+[A-Z\u3041-\u9fff]|\s*$)'
         sentences = [s for s in re.split(pattern, text) if s.strip()]
         head = "".join(sentences[:n]).rstrip()
-        return head if head else text
+        if not head:
+            head = text
+        # 200文字上限: Phase C calibration で text-length bias を分離するため
+        if len(head) > 200:
+            head = head[:200].rstrip()
+        return head
 
     def _score_minimal(
         self, question: str, response: str, reference: str,

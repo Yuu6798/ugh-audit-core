@@ -58,7 +58,8 @@ def main() -> None:
                 questions[q["id"]] = q
 
     scorer = UGHScorer()
-    print(f"Backend: {scorer.backend}")
+    expected_backend = scorer.backend
+    print(f"Backend: {expected_backend}")
 
     # minimal backend では再採点の意味がないため早期終了
     if scorer.backend == "minimal":
@@ -98,9 +99,12 @@ def main() -> None:
                 reference_core=reference_core,
             )
 
-            # per-row で minimal fallback が発生した場合はスキップ（all-zero 汚染防止）
-            if scorer.last_backend == "minimal":
-                print(f"Warning: {qid} で minimal backend にフォールバック、スキップ")
+            # per-row でバックエンドが変わった場合はスキップ（異なるスケール混在防止）
+            if scorer.last_backend != expected_backend:
+                print(
+                    f"Warning: {qid} で {scorer.last_backend} にフォールバック"
+                    f"（期待: {expected_backend}）、スキップ"
+                )
                 continue
 
             results.append({
