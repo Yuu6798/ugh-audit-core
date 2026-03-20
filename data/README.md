@@ -12,11 +12,12 @@ data/
 │   ├── phase_c_report.html             # v0 HTMLレポート
 │   └── calibration_notes.md           # v0で発見された問題の記録
 │
-└── phase_c_v1/                         # v1: キャリブレーション後（作業中）
-    ├── phase_c_results_refull.csv      # reference全文でのΔE再計算
-    ├── phase_c_results_summary.csv     # 要約比較でのΔE再計算
-    ├── human_annotations_20.csv        # 人手アノテーション20件
-    └── threshold_calibration.md       # 新閾値の根拠
+└── phase_c_v1/                         # v1: ST再採点後の正式成果物
+    ├── phase_c_results_v1.csv          # v1正式CSV（sentence-transformers backend）
+    ├── phase_c_v1_results.csv          # 上記CSVへの互換リンク
+    ├── phase_c_report_v1.html          # v1 HTMLレポート
+    ├── phase_c_scored_v1.jsonl         # v1スコア済みJSONL
+    └── calibration_log.md              # v1の数値サマリーと解釈
 ```
 
 ## データ仕様
