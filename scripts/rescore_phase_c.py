@@ -25,10 +25,13 @@ from ugh_audit.scorer import UGHScorer  # noqa: E402
 
 
 def _get_grv_top(grv: dict) -> str:
-    """grv辞書から最大重みのキーを返す"""
+    """grv辞書から最大重みの語彙キーを返す（内部キーを除外）"""
     if not grv:
         return ""
-    return max(grv, key=grv.get)
+    filtered = {k: v for k, v in grv.items() if not k.startswith("_")}
+    if not filtered:
+        return ""
+    return max(filtered, key=filtered.get)
 
 
 def main() -> None:

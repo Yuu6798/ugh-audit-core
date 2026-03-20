@@ -116,7 +116,7 @@ class UGHScorer:
                              空なら reference をそのまま使う
         """
         ref = reference or reference_core or question
-        ref_core = reference_core or ref
+        ref_core = reference_core  # None なら core/summary は個別計算しない
         sid = session_id or str(uuid.uuid4())[:8]
 
         if _UGH3_AVAILABLE and self._por is not None:
@@ -141,7 +141,7 @@ class UGHScorer:
 
     def _score_with_ugh3(
         self, question: str, response: str, reference: str,
-        reference_core: str, session_id: str,
+        reference_core: Optional[str], session_id: str,
     ) -> AuditResult:
         """
         ugh3-metrics-lib の実API に合わせた native 経路。
@@ -159,15 +159,20 @@ class UGHScorer:
             por: float = float(self._por.score(question, response))
             por_fired: bool = por >= POR_FIRE_THRESHOLD
 
-            # ΔE 3パターン
-            delta_e_core: float = max(0.0, min(1.0, float(
-                self._delta_e.score(reference_core, response))))
+            # ΔE full（常に計算）
             delta_e_full: float = max(0.0, min(1.0, float(
                 self._delta_e.score(reference, response))))
 
-            response_head = self._extract_head_sentences(response)
-            delta_e_summary: float = max(0.0, min(1.0, float(
-                self._delta_e.score(reference_core, response_head))))
+            # ΔE core/summary（reference_core が明示的に渡された場合のみ個別計算）
+            if reference_core is not None:
+                delta_e_core = max(0.0, min(1.0, float(
+                    self._delta_e.score(reference_core, response))))
+                response_head = self._extract_head_sentences(response)
+                delta_e_summary = max(0.0, min(1.0, float(
+                    self._delta_e.score(reference_core, response_head))))
+            else:
+                delta_e_core = delta_e_full
+                delta_e_summary = delta_e_full
 
             # GrvV4.score(a, b) は b を無視して a のスカラー重力値を返す
             # 辞書形式の grv はフォールバック実装で補完する
@@ -205,7 +210,7 @@ class UGHScorer:
 
     def _score_with_st(
         self, question: str, response: str, reference: str,
-        reference_core: str, session_id: str,
+        reference_core: Optional[str], session_id: str,
     ) -> AuditResult:
         np = _NP
         model = _ST_MODEL
@@ -213,24 +218,29 @@ class UGHScorer:
         q_emb = model.encode(question, normalize_embeddings=True)
         r_emb = model.encode(response, normalize_embeddings=True)
         ref_emb = model.encode(reference, normalize_embeddings=True)
-        ref_core_emb = model.encode(reference_core, normalize_embeddings=True)
 
         # PoR: 質問と回答のコサイン類似度
         por = float(np.dot(q_emb, r_emb))
         por = max(0.0, min(1.0, por))
         por_fired = por >= POR_FIRE_THRESHOLD
 
-        # ΔE 3パターン
-        delta_e_core = float(1.0 - np.dot(ref_core_emb, r_emb))
-        delta_e_core = max(0.0, min(1.0, delta_e_core))
-
+        # ΔE full（常に計算）
         delta_e_full = float(1.0 - np.dot(ref_emb, r_emb))
         delta_e_full = max(0.0, min(1.0, delta_e_full))
 
-        response_head = self._extract_head_sentences(response)
-        r_head_emb = model.encode(response_head, normalize_embeddings=True)
-        delta_e_summary = float(1.0 - np.dot(ref_core_emb, r_head_emb))
-        delta_e_summary = max(0.0, min(1.0, delta_e_summary))
+        # ΔE core/summary（reference_core が明示的に渡された場合のみ個別計算）
+        if reference_core is not None:
+            ref_core_emb = model.encode(reference_core, normalize_embeddings=True)
+            delta_e_core = float(1.0 - np.dot(ref_core_emb, r_emb))
+            delta_e_core = max(0.0, min(1.0, delta_e_core))
+
+            response_head = self._extract_head_sentences(response)
+            r_head_emb = model.encode(response_head, normalize_embeddings=True)
+            delta_e_summary = float(1.0 - np.dot(ref_core_emb, r_head_emb))
+            delta_e_summary = max(0.0, min(1.0, delta_e_summary))
+        else:
+            delta_e_core = delta_e_full
+            delta_e_summary = delta_e_full
 
         # grv: fugashi or 正規表現フォールバック
         grv = self._compute_grv(response)
@@ -378,7 +388,7 @@ class UGHScorer:
 
     def _score_minimal(
         self, question: str, response: str, reference: str,
-        reference_core: str, session_id: str,
+        reference_core: Optional[str], session_id: str,
     ) -> AuditResult:
         return AuditResult(
             question=question,
