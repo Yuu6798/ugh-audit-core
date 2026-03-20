@@ -182,14 +182,21 @@ class UGHScorer:
                 delta_e_summary = delta_e_full
 
             # GrvV4.score(a, b) は b を無視して a のスカラー重力値を返す
-            # スカラー値は内部参考値として保持するが grv dict には含めない
-            # （grv は純粋な token→weight map として公開する）
-            grv: dict = self._compute_grv(response)
+            # native スカラー値でトークン分布をスケーリングし、ugh3 精度を反映
+            grv_scalar: float = max(0.0, min(1.0, float(self._grv.score(response, ""))))
+            token_dist: dict = self._compute_grv(response)
+            if token_dist and grv_scalar > 0:
+                # native scalar で重み付け: 分布の合計を grv_scalar に正規化
+                total = sum(token_dist.values()) or 1.0
+                grv = {k: round(v / total * grv_scalar, 4) for k, v in token_dist.items()}
+            else:
+                grv = token_dist
 
             return AuditResult(
                 question=question,
                 response=response,
                 reference=reference,
+                reference_core=reference_core,
                 por=por,
                 por_fired=por_fired,
                 delta_e=delta_e_full,
@@ -255,6 +262,7 @@ class UGHScorer:
             question=question,
             response=response,
             reference=reference,
+            reference_core=reference_core,
             por=por,
             por_fired=por_fired,
             delta_e=delta_e_full,
@@ -406,6 +414,7 @@ class UGHScorer:
             question=question,
             response=response,
             reference=reference,
+            reference_core=reference_core,
             por=0.0,
             por_fired=False,
             delta_e=0.0,

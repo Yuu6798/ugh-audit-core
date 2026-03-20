@@ -16,6 +16,7 @@ class AuditResult:
     question: str
     response: str
     reference: Optional[str] = None
+    reference_core: Optional[str] = None
 
     # UGH指標
     por: float = 0.0          # Point of Resonance（共鳴度）0-1

@@ -38,6 +38,7 @@ class AuditDB:
                     question    TEXT NOT NULL,
                     response    TEXT NOT NULL,
                     reference   TEXT,
+                    reference_core TEXT,
                     por         REAL NOT NULL,
                     por_fired   INTEGER NOT NULL,
                     delta_e     REAL NOT NULL,
@@ -50,6 +51,12 @@ class AuditDB:
                 )
             """)
             # 既存DBへのマイグレーション（カラム追加）
+            try:
+                conn.execute(
+                    "ALTER TABLE audit_runs ADD COLUMN reference_core TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass  # カラムが既に存在する場合はスキップ
             for col in ("delta_e_core", "delta_e_full", "delta_e_summary"):
                 try:
                     conn.execute(
@@ -81,16 +88,18 @@ class AuditDB:
             cursor = conn.execute("""
                 INSERT INTO audit_runs
                     (session_id, model_id, question, response, reference,
+                     reference_core,
                      por, por_fired, delta_e,
                      delta_e_core, delta_e_full, delta_e_summary,
                      grv_json, meaning_drift, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 result.session_id,
                 result.model_id,
                 result.question,
                 result.response,
                 result.reference,
+                result.reference_core,
                 result.por,
                 int(result.por_fired),
                 result.delta_e,
