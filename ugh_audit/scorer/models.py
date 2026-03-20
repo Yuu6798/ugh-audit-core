@@ -46,10 +46,13 @@ class AuditResult:
 
     @property
     def dominant_gravity(self) -> Optional[str]:
-        """最も強い語彙重力を持つ概念"""
+        """最も強い語彙重力を持つ概念（内部キーを除外）"""
         if not self.grv:
             return None
-        return max(self.grv, key=self.grv.get)
+        filtered = {k: v for k, v in self.grv.items() if not k.startswith("_")}
+        if not filtered:
+            return None
+        return max(filtered, key=filtered.get)
 
     def __repr__(self) -> str:
         return (
