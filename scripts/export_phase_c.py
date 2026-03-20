@@ -16,6 +16,40 @@ from collections import defaultdict
 from pathlib import Path
 
 
+def _get_scores(r: dict) -> dict:
+    """レコードからスコアフィールドを取得（nested/flat両対応）"""
+    if "scores" in r:
+        return r["scores"]
+    # flat schema → scores dict を構築
+    de = r.get("delta_e_full", r.get("delta_e", 0.0))
+    grv = r.get("grv", {})
+    filtered_grv = {k: v for k, v in grv.items() if not k.startswith("_")}
+    dominant = max(filtered_grv, key=filtered_grv.get) if filtered_grv else None
+    if de <= 0.04:
+        drift = "同一意味圏"
+    elif de <= 0.10:
+        drift = "軽微なズレ"
+    else:
+        drift = "意味乖離"
+    return {
+        "por": r.get("por", 0.0),
+        "delta_e": de,
+        "por_fired": r.get("por_fired", False),
+        "meaning_drift": drift,
+        "dominant_gravity": dominant,
+    }
+
+
+def _get_scoring_meta(r: dict) -> dict:
+    """レコードからスコアリングメタ情報を取得（nested/flat両対応）"""
+    if "scoring_meta" in r:
+        return r["scoring_meta"]
+    return {
+        "backend": r.get("backend", "unknown"),
+        "reference_field": "reference_core" if r.get("reference_core") else "reference",
+    }
+
+
 def export_csv(records: list[dict], output_path: Path) -> None:
     with open(output_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
@@ -26,7 +60,7 @@ def export_csv(records: list[dict], output_path: Path) -> None:
             "meaning_drift", "dominant_gravity",
         ])
         for r in records:
-            s = r["scores"]
+            s = _get_scores(r)
             writer.writerow([
                 r["id"], r["category"], r["role"], r["difficulty"], r["temperature"],
                 r["question"], r["response"], r["reference"], r.get("reference_core", ""),
@@ -43,13 +77,13 @@ def export_html(records: list[dict], output_path: Path, version: str) -> None:
         print("temp=0.0 のレコードがありません")
         return
 
-    pors = [r["scores"]["por"] for r in r0]
-    des = [r["scores"]["delta_e"] for r in r0]
-    fired = sum(1 for r in r0 if r["scores"]["por_fired"])
+    pors = [_get_scores(r)["por"] for r in r0]
+    des = [_get_scores(r)["delta_e"] for r in r0]
+    fired = sum(1 for r in r0 if _get_scores(r)["por_fired"])
 
     cat_scores: dict = defaultdict(list)
     for r in r0:
-        cat_scores[r["category"]].append(r["scores"]["por"])
+        cat_scores[r["category"]].append(_get_scores(r)["por"])
 
     cat_rows = ""
     for cat, scores in sorted(cat_scores.items(), key=lambda x: -sum(x[1]) / len(x[1])):
@@ -62,8 +96,8 @@ def export_html(records: list[dict], output_path: Path, version: str) -> None:
         )
 
     table_rows = ""
-    for r in sorted(r0, key=lambda x: x["scores"]["por"]):
-        s = r["scores"]
+    for r in sorted(r0, key=lambda x: _get_scores(x)["por"]):
+        s = _get_scores(r)
         por_color = "#4caf50" if s["por_fired"] else "#ff9800" if s["por"] >= 0.75 else "#f44336"
         de_color = "#f44336" if s["delta_e"] > 0.5 else "#ff9800"
         table_rows += f"""
@@ -77,8 +111,9 @@ def export_html(records: list[dict], output_path: Path, version: str) -> None:
       <td style="max-width:300px;font-size:12px">{r['question'][:80]}...</td>
     </tr>"""
 
-    backend = r0[0].get("scoring_meta", {}).get("backend", "unknown")
-    ref_field = r0[0].get("scoring_meta", {}).get("reference_field", "unknown")
+    meta = _get_scoring_meta(r0[0])
+    backend = meta.get("backend", "unknown")
+    ref_field = meta.get("reference_field", "unknown")
 
     temps = sorted(set(r["temperature"] for r in records))
     html = f"""<!DOCTYPE html>
