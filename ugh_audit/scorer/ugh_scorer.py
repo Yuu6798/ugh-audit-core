@@ -367,10 +367,12 @@ class UGHScorer:
     def _extract_head_sentences(text: str, n: int = 3) -> str:
         """テキストの先頭n文を抽出する（日本語・英語対応）"""
         import re
-        # 文末記号(。.?!？！)までの塊をマッチ
-        # ピリオドは直前が数字の場合は文末とみなさない（リスト番号 1. 2. を除外）
-        pattern = r'(?:[^。.?!？！]|(?<=\d)\.)+(?:[。?!？！]|(?<!\d)\.)?\s*'
-        sentences = [s for s in re.findall(pattern, text) if s.strip()]
+        # 文境界:
+        # - 。？！?! は無条件で文境界
+        # - ピリオド(.)は直前が数字でなく、後続が空白+大文字/CJK または文末の場合のみ
+        #   → 2024. v2. 1. 等の数字ピリオドは文境界にしない
+        pattern = r'(?<=[。？！?!])|(?<=[^\d]\.)(?=\s+[A-Z\u3041-\u9fff]|\s*$)'
+        sentences = [s for s in re.split(pattern, text) if s.strip()]
         head = "".join(sentences[:n]).rstrip()
         return head if head else text
 

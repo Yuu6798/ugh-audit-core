@@ -101,3 +101,19 @@ def test_extract_head_sentences_fullwidth_punctuation():
     text2 = "すごい！本当？確かに。余分。"
     head2 = UGHScorer._extract_head_sentences(text2)
     assert head2 == "すごい！本当？確かに。"
+
+
+def test_extract_head_sentences_year_and_version():
+    """年号（2024.）やバージョン（v2.）を文境界として誤認識しない"""
+    head = UGHScorer._extract_head_sentences(
+        "Released in 2024. It improved. Third. Fourth."
+    )
+    # 2024. は文境界にならず、"Released in 2024. It improved." が1文
+    assert "2024." in head
+    assert "It improved" in head
+
+    head2 = UGHScorer._extract_head_sentences(
+        "Uses v2. It works well. Fast. Stable."
+    )
+    assert "v2." in head2
+    assert "It works well" in head2
