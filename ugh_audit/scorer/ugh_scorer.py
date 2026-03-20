@@ -184,13 +184,18 @@ class UGHScorer:
             # GrvV4.score(a, b) は b を無視して a のスカラー重力値を返す
             # native スカラー値でトークン分布をスケーリングし、ugh3 精度を反映
             grv_scalar: float = max(0.0, min(1.0, float(self._grv.score(response, ""))))
-            token_dist: dict = self._compute_grv(response)
-            if token_dist and grv_scalar > 0:
-                # native scalar で重み付け: 分布の合計を grv_scalar に正規化
-                total = sum(token_dist.values()) or 1.0
-                grv = {k: round(v / total * grv_scalar, 4) for k, v in token_dist.items()}
+            if grv_scalar > 0:
+                token_dist: dict = self._compute_grv(response)
+                if token_dist:
+                    # native scalar で重み付け: 分布の合計を grv_scalar に正規化
+                    total = sum(token_dist.values()) or 1.0
+                    grv = {k: round(v / total * grv_scalar, 4)
+                           for k, v in token_dist.items()}
+                else:
+                    grv = {}
             else:
-                grv = token_dist
+                # native backend が zero gravity を報告 → 空 dict を保持
+                grv = {}
 
             return AuditResult(
                 question=question,
@@ -405,8 +410,17 @@ class UGHScorer:
         if not head:
             head = text
         # 200文字上限: Phase C calibration で text-length bias を分離するため
+        # 文境界を尊重して切断（mid-word 切断を防止）
         if len(head) > 200:
-            head = head[:200].rstrip()
+            # head 自体を再度文分割し、200文字以内に収まる最大の文数を採用
+            head_sentences = [s for s in re.split(pattern, head) if s.strip()]
+            truncated = ""
+            for s in head_sentences:
+                candidate = truncated + s
+                if len(candidate) > 200:
+                    break
+                truncated = candidate
+            head = truncated.rstrip() if truncated else head[:200].rstrip()
         return head
 
     def _score_minimal(
