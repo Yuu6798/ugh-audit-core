@@ -56,7 +56,13 @@ class AuditDB:
                         f"ALTER TABLE audit_runs ADD COLUMN {col} REAL DEFAULT 0.0"
                     )
                 except sqlite3.OperationalError:
-                    pass  # カラムが既に存在する場合は無視
+                    continue  # カラムが既に存在する場合はスキップ
+            # 既存行の delta_e_full をレガシー delta_e から backfill
+            conn.execute("""
+                UPDATE audit_runs
+                SET delta_e_full = delta_e
+                WHERE delta_e_full = 0.0 AND delta_e != 0.0
+            """)
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_session
                 ON audit_runs(session_id)

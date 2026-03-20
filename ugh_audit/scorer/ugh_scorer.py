@@ -99,8 +99,9 @@ class UGHScorer:
         question: str,
         response: str,
         reference: Optional[str] = None,
-        reference_core: Optional[str] = None,
         session_id: Optional[str] = None,
+        *,
+        reference_core: Optional[str] = None,
     ) -> AuditResult:
         """
         AI回答を UGH 指標でスコアリングする
@@ -110,9 +111,9 @@ class UGHScorer:
             response       : AI の回答
             reference      : 期待される回答全文（ΔE 計算用）。
                              None の場合は question を代用
-            reference_core : 期待される回答の核心文（ΔE core 計算用）。
-                             空なら reference をそのまま使う
             session_id     : セッション識別子
+            reference_core : 期待される回答の核心文（ΔE core 計算用、keyword-only）。
+                             空なら reference をそのまま使う
         """
         ref = reference or question
         ref_core = reference_core or ref
