@@ -71,4 +71,13 @@ def test_extract_head_sentences():
     assert head == "最初。二番目。三番目。"
 
     head2 = UGHScorer._extract_head_sentences("一文だけ")
-    assert head2 == "一文だけ。"
+    assert head2 == "一文だけ"
+
+
+def test_extract_head_sentences_english():
+    """英語の文境界（.?!）にも対応する"""
+    head = UGHScorer._extract_head_sentences("First. Second. Third. Fourth.")
+    assert head == "First. Second. Third."
+
+    head2 = UGHScorer._extract_head_sentences("What is AI? It processes meaning. Really!")
+    assert head2 == "What is AI? It processes meaning. Really!"

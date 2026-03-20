@@ -92,6 +92,7 @@ def main() -> None:
 
     # CSV出力
     if results:
+        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
         with open(args.output, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=results[0].keys())
             writer.writeheader()

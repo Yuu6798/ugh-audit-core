@@ -77,6 +77,8 @@ class AuditDB:
 
     def save(self, result: AuditResult) -> int:
         """AuditResultを保存してrow idを返す"""
+        # delta_e_full が未設定（0.0）の場合はレガシー delta_e から補填
+        delta_e_full = result.delta_e_full if result.delta_e_full != 0.0 else result.delta_e
         with self._conn() as conn:
             cursor = conn.execute("""
                 INSERT INTO audit_runs
@@ -95,7 +97,7 @@ class AuditDB:
                 int(result.por_fired),
                 result.delta_e,
                 result.delta_e_core,
-                result.delta_e_full,
+                delta_e_full,
                 result.delta_e_summary,
                 json.dumps(result.grv, ensure_ascii=False),
                 result.meaning_drift,
