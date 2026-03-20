@@ -83,6 +83,10 @@ def main() -> None:
             if not reference and not reference_core:
                 print(f"Warning: {qid} に reference が無いためスキップ")
                 continue
+            if not reference:
+                print(f"Warning: {qid} に reference 全文が無いためスキップ"
+                      "（core-only では delta_e_full が不正確になる）")
+                continue
 
             result = scorer.score(
                 question=record["question"],
