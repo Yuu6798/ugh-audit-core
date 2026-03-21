@@ -57,7 +57,7 @@ WHY_PATTERN = re.compile(r"なぜ")
 
 # 前提検出の問い文パターン
 PREMISE_QUESTION_PATTERNS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"すべきか"), "当為を前提化"),
+    (re.compile(r"すべきか"), "当為を前提化"),  # ※方法論的質問は除外（下記ロジック参照）
     (re.compile(r"(.+)は(.+)より優れている"), "優劣を前提化"),
     (re.compile(r"犠牲にしていないか"), "犠牲を前提化"),
     (re.compile(r"のだから"), "因果を前提化"),
@@ -101,10 +101,18 @@ def extract_anchor_terms(q: dict) -> list[str]:
         # カッコの直前の語もアンカーに
         start = m.start()
         prefix = question[:start]
-        # 直前のフレーズを取得（"Mixture of Experts" 等の複数語も対象）
+        # 直前の英字フレーズを取得（"Mixture of Experts" 等の複数語も対象）
         prefix_match = re.search(r"((?:[A-Za-zΔ][A-Za-z0-9_]+ )*[A-Za-zΔ][A-Za-z0-9_]+)$", prefix)
         if prefix_match:
             add(prefix_match.group(1))
+        else:
+            # 直前の日本語ヘッド語を取得（「推論時計算量の増大」「過信」等）
+            # 漢字+助詞「の」を含む複合名詞句もマッチ
+            jp_prefix_match = re.search(
+                r"([一-龥ァ-ヴー][一-龥ァ-ヴーの]+[一-龥ァ-ヴー]|[一-龥ァ-ヴー]{2,})$", prefix
+            )
+            if jp_prefix_match:
+                add(jp_prefix_match.group(1))
         add(inner)
 
     # 2. 鉤括弧で囲まれた概念
@@ -269,8 +277,15 @@ def extract_operators(q: dict) -> tuple[list[dict], str | None]:
         combined = "「なぜ」は全称を事実として前提化しているため先に全称を処理する"
         actions.append(combined)
     elif has_why:
-        # なぜ単独は演算子として追加しない（前提なしの理由要求は正当）
-        pass
+        # なぜ単独でも、trap_typeがpremise_acceptanceなら前提埋め込み型の理由要求
+        trap_type = q.get("trap_type", "")
+        if trap_type == "premise_acceptance":
+            ops.append({
+                "term": "なぜ",
+                "scope": "全文",
+                "type": "reason_request_with_premise",
+            })
+            actions.append("「なぜ」が前提を事実化しているため、前提自体を先に検討する")
 
     if not ops:
         return [], None
@@ -303,8 +318,13 @@ def extract_premise(q: dict) -> dict:
 
     # 2. 問い文パターンからの検出
     detected_patterns: list[str] = []
+    # 「どのように〜すべきか」は方法論的質問であり前提罠ではない
+    is_methodological = bool(re.search(r"どのように.+すべきか", question))
     for pat, desc in PREMISE_QUESTION_PATTERNS:
         if pat.search(question):
+            # すべきか が方法論的文脈なら除外
+            if desc == "当為を前提化" and is_methodological:
+                continue
             premise_present = True
             detected_patterns.append(desc)
 
