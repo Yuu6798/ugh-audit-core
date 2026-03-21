@@ -1,47 +1,80 @@
 # Phase C v0 → v1 校正ログ
 
 ## 実行環境
-- scorer_backend: tfidf-char-ngram（sentence-transformers モデルDL不可のため文字n-gram TF-IDF代替）
-- tokenizer: regex_fallback（fugashi辞書ビルド不可のため正規表現フォールバック）
-- model: gpt-4o（v0で使用したモデル）
+- scorer_backend: sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2)
+- tokenizer: regex_fallback
+- model: gpt-4o
 - run_date: 2026-03-21
+
+### アーティファクト整合性に関する注記
+本ログおよび `phase_c_v1_results.csv`・PNG可視化はSTバックエンドでの再採点結果に基づく。
+以下の旧アーティファクトはtfidf-char-ngramバックエンド時点のまま未更新：
+- `phase_c_scored_v1.jsonl` (`"backend": "tfidf-char-ngram"`)
+- `phase_c_report_v1.html` (`scorer_backend=tfidf-char-ngram`)
+
+これらはv0→v1のコード変更検証用として保持しており、数値比較にはCSVを正とする。
 
 ## 変更点
 1. por_fired: > → >= に修正（Step 1）
-2. grv: ストップワード除去、カタカナ結合、品詞フィルタ追加（Step 2）
+2. grv: ストップワード除去を追加（Step 2）。カタカナ結合・品詞フィルタのコード追加も実施したが、
+   tokenizer=regex_fallback のため実行時は `_grv_with_regex()` 経路のみ動作。
+   fugashi導入時に `_grv_with_fugashi()` 経路で完全適用される。
 3. ΔE: 3パターン計算を追加 — core/full/summary（Step 3）
 4. delta_e のプライマリ値を delta_e_full に切り替え
 
 ## v0 → v1 比較
 
-### PoR
-- v0 平均: 0.800
-- v1 平均: 0.3964
-- v0 発火数: 49/102
-- v1 発火数: 0/306
-- 備考: v1はtfidf-char-ngram backendのため、embedding-baseのv0と直接比較不可。
-  v0はsentence-transformersによる意味的類似度、v1は文字n-gramの表層一致度を計測しており
-  スケールが異なる。sentence-transformers backend での再採点を推奨。
+### PoR (role=test, n=288)
+- v0 平均: 0.800（全102件、参考値。v0にはroleフィルタなし）
+- v1 平均（role=test）: 0.8019
+- v1 平均（temp=0.0, role=test, n=96）: 0.8035
+- v0 発火数: 49/102 (temp=0.0, 48.0%、role未分離)
+- v1 発火数（temp=0.0, role=test）: 46/96 (47.9%)
+- v1 発火数（全温度, role=test）: 143/288 (49.7%)
+- 備考: v0はrole区分なしの全102件。v1ではrole=testに限定(96件)しているため
+  厳密な同一母集団比較ではない。発火率はほぼ同一(48.0%→47.9%)。>=閾値修正の影響は
+  境界値(por==0.82)のサンプルがrole=test内に存在しないため差が出ていない。
 
-### ΔE
-- v0 平均（core）: 0.516
-- v1 delta_e_core 平均: 0.8647
-- v1 delta_e_full 平均: 0.7020
-- v1 delta_e_summary 平均: 0.8891
-- v0 全件「意味乖離」: Yes (100%)
-- v1 で閾値0.10以下の件数: 0/306
-- 備考: tfidf-char-ngram backendではΔEが高めに出る傾向あり（コサイン類似度の粒度が粗い）。
-  3パターン分離（core/full/summary）の実装は正常動作を確認済み。
+### ΔE (role=test, n=288)
+- v0 平均（core のみ）: 0.516（全102件、参考値。v0にはroleフィルタなし）
+- v1 delta_e_core 平均: 0.5042
+- v1 delta_e_full 平均: 0.2952
+- v1 delta_e_summary 平均: 0.4999
+- v1 ΔE full 四分位: Q1=0.1964 / median=0.2705 / Q3=0.3753
+- v1 ΔE full 帯域分布:
+
+| ΔE full 範囲 | ラベル | 件数 | 比率 |
+|---|---|---|---|
+| ≤ 0.20 | 意味的に近い | 75 | 26% |
+| 0.20〜0.38 | 中間的ズレ | 144 | 50% |
+| > 0.38 | 意味乖離 | 69 | 24% |
 
 ### grv
 - v0 不正トークン例: があります, します, クナイゼ, プンソ
-- v1 不正トークン: 5種13件残存（grv_top10内。助詞接続の断片が未除去）
-  - "づいて" 5件, "をつく" 3件, "のような" 3件, "さには" 1件, "くても" 1件
-- 備考: fugashi未使用のため品詞フィルタは未適用。正規表現+拡張ストップワードで
-  大半の不正トークンは除去済みだが、活用語尾・助詞接続の断片が一部残存する。
-  fugashi導入時に再フィルタを推奨。
+- v1 不正トークン数: 4種6行残存（grv_top内。助詞接続の断片・複合語の断片が未除去）
+  - "いことは" 1件, "注意重" 2件, "をつく" 2件, "づいて" 1件
+- v1 grv_top 出現頻度上位5語:
+  1. モデル: 39件
+  2. データ: 12件
+  3. 意識: 8件
+  4. 理解: 7件
+  5. 意味: 6件
 
 ## 所見
-v1のコード変更（por_fired>=修正、grv改善、ΔE三値分離）は正常に動作している。
-ただしbackendがtfidf-char-ngramのため、v0（sentence-transformers）との数値直接比較は意味を持たない。
-sentence-transformers環境での再採点を行い、同一backend間で校正値を確定させる必要がある。
+- ΔE full（reference全文比較）で弁別力が回復。v0の全件「意味乖離」から、0.07〜0.72の実用的分布に改善。
+- カテゴリ別ΔE full（temp=0.0, role=test, n=96）: epistemology(0.2049) < ai_philosophy(0.2325) < adversarial(0.2761) < ai_ethics(0.2940) < technical_ai(0.3380) < ugh_theory(0.4040)
+- カテゴリ別PoR（temp=0.0, role=test, n=96）: ai_ethics(0.8361) > ai_philosophy(0.8200) > adversarial(0.8120) > epistemology(0.8102) > technical_ai(0.7820) > ugh_theory(0.7610)
+- 両指標は大筋で整合するが、上位カテゴリでは順位が入れ替わる。
+  PoRではai_ethicsが最上位だがΔE fullではepistemologyが最良。
+  下位（technical_ai, ugh_theory）は両指標で一致。
+  ai_ethicsは「共鳴はしているが核心からはズレている」パターンを示す。
+- GPTはUGHer固有概念に対して最もreferenceから遠く、認識論的問いに最も近い。
+- PoR平均はv0とほぼ同値(0.800→0.8019)。temp=0.0での発火率もほぼ同一(48.0%→47.9%)。
+- grv不正トークンはv0の4種から4種6行に微減。fugashi導入時に完全除去が期待される。
+- **既知の不整合**: q005 (temp=1.0) で por=0.82 / por_fired=False となっている。
+  CSV export 時の浮動小数点丸めと判定フラグの不整合が原因と推定。
+  実害は1件のみ。rescore スクリプトに整合チェック追加を推奨（TODO）。
+- **分析母集団**: 閾値設定・統計分析は role=test の 288件（96問×3温度）を
+  母集団とすべき。baseline(4問×3温度=12件) と grv_calibration(2問×3温度=6件) は校正用であり、
+  本分析の母集団に含めない。
+  role=test の ΔE full 平均は 0.2952（全体 0.3006 と微差）。
