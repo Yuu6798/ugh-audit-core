@@ -119,7 +119,7 @@ def extract_anchor_terms(q: dict) -> list[str]:
 
     # 4. question内の英字専門用語を直接抽出（Transformer, RNN, In-context learning等）
     # 日本語文脈では\bが機能しないため、非ASCII境界も考慮
-    for m in re.finditer(r"(?<![A-Za-z])([A-ZΔ][A-Za-z0-9_Δ]+(?:[- ][A-Za-z][A-Za-z0-9]*)*)", question):
+    for m in re.finditer(r"(?<![A-Za-z])([A-ZΔ][A-Za-z0-9_Δ]+(?:[- ][A-Za-z0-9][A-Za-z0-9]*)*)", question):
         candidate = m.group(1).strip()
         if len(candidate) >= 2 and candidate not in KNOWN_TERMS:
             # 既にフレーズとして追加済みの部分語は除外
