@@ -40,6 +40,7 @@ OPERATOR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"すべて"), "universal", "問い直す or 限定する"),
     (re.compile(r"あらゆる"), "universal", "問い直す or 限定する"),
     (re.compile(r"必ず"), "universal", "問い直す or 限定する"),
+    (re.compile(r"普遍的"), "universal", "問い直す or 限定する"),
     (re.compile(r"本質的に"), "limiter", "問い直す or 再定義する"),
     (re.compile(r"根本的に"), "limiter", "問い直す or 再定義する"),
     (re.compile(r"完全に"), "limiter", "問い直す or 再定義する"),
@@ -176,7 +177,24 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
     unknowns: list[str] = []
     seen: set[str] = set()
 
-    # 1. 略語・ハイフン付き複合語を候補とする
+    # 1. カッコ前の複数語フレーズを未確定語候補に追加（部分語の先取り）
+    for m in PAREN_PATTERN.finditer(question):
+        start = m.start()
+        prefix = question[:start]
+        # 英字フレーズ（"Mixture of Experts"等）
+        pfx_match = re.search(
+            r"((?:[A-Za-zΔ][A-Za-z0-9_]+ )*[A-Za-zΔ][A-Za-z0-9_]+)$", prefix
+        )
+        if pfx_match:
+            phrase = pfx_match.group(1)
+            if phrase not in KNOWN_TERMS and phrase not in seen:
+                seen.add(phrase)
+                unknowns.append(phrase)
+                # フレーズの各単語もseenに登録して重複を防ぐ
+                for word in phrase.split():
+                    seen.add(word)
+
+    # 2. 略語・ハイフン付き複合語を候補とする
     for m in ABBREVIATION_PATTERN.finditer(question):
         abbr = m.group(1)
         if abbr in KNOWN_TERMS:
@@ -204,7 +222,7 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
             seen.add(abbr)
             unknowns.append(abbr)
 
-    # 2. カッコ内の英語表現を未確定語候補に追加
+    # 3. カッコ内の英語表現を未確定語候補に追加
     for m in PAREN_PATTERN.finditer(question):
         inner = m.group(1)
         if inner in seen or inner in KNOWN_TERMS:
@@ -214,7 +232,7 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
             seen.add(inner)
             unknowns.append(inner)
 
-    # 3. UGH固有用語（日本語含む）でquestion中に出現するもの
+    # 4. UGH固有用語（日本語含む）でquestion中に出現するもの
     for term in UGH_TERMS:
         if term in question and term not in seen:
             seen.add(term)
