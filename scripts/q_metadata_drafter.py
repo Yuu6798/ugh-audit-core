@@ -573,8 +573,8 @@ def compute_severity(
 
     # --- f4: 前提 ---
     if premise["premise_present"]:
-        # 強い前提指標: premise_acceptance は常に medium
-        # binary_reduction は問い文パターン検出ありで medium
+        # premise_acceptance / binary_reduction は元データ作成者が構造的前提の
+        # 埋め込みを認定した trap_type であり、パターン検出の有無にかかわらず medium。
         if trap_type == "premise_acceptance":
             result["f4"] = {
                 "severity": "medium",
@@ -588,11 +588,11 @@ def compute_severity(
                 "matched_rule": f"trap_type={trap_type}+pattern",
             }
         elif trap_type == "binary_reduction":
-            # パターン検出なしの binary_reduction → low
+            # パターン検出なしでも trap_type が binary_reduction なら medium
             result["f4"] = {
-                "severity": "low",
+                "severity": "medium",
                 "trigger_text": premise.get("premise_content", ""),
-                "matched_rule": f"trap_type={trap_type}_weak",
+                "matched_rule": f"trap_type={trap_type}",
             }
         else:
             # safety_boilerplate, relativism_drift → low
@@ -968,7 +968,7 @@ def main() -> None:
         result = process_question(q)
         results.append(result)
 
-    # 運用メタ情報の付与
+    # 運用メタ情報の付与（generated_at は非決定的なので JSONL には含めない）
     source_bytes = input_path.read_bytes()
     source_hash = hashlib.sha256(source_bytes).hexdigest()[:16]
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -977,7 +977,6 @@ def main() -> None:
     for r in results:
         record = {
             "schema_version": SCHEMA_VERSION,
-            "generated_at": generated_at,
             "source_file": input_path.name,
             "source_hash": source_hash,
             "generator_version": GENERATOR_VERSION,
@@ -992,6 +991,7 @@ def main() -> None:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     print(f"出力: {output_path}")
+    print(f"generated_at: {generated_at}")
 
     # サマリー表示
     # 基準値: v1最終版の needs_human_review=true は 93/102。

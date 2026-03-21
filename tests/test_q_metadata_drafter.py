@@ -106,7 +106,7 @@ class TestSentinelQuestions:
 class TestTierPass:
     """pass 回帰テスト（5問以上）。"""
 
-    PASS_IDS = ["q015", "q040", "q047", "q066", "q067", "q018"]
+    PASS_IDS = ["q015", "q040", "q052", "q066", "q068", "q018"]
 
     @pytest.mark.parametrize("qid", PASS_IDS)
     def test_pass_tier(self, all_results: dict[str, dict], qid: str) -> None:
