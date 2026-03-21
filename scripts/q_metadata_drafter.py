@@ -188,13 +188,15 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
             seen.add(abbr)
             unknowns.append(abbr)
 
-    # 2. カッコ内の英語表現でUGH固有のもの
+    # 2. カッコ内の英語表現を未確定語候補に追加
     for m in PAREN_PATTERN.finditer(question):
         inner = m.group(1)
-        if is_ugh_term(inner):
-            if inner not in seen:
-                seen.add(inner)
-                unknowns.append(inner)
+        if inner in seen or inner in KNOWN_TERMS:
+            continue
+        # 英字を含む表現（専門用語の英語グロス）は未確定語候補
+        if re.search(r"[A-Za-z]", inner):
+            seen.add(inner)
+            unknowns.append(inner)
 
     # 3. UGH固有用語（日本語含む）でquestion中に出現するもの
     for term in UGH_TERMS:
