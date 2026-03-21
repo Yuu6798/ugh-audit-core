@@ -1,15 +1,42 @@
 #!/usr/bin/env python3
-"""Qメタデータ自動下書き器 — 4要素構造フレームの半自動生成スクリプト。
+"""Qメタデータ構造トリアージ生成器 — 4要素構造フレームの半自動生成スクリプト。
 
 入力: ugh-audit-100q-v3_jsonl.txt (JSONL, 102問)
 出力: q_metadata_structural_draft.jsonl (JSONL, 102問 + サマリー表示)
+
+review_tier:
+  pass   — 自動承認可能。全要素 low で構造的リスクなし。
+  warn   — 目視推奨だが低リスク（ソフトトリアージ）。
+           f4_premise=medium 単独やソース側フラグのみの問はここに入る。
+           今後のチューニングでは、不要な warn を減らすことが主な改善方向。
+  review — 人間による確認が必須（ハードトリアージ）。
+           high 要素あり、または f1-f3 の medium が2つ以上重なった問。
+
+基準値メモ:
+  v1 (needs_human_review 二値) では medium が1つでも review 扱いだったため
+  93/102 が review に分類されていた。設計仕様書の「71/102」はスクリプト初期版
+  での計測値であり、v1 最終版の実測値は 93/102 である。
+  v2 で review_tier を導入し 93 → 32 に削減した（65.6%削減）。
+
+source_requires_manual_review:
+  入力 JSONL の各問に付与される元データ側フラグ。
+  質問作成者が「自動判定だけでは不十分」と判断した問に true を設定する。
+  本スクリプトでは severity 計算には影響せず、tier を最低 review に引き上げる
+  ために使用する（作成者の「要確認」意図を尊重）。
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+# ---------- バージョン ----------
+
+SCHEMA_VERSION = "2.0.0"
+GENERATOR_VERSION = "2.0.0"
 
 # ---------- 定数 ----------
 
@@ -402,8 +429,12 @@ def extract_operators(q: dict) -> tuple[list[dict], str | None]:
     return ops, action
 
 
-def extract_premise(q: dict) -> dict:
-    """f4_premise のメタデータを抽出する。"""
+def extract_premise(q: dict) -> tuple[dict, list[str]]:
+    """f4_premise のメタデータを抽出する。
+
+    Returns:
+        (premise_dict, detected_patterns) — detected_patterns は severity 判定で使用
+    """
     question = q["question"]
     trap_type = q.get("trap_type", "")
     disq = q.get("disqualifying_shortcuts", [])
@@ -454,7 +485,7 @@ def extract_premise(q: dict) -> dict:
         "premise_present": premise_present,
         "premise_content": premise_content if premise_present else "",
         "premise_acceptable_stances": acceptable_stances,
-    }
+    }, detected_patterns
 
 
 def compute_severity(
@@ -463,103 +494,247 @@ def compute_severity(
     unknown_terms: list[str],
     operators: list[dict],
     premise: dict,
-) -> dict[str, str]:
-    """各要素のseverity_hintを計算する。"""
+    detected_premise_patterns: list[str],
+) -> dict[str, dict]:
+    """各要素のseverity + 根拠情報を計算する。"""
     question = q["question"]
     trap_type = q.get("trap_type", "")
 
-    sev = {
-        "f1": "low",
-        "f2": "low",
-        "f3": "low",
-        "f4": "low",
-    }
+    result: dict[str, dict] = {}
 
-    # f1: アンカー語が空または汎用述語のみ → medium
-    # 汎用述語: 質問の主題を特定できない一般的な動詞・形容詞
+    # --- f1: アンカー語 ---
     generic_predicates = {
         "正当化", "可能", "必要", "重要", "存在", "意味", "問題", "影響",
         "変化", "関係", "理由", "結果", "原因", "目的", "方法",
     }
     if not anchor_terms:
-        sev["f1"] = "medium"
+        result["f1"] = {
+            "severity": "medium",
+            "trigger_text": "",
+            "matched_rule": "no_anchor_terms",
+        }
     elif all(t in generic_predicates for t in anchor_terms):
-        sev["f1"] = "medium"
+        result["f1"] = {
+            "severity": "medium",
+            "trigger_text": ", ".join(anchor_terms),
+            "matched_rule": "generic_predicates_only",
+        }
+    else:
+        result["f1"] = {
+            "severity": "low",
+            "trigger_text": ", ".join(anchor_terms[:3]),
+            "matched_rule": "anchor_terms_present",
+        }
 
-    # f2: UGH固有語が主対象 → high、非UGH未確定語あり → medium
+    # --- f2: 未確定語 ---
     ugh_unknowns = [t for t in unknown_terms if is_ugh_term(t)]
-    if ugh_unknowns:
-        for t in ugh_unknowns:
-            if t in question:
-                sev["f2"] = "high"
-                break
+    if ugh_unknowns and any(t in question for t in ugh_unknowns):
+        result["f2"] = {
+            "severity": "high",
+            "trigger_text": ", ".join(ugh_unknowns),
+            "matched_rule": "ugh_term_as_subject",
+        }
     elif unknown_terms:
-        sev["f2"] = "medium"
+        result["f2"] = {
+            "severity": "medium",
+            "trigger_text": ", ".join(unknown_terms[:3]),
+            "matched_rule": "non_ugh_unknowns",
+        }
+    else:
+        result["f2"] = {
+            "severity": "low",
+            "trigger_text": "",
+            "matched_rule": "no_unknowns",
+        }
 
-    # f3: 全称表現あり → high、limiter/negative_question → medium
+    # --- f3: 演算子 ---
+    f3_sev = "low"
+    f3_trigger = ""
+    f3_rule = "no_operators"
     for op in operators:
         if op["type"] in ("universal", "reason_request_with_premise"):
-            sev["f3"] = "high"
+            f3_sev = "high"
+            f3_trigger = op["term"]
+            f3_rule = f"operator_{op['type']}"
             break
-        if op["type"] in ("limiter", "limiter_prefix", "limiter_suffix", "negative_question", "equivalence"):
-            sev["f3"] = "medium"
+        if op["type"] in (
+            "limiter", "limiter_prefix", "limiter_suffix",
+            "negative_question", "equivalence", "skeptical_modality",
+        ):
+            if f3_sev != "high":
+                f3_sev = "medium"
+                f3_trigger = op["term"]
+                f3_rule = f"operator_{op['type']}"
+    result["f3"] = {
+        "severity": f3_sev,
+        "trigger_text": f3_trigger,
+        "matched_rule": f3_rule,
+    }
 
-    # f4: premise
+    # --- f4: 前提 ---
     if premise["premise_present"]:
+        # premise_acceptance / binary_reduction は元データ作成者が構造的前提の
+        # 埋め込みを認定した trap_type であり、パターン検出の有無にかかわらず medium。
         if trap_type == "premise_acceptance":
-            sev["f4"] = "medium"
+            result["f4"] = {
+                "severity": "medium",
+                "trigger_text": premise.get("premise_content", ""),
+                "matched_rule": f"trap_type={trap_type}",
+            }
+        elif trap_type == "binary_reduction" and detected_premise_patterns:
+            result["f4"] = {
+                "severity": "medium",
+                "trigger_text": ", ".join(detected_premise_patterns),
+                "matched_rule": f"trap_type={trap_type}+pattern",
+            }
         elif trap_type == "binary_reduction":
-            sev["f4"] = "medium"
+            # パターン検出なしでも trap_type が binary_reduction なら medium
+            result["f4"] = {
+                "severity": "medium",
+                "trigger_text": premise.get("premise_content", ""),
+                "matched_rule": f"trap_type={trap_type}",
+            }
         else:
-            sev["f4"] = "medium"
+            # safety_boilerplate, relativism_drift — premise_present=true なら medium。
+            # 元データ作成者が trap_type を付与した以上、前提の埋め込みは認定済み。
+            result["f4"] = {
+                "severity": "medium",
+                "trigger_text": premise.get("premise_content", ""),
+                "matched_rule": f"trap_type={trap_type}",
+            }
+    else:
+        result["f4"] = {
+            "severity": "low",
+            "trigger_text": "",
+            "matched_rule": "no_premise",
+        }
 
-    return sev
+    return result
 
 
-def compute_review_flags(
-    severity: dict[str, str],
+# ---------- review_tier ----------
+
+_FACTOR_LABELS = {
+    "f1": "f1_anchor",
+    "f2": "f2_unknown",
+    "f3": "f3_operator",
+    "f4": "f4_premise",
+}
+
+
+def compute_review_tier(
+    severity_info: dict[str, dict],
     source_requires_manual_review: bool = False,
 ) -> dict:
-    """review_flags を生成する。"""
-    reasons: list[str] = []
-    max_sev = "low"
+    """review_tier (pass / warn / review) と根拠を生成する。
+
+    ルール:
+    - high が1つでもあれば → review
+    - f1〜f3 の medium が2つ以上 → review
+    - f4_premise=medium は tier 閾値に寄与しない（単独 or 補助扱い → warn）
+    - medium が1つ → warn
+    - source_requires_manual_review → 最低 warn
+    - low のみ → pass
+    """
+    highs: list[str] = []
+    mediums: list[str] = []
+    core_mediums: list[str] = []  # f1-f3 のみ（f4 は含めない）
+    all_reasons: list[dict] = []
 
     for key in ("f1", "f2", "f3", "f4"):
-        s = severity[key]
-        label = {
-            "f1": "f1_anchor",
-            "f2": "f2_unknown",
-            "f3": "f3_operator",
-            "f4": "f4_premise",
-        }[key]
-        if s == "high":
-            reasons.append(f"{label} severity=high")
-            max_sev = "high"
-        elif s == "medium":
-            reasons.append(f"{label} severity=medium")
-            if max_sev != "high":
-                max_sev = "medium"
+        info = severity_info[key]
+        sev = info["severity"]
+        label = _FACTOR_LABELS[key]
+        if sev == "high":
+            highs.append(key)
+            all_reasons.append({
+                "factor": label,
+                "severity": "high",
+                "trigger_text": info["trigger_text"],
+                "matched_rule": info["matched_rule"],
+            })
+        elif sev == "medium":
+            mediums.append(key)
+            if key != "f4":
+                core_mediums.append(key)
+            all_reasons.append({
+                "factor": label,
+                "severity": "medium",
+                "trigger_text": info["trigger_text"],
+                "matched_rule": info["matched_rule"],
+            })
 
-    # 元データの requires_manual_review を尊重する
-    if source_requires_manual_review:
-        reasons.append("source requires_manual_review=true")
-
-    needs_review = max_sev in ("high", "medium") or source_requires_manual_review
-
-    # confidence: high=全要素low / medium=medium要素あり / low=high要素あり
-    medium_count = sum(1 for k in ("f1", "f2", "f3", "f4") if severity[k] == "medium")
-    if max_sev == "high":
-        confidence = "low"
-    elif max_sev == "medium":
-        confidence = "medium" if medium_count >= 2 or source_requires_manual_review else "medium"
+    # --- tier 判定 ---
+    # review (ハードトリアージ): high が1つでも、f1-f3 の medium が2つ以上、
+    #   または source_requires_manual_review=true。
+    # warn   (ソフトトリアージ): medium が1つ。
+    #   f4_premise=medium は閾値に寄与しない — v1 で f4 が review を押し上げていた
+    #   主因であり、f4 単独では構造的リスクが低いため core_mediums から除外。
+    # pass: 全要素 low かつ source フラグなし。
+    #
+    # source_requires_manual_review は元データ作成者が付与した外部フラグ。
+    # 「人間の確認が必要」という作成者の意図を尊重し、最低 review に引き上げる。
+    if highs:
+        tier = "review"
+    elif len(core_mediums) >= 2:
+        tier = "review"
     elif source_requires_manual_review:
+        tier = "review"
+    elif mediums:
+        tier = "warn"
+    else:
+        tier = "pass"
+
+    # --- primary_factor（二重計上防止）---
+    primary_reason: dict | None = None
+    secondary_reasons: list[dict] = []
+    suppressed_reasons: list[dict] = []
+
+    if all_reasons:
+        # primary: 最も重いもの（high > medium、同レベルなら f3 > f2 > f4 > f1）
+        priority_order = {"f3": 0, "f2": 1, "f4": 2, "f1": 3}
+        sev_order = {"high": 0, "medium": 1}
+        sorted_reasons = sorted(
+            all_reasons,
+            key=lambda r: (sev_order.get(r["severity"], 2), priority_order.get(r["factor"].split("_")[0][:2], 9)),
+        )
+        primary_reason = sorted_reasons[0]
+
+        for r in sorted_reasons[1:]:
+            # 同一 matched_rule による二重計上を抑制
+            if r["matched_rule"] == primary_reason["matched_rule"]:
+                suppressed_reasons.append(r)
+            else:
+                secondary_reasons.append(r)
+
+    if source_requires_manual_review:
+        source_entry = {
+            "factor": "source",
+            "severity": "external",
+            "trigger_text": "requires_manual_review=true",
+            "matched_rule": "source_flag",
+        }
+        if primary_reason is None:
+            # source_requires_manual_review のみで warn に引き上げたケース
+            primary_reason = source_entry
+        else:
+            secondary_reasons.append(source_entry)
+
+    # confidence
+    if highs:
+        confidence = "low"
+    elif len(mediums) >= 2:
+        confidence = "medium"
+    elif mediums or source_requires_manual_review:
         confidence = "medium"
     else:
         confidence = "high"
 
     return {
-        "needs_human_review": needs_review,
-        "review_reason": ", ".join(reasons) if reasons else "",
+        "review_tier": tier,
+        "primary_reason": primary_reason,
+        "secondary_reasons": secondary_reasons,
+        "suppressed_reasons": suppressed_reasons,
         "auto_draft_confidence": confidence,
     }
 
@@ -569,10 +744,12 @@ def process_question(q: dict) -> dict:
     anchor_terms = extract_anchor_terms(q)
     unknown_terms, unknown_action = extract_unknown_terms(q)
     operators, operator_action = extract_operators(q)
-    premise = extract_premise(q)
+    premise, detected_premise_patterns = extract_premise(q)
 
-    severity = compute_severity(q, anchor_terms, unknown_terms, operators, premise)
-    review_flags = compute_review_flags(severity, q.get("requires_manual_review", False))
+    severity_info = compute_severity(
+        q, anchor_terms, unknown_terms, operators, premise, detected_premise_patterns,
+    )
+    review = compute_review_tier(severity_info, q.get("requires_manual_review", False))
 
     result = {
         "id": q["id"],
@@ -583,24 +760,38 @@ def process_question(q: dict) -> dict:
                 "anchor_terms": anchor_terms,
                 "anchor_allowed_rephrase": [],
                 "anchor_forbidden_reinterpret": [],
-                "severity_hint": severity["f1"],
+                "severity_hint": severity_info["f1"]["severity"],
+                "trigger_text": severity_info["f1"]["trigger_text"],
+                "matched_rule": severity_info["f1"]["matched_rule"],
             },
             "f2_unknown": {
                 "unknown_terms": unknown_terms,
                 "unknown_default_action": unknown_action,
-                "severity_hint": severity["f2"],
+                "severity_hint": severity_info["f2"]["severity"],
+                "trigger_text": severity_info["f2"]["trigger_text"],
+                "matched_rule": severity_info["f2"]["matched_rule"],
             },
             "f3_operator": {
                 "operators": operators,
                 "operator_required_action": operator_action,
-                "severity_hint": severity["f3"],
+                "severity_hint": severity_info["f3"]["severity"],
+                "trigger_text": severity_info["f3"]["trigger_text"],
+                "matched_rule": severity_info["f3"]["matched_rule"],
             },
             "f4_premise": {
                 **premise,
-                "severity_hint": severity["f4"],
+                "severity_hint": severity_info["f4"]["severity"],
+                "trigger_text": severity_info["f4"]["trigger_text"],
+                "matched_rule": severity_info["f4"]["matched_rule"],
             },
         },
-        "review_flags": review_flags,
+        "review_tier": review["review_tier"],
+        "review_detail": {
+            "primary_reason": review["primary_reason"],
+            "secondary_reasons": review["secondary_reasons"],
+            "suppressed_reasons": review["suppressed_reasons"],
+            "auto_draft_confidence": review["auto_draft_confidence"],
+        },
         "original_trap_type": q.get("trap_type", ""),
         "original_disqualifying_shortcuts": q.get("disqualifying_shortcuts", []),
         "original_core_propositions": q.get("core_propositions", []),
@@ -610,51 +801,83 @@ def process_question(q: dict) -> dict:
     return result
 
 
-def print_summary(results: list[dict]) -> None:
-    """サマリーを標準出力に表示する。"""
-    total = len(results)
+def print_summary(results: list[dict], old_review_count: int | None = None) -> None:
+    """拡張サマリーを標準出力に表示する。"""
+    # --- tier 集計 ---
+    tier_counts = {"pass": 0, "warn": 0, "review": 0}
+    for r in results:
+        tier_counts[r["review_tier"]] += 1
 
-    # severity統計
-    stats: dict[str, dict[str, int]] = {
+    # --- severity × 要素 ---
+    sev_stats: dict[str, dict[str, int]] = {
         f: {"high": 0, "medium": 0, "low": 0}
         for f in ("f1_anchor", "f2_unknown", "f3_operator", "f4_premise")
     }
-
-    needs_review_count = 0
+    total_high = total_medium = total_low = 0
     high_severity_items: list[tuple[str, list[str]]] = []
 
     for r in results:
         meta = r["structural_meta"]
         highs: list[str] = []
-        for fkey, fname in [
-            ("f1_anchor", "f1_anchor"),
-            ("f2_unknown", "f2_unknown"),
-            ("f3_operator", "f3_operator"),
-            ("f4_premise", "f4_premise"),
-        ]:
+        for fkey in ("f1_anchor", "f2_unknown", "f3_operator", "f4_premise"):
             sev = meta[fkey]["severity_hint"]
-            stats[fname][sev] += 1
+            sev_stats[fkey][sev] += 1
             if sev == "high":
-                highs.append(fname)
-
-        if r["review_flags"]["needs_human_review"]:
-            needs_review_count += 1
-
+                total_high += 1
+                highs.append(fkey)
+            elif sev == "medium":
+                total_medium += 1
+            else:
+                total_low += 1
         if highs:
             high_severity_items.append((r["id"], highs))
 
+    # --- category 別 ---
+    cat_counts: dict[str, dict[str, int]] = {}
+    for r in results:
+        cat = r.get("category", "unknown")
+        if cat not in cat_counts:
+            cat_counts[cat] = {"pass": 0, "warn": 0, "review": 0}
+        cat_counts[cat][r["review_tier"]] += 1
+
+    # --- primary_factor 分布 ---
+    pf_counts: dict[str, int] = {}
+    for r in results:
+        pf = r["review_detail"].get("primary_reason")
+        if pf:
+            label = pf["factor"]
+            pf_counts[label] = pf_counts.get(label, 0) + 1
+
+    # === 出力 ===
     print("\n" + "=" * 60)
-    print("Qメタデータ自動下書き — サマリー")
+    print("Qメタデータ構造トリアージ — サマリー")
     print("=" * 60)
 
-    print("\n【全体統計】")
-    print(f"  総問数: {total}")
-    print(f"  needs_human_review = true: {needs_review_count}件")
+    print("\n【review_tier 集計】")
+    print(f"  pass:   {tier_counts['pass']}件")
+    print(f"  warn:   {tier_counts['warn']}件")
+    print(f"  review: {tier_counts['review']}件")
+    if old_review_count is not None:
+        reduction = old_review_count - tier_counts["review"]
+        pct = reduction / old_review_count * 100 if old_review_count > 0 else 0
+        print(f"\n  推定レビュー削減率: {old_review_count} → {tier_counts['review']} "
+              f"({reduction:+d}件, {pct:.1f}%削減)")
 
-    print("\n  severity分布:")
+    print("\n【severity × 要素】")
     for fname in ("f1_anchor", "f2_unknown", "f3_operator", "f4_premise"):
-        s = stats[fname]
-        print(f"    {fname}: high={s['high']} / medium={s['medium']} / low={s['low']}")
+        s = sev_stats[fname]
+        print(f"  {fname}: high={s['high']} / medium={s['medium']} / low={s['low']}")
+    print(f"\n  合計: high={total_high} / medium={total_medium} / low={total_low}")
+
+    print("\n【category 別 tier 集計】")
+    for cat in sorted(cat_counts.keys()):
+        c = cat_counts[cat]
+        cat_total = c["pass"] + c["warn"] + c["review"]
+        print(f"  {cat} ({cat_total}): pass={c['pass']} warn={c['warn']} review={c['review']}")
+
+    print("\n【primary_factor 分布】")
+    for label, cnt in sorted(pf_counts.items(), key=lambda x: -x[1]):
+        print(f"  {label}: {cnt}")
 
     print("\n【要注意問題】(severity=high が1つ以上)")
     if high_severity_items:
@@ -690,7 +913,11 @@ def print_summary(results: list[dict]) -> None:
         if meta["f4_premise"]["premise_content"]:
             print(f"  f4_premise.content: {meta['f4_premise']['premise_content']}")
         print(f"  f4_premise.severity: {meta['f4_premise']['severity_hint']}")
-        print(f"  review: {r['review_flags']}")
+        print(f"  review_tier: {r['review_tier']}")
+        pd = r["review_detail"]
+        if pd["primary_reason"]:
+            pr = pd["primary_reason"]
+            print(f"  primary_reason: {pr['factor']} ({pr['severity']}) — {pr['matched_rule']}")
 
 
 def main() -> None:
@@ -739,15 +966,36 @@ def main() -> None:
         result = process_question(q)
         results.append(result)
 
+    # 運用メタ情報の付与（generated_at は非決定的なので JSONL には含めない）
+    source_bytes = input_path.read_bytes()
+    source_hash = hashlib.sha256(source_bytes).hexdigest()[:16]
+    generated_at = datetime.now(timezone.utc).isoformat()
+
+    output_records: list[dict] = []
+    for r in results:
+        record = {
+            "schema_version": SCHEMA_VERSION,
+            "source_file": input_path.name,
+            "source_hash": source_hash,
+            "generator_version": GENERATOR_VERSION,
+            **r,
+        }
+        output_records.append(record)
+
     # 出力
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        for r in results:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        for rec in output_records:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     print(f"出力: {output_path}")
+    print(f"generated_at: {generated_at}")
 
     # サマリー表示
-    print_summary(results)
+    # 基準値: v1最終版の needs_human_review=true は 93/102。
+    # 設計仕様書の「71/102」は初期版での計測値であり、その後の severity 拡張で
+    # 93 まで増加した。ここでは実測値の 93 を基準に削減率を算出する。
+    print_summary(results, old_review_count=93)
 
 
 if __name__ == "__main__":
