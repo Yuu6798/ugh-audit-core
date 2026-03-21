@@ -352,14 +352,15 @@ def compute_severity(
     if not anchor_terms:
         sev["f1"] = "medium"
 
-    # f2: UGH固有語が主対象 → high
+    # f2: UGH固有語が主対象 → high、非UGH未確定語あり → medium
     ugh_unknowns = [t for t in unknown_terms if is_ugh_term(t)]
     if ugh_unknowns:
-        # 主対象かどうか: questionの冒頭〜中盤に出現するか
         for t in ugh_unknowns:
             if t in question:
                 sev["f2"] = "high"
                 break
+    elif unknown_terms:
+        sev["f2"] = "medium"
 
     # f3: 全称表現あり → high
     for op in operators:
@@ -409,11 +410,14 @@ def compute_review_flags(
 
     needs_review = max_sev in ("high", "medium") or source_requires_manual_review
 
-    # confidence
+    # confidence: high=全要素low / medium=medium要素あり / low=high要素あり
+    medium_count = sum(1 for k in ("f1", "f2", "f3", "f4") if severity[k] == "medium")
     if max_sev == "high":
+        confidence = "low"
+    elif max_sev == "medium":
+        confidence = "medium" if medium_count >= 2 or source_requires_manual_review else "medium"
+    elif source_requires_manual_review:
         confidence = "medium"
-    elif max_sev == "medium" or source_requires_manual_review:
-        confidence = "high"
     else:
         confidence = "high"
 
