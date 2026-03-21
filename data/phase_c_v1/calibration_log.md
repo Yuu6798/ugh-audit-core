@@ -78,3 +78,19 @@
   母集団とすべき。baseline(4問×3温度=12件) と grv_calibration(2問×3温度=6件) は校正用であり、
   本分析の母集団に含めない。
   role=test の ΔE full 平均は 0.2952（全体 0.3006 と微差）。
+
+## 人手アノテーション20問の追記
+- 人手評価CSVを `data/phase_c_v1/human_annotation_20_completed.csv` に配置。
+- 相関要約CSVを `data/phase_c_v1/human_annotation_20_correlation_summary-1.csv` に配置。
+- 散布図を以下に配置。
+  - `data/phase_c_v1/scatter_human_score_vs_por_regenerated.png`
+  - `data/phase_c_v1/scatter_human_score_vs_delta_e_full_regenerated.png`
+- 元データ保全版は `data/human_annotation_20/` にも保持している。
+
+これで、Phase C v1 ディレクトリ単体で
+- 再採点CSV
+- 校正ログ
+- 人手アノテーションCSV
+- 相関要約CSV
+- 可視化グラフ
+を参照できる状態になった。
