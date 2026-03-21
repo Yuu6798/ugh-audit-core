@@ -129,19 +129,20 @@ def extract_anchor_terms(q: dict) -> list[str]:
 
     # 4. question内の英字専門用語を直接抽出（Transformer, RNN, In-context learning等）
     # 日本語文脈では\bが機能しないため、非ASCII境界も考慮
+    # KNOWN_TERMSはunknown_terms用のフィルタであり、アンカーでは除外しない
     for m in re.finditer(r"(?<![A-Za-z])([A-ZΔ][A-Za-z0-9_Δ]+(?:[- ][A-Za-z0-9][A-Za-z0-9]*)*)", question):
         candidate = m.group(1).strip()
-        if len(candidate) >= 2 and candidate not in KNOWN_TERMS:
+        if len(candidate) >= 2:
             # 既にフレーズとして追加済みの部分語は除外
             if not any(candidate != t and candidate in t for t in terms):
                 add(candidate)
 
     # 5. core_propositions / reference_core から重要語を補完抽出
     all_text = reference_core + " " + " ".join(core_props)
-    # 英字の専門用語
+    # 英字の専門用語（KNOWN_TERMSもアンカー対象）
     for m in re.finditer(r"\b([A-ZΔ][A-Za-z0-9_Δ]+)\b", all_text):
         candidate = m.group(1)
-        if len(candidate) >= 2 and candidate not in KNOWN_TERMS:
+        if len(candidate) >= 2:
             # questionにも出現し、既存フレーズの部分語でない場合のみ追加
             if candidate in question:
                 if not any(candidate != t and candidate in t for t in terms):
@@ -246,9 +247,13 @@ def extract_operators(q: dict) -> tuple[list[dict], str | None]:
             if op_type in suffix_types:
                 # 接尾辞型: 演算子の前方からスコープを取得
                 before = question[:m.start()]
-                # 直近の句読点・読点以降をスコープとする
-                scope_match = re.search(r"[。？?、「]([^。？?、「]+)$", before)
-                scope = scope_match.group(1).strip() if scope_match else before.strip()
+                if op_type == "negative_question":
+                    # 否定疑問は文全体の主張に対する問いかけ → 全前方をスコープ
+                    scope = before.strip()
+                else:
+                    # limiter_suffix: 直近の句読点以降をスコープ
+                    scope_match = re.search(r"[。？?、「]([^。？?、「]+)$", before)
+                    scope = scope_match.group(1).strip() if scope_match else before.strip()
             else:
                 # 前置型: 演算子以降の文を取得
                 after = question[m.end():]
