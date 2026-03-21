@@ -122,9 +122,13 @@ def extract_anchor_terms(q: dict) -> list[str]:
                 add(jp_prefix_match.group(1))
         add(inner)
 
-    # 2. 鉤括弧で囲まれた概念
+    # 2. 鉤括弧で囲まれた概念（命題レベルの長文は除外、概念語のみ）
     for m in KAKKO_PATTERN.finditer(question):
-        add(m.group(1))
+        inner = m.group(1)
+        # 動詞活用語尾を含む長い命題は除外（「AIは道具にすぎない」等）
+        if len(inner) > 8 or re.search(r"(こと|[るたいすくけ])$", inner):
+            continue
+        add(inner)
 
     # 3. UGH固有用語（カテゴリがugh_theoryの場合に優先）
     if category == "ugh_theory":
@@ -255,6 +259,9 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
         inner = m.group(1)
         if inner in seen:
             continue
+        # 命題レベルの長文や動詞活用を含むものは除外
+        if len(inner) > 8 or re.search(r"(こと|[るたいすくけ])$", inner):
+            continue
         # 4文字以上の専門的な表現は未確定語候補
         if len(inner) >= 4:
             seen.add(inner)
@@ -266,6 +273,9 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
         "バイアス", "アルゴリズム", "ネットワーク", "パラメータ", "パターン",
         "コンテキスト", "トレーニング", "リスク", "コスト", "エラー",
         "ソース", "オープン", "クローズド", "イノベーション",
+        "フレームワーク", "ニュース", "ガバナンス", "セキュリティ",
+        "プライバシー", "インフラ", "プラットフォーム", "カテゴリ",
+        "メカニズム", "プロセス", "ロジック", "ツール",
     }
     for m in re.finditer(r"[ァ-ヴー]{4,}", question):
         word = m.group()
