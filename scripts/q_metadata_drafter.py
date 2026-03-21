@@ -44,6 +44,7 @@ OPERATOR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"にすぎない"), "limiter_suffix", "問い直す or 再定義する"),
     (re.compile(r"単なる"), "limiter_prefix", "問い直す or 再定義する"),
     (re.compile(r"ただの"), "limiter_prefix", "問い直す or 再定義する"),
+    (re.compile(r"だけ"), "limiter_suffix", "問い直す or 再定義する"),
     (re.compile(r"本当に"), "skeptical_modality", "疑いを認識して応答する"),
     (re.compile(r"果たして"), "skeptical_modality", "疑いを認識して応答する"),
     (re.compile(r"していないか"), "negative_question", "指摘を検討して応答する"),
@@ -116,17 +117,27 @@ def extract_anchor_terms(q: dict) -> list[str]:
             for m in pat.finditer(question):
                 add(m.group())
 
-    # 4. core_propositions / reference_core から重要語を抽出
+    # 4. question内の英字専門用語を直接抽出（Transformer, RNN, In-context learning等）
+    # 日本語文脈では\bが機能しないため、非ASCII境界も考慮
+    for m in re.finditer(r"(?<![A-Za-z])([A-ZΔ][A-Za-z0-9_Δ]+(?:[- ][A-Za-z][A-Za-z0-9]*)*)", question):
+        candidate = m.group(1).strip()
+        if len(candidate) >= 2 and candidate not in KNOWN_TERMS:
+            # 既にフレーズとして追加済みの部分語は除外
+            if not any(candidate != t and candidate in t for t in terms):
+                add(candidate)
+
+    # 5. core_propositions / reference_core から重要語を補完抽出
     all_text = reference_core + " " + " ".join(core_props)
     # 英字の専門用語
     for m in re.finditer(r"\b([A-ZΔ][A-Za-z0-9_Δ]+)\b", all_text):
         candidate = m.group(1)
         if len(candidate) >= 2 and candidate not in KNOWN_TERMS:
-            # questionにも出現する場合のみ追加
+            # questionにも出現し、既存フレーズの部分語でない場合のみ追加
             if candidate in question:
-                add(candidate)
+                if not any(candidate != t and candidate in t for t in terms):
+                    add(candidate)
 
-    # 5. 日本語の重要概念: 漢字+カタカナの複合語も保持（例: 量子コンピューティング）
+    # 6. 日本語の重要概念: 漢字+カタカナの複合語も保持（例: 量子コンピューティング）
     stop_katakana = {"プロンプト", "モデル", "データ", "テスト", "システム", "ベース"}
     for m in re.finditer(r"[一-龥]*[ァ-ヴー]{2,}[一-龥ァ-ヴー]*", question):
         word = m.group()
@@ -170,6 +181,10 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
             unknowns.append(abbr)
         # 大文字略語（2〜5文字）
         elif abbr.isupper() and 2 <= len(abbr) <= 5:
+            seen.add(abbr)
+            unknowns.append(abbr)
+        # 混合ケース略語（MoE, CoT等: 大文字始まり2〜5文字で内部に大文字を含む）
+        elif 2 <= len(abbr) <= 5 and any(c.isupper() for c in abbr[1:]):
             seen.add(abbr)
             unknowns.append(abbr)
 
