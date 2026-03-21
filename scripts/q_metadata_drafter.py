@@ -19,9 +19,10 @@ UGH_TERMS = {
     "Semantic Vector Prompt", "Reverse Prompt Engineering",
 }
 
-# UGH固有用語の正規表現パターン（単語境界付き）
+# UGH固有用語の正規表現パターン（CJK境界対応）
 UGH_TERM_PATTERNS = [
-    re.compile(r"\b" + re.escape(t) + r"\b") for t in UGH_TERMS if t.isascii()
+    re.compile(r"(?<![A-Za-z0-9_])" + re.escape(t) + r"(?![A-Za-z0-9_])")
+    for t in UGH_TERMS if t.isascii()
 ] + [
     re.compile(re.escape(t)) for t in UGH_TERMS if not t.isascii()
 ]
@@ -159,11 +160,11 @@ def extract_anchor_terms(q: dict) -> list[str]:
 
     # 6. 日本語の重要概念: 漢字+カタカナの複合語も保持（例: 量子コンピューティング）
     stop_katakana = {"プロンプト", "モデル", "データ", "テスト", "システム", "ベース"}
-    for m in re.finditer(r"[一-龥]*[ァ-ヴー]{2,}[一-龥ァ-ヴー]*", question):
+    for m in re.finditer(r"[A-Za-z一-龥]*[ァ-ヴー]{2,}[一-龥ァ-ヴー]*", question):
         word = m.group()
-        # 純カタカナ部分がストップワードなら除外
         kata_only = re.sub(r"[^ァ-ヴー]", "", word)
-        if kata_only in stop_katakana:
+        # 純カタカナのみの場合はストップワードで除外、複合語は保持
+        if kata_only == word and kata_only in stop_katakana:
             continue
         if len(word) >= 2:
             add(word)
@@ -326,8 +327,10 @@ def extract_operators(q: dict) -> tuple[list[dict], str | None]:
                 # 接尾辞型: 演算子の前方からスコープを取得
                 before = question[:m.start()]
                 if op_type in ("negative_question", "equivalence"):
-                    # 否定疑問・等値は文全体の主張に対する問いかけ → 全前方をスコープ
-                    scope = before.strip()
+                    # 否定疑問・等値は同一文内の主張に対する問いかけ
+                    # 文境界（？。）で区切り、最後の文をスコープとする
+                    last_sent_match = re.search(r"[。？?]([^。？?]+)$", before)
+                    scope = last_sent_match.group(1).strip() if last_sent_match else before.strip()
                 else:
                     # limiter_suffix: 直近の句読点以降をスコープ
                     scope_match = re.search(r"[。？?、「]([^。？?、「]+)$", before)
