@@ -23,13 +23,15 @@
 ## v0 → v1 比較
 
 ### PoR (role=test, n=288)
-- v0 平均: 0.800
-- v1 平均: 0.8019
-- v0 発火数: 49/102 (temp=0.0, 48.0%)
-- v1 発火数（temp=0.0, role=test）: 46/96 (47.9%) — v0と同条件で比較
+- v0 平均: 0.800（全102件、参考値。v0にはroleフィルタなし）
+- v1 平均（role=test）: 0.8019
+- v1 平均（temp=0.0, role=test, n=96）: 0.8035
+- v0 発火数: 49/102 (temp=0.0, 48.0%、role未分離)
+- v1 発火数（temp=0.0, role=test）: 46/96 (47.9%)
 - v1 発火数（全温度, role=test）: 143/288 (49.7%)
-- 備考: temp=0.0同士で比較すると発火率はほぼ同一(48.0%→47.9%)。>=閾値修正の影響は
-  境界値(por==0.82)のサンプルが存在しないため、この96件では差が出ていない。
+- 備考: v0はrole区分なしの全102件。v1ではrole=testに限定(96件)しているため
+  厳密な同一母集団比較ではない。発火率はほぼ同一(48.0%→47.9%)。>=閾値修正の影響は
+  境界値(por==0.82)のサンプルがrole=test内に存在しないため差が出ていない。
 
 ### ΔE (role=test, n=288)
 - v0 平均（core のみ）: 0.516
@@ -58,14 +60,14 @@
 
 ## 所見
 - ΔE full（reference全文比較）で弁別力が回復。v0の全件「意味乖離」から、0.07〜0.72の実用的分布に改善。
-- カテゴリ別ΔE full（temp=0.0, role=test）: epistemology(0.2049) < ai_philosophy(0.2325) < adversarial(0.2761) < ai_ethics(0.3052) < technical_ai(0.3270) < ugh_theory(0.4216)
-- カテゴリ別PoR（temp=0.0, role=test）: ai_ethics(0.8404) > ai_philosophy(0.8200) > adversarial(0.8120) > epistemology(0.8102) > technical_ai(0.7702) > ugh_theory(0.7520)
+- カテゴリ別ΔE full（temp=0.0, role=test, n=96）: epistemology(0.2049) < ai_philosophy(0.2325) < adversarial(0.2761) < ai_ethics(0.2940) < technical_ai(0.3380) < ugh_theory(0.4040)
+- カテゴリ別PoR（temp=0.0, role=test, n=96）: ai_ethics(0.8361) > ai_philosophy(0.8200) > adversarial(0.8120) > epistemology(0.8102) > technical_ai(0.7820) > ugh_theory(0.7610)
 - 両指標は大筋で整合するが、上位カテゴリでは順位が入れ替わる。
   PoRではai_ethicsが最上位だがΔE fullではepistemologyが最良。
   下位（technical_ai, ugh_theory）は両指標で一致。
   ai_ethicsは「共鳴はしているが核心からはズレている」パターンを示す。
 - GPTはUGHer固有概念に対して最もreferenceから遠く、認識論的問いに最も近い。
-- PoR平均はv0とほぼ同値(0.800→0.8019)。temp=0.0同士では発火率も同一(48.0%→47.9%)。
+- PoR平均はv0とほぼ同値(0.800→0.8019)。temp=0.0での発火率もほぼ同一(48.0%→47.9%)。
 - grv不正トークンはv0の4種から4種6行に微減。fugashi導入時に完全除去が期待される。
 - **既知の不整合**: q005 (temp=1.0) で por=0.82 / por_fired=False となっている。
   CSV export 時の浮動小数点丸めと判定フラグの不整合が原因と推定。
