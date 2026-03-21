@@ -100,8 +100,8 @@ def extract_anchor_terms(q: dict) -> list[str]:
         # カッコの直前の語もアンカーに
         start = m.start()
         prefix = question[:start]
-        # 直前の単語を取得（英字略語など）
-        prefix_match = re.search(r"([A-Za-zΔ][A-Za-z0-9_]+)$", prefix)
+        # 直前のフレーズを取得（"Mixture of Experts" 等の複数語も対象）
+        prefix_match = re.search(r"((?:[A-Za-zΔ][A-Za-z0-9_]+ )*[A-Za-zΔ][A-Za-z0-9_]+)$", prefix)
         if prefix_match:
             add(prefix_match.group(1))
         add(inner)
@@ -297,6 +297,7 @@ def extract_premise(q: dict) -> dict:
 
 def compute_severity(
     q: dict,
+    anchor_terms: list[str],
     unknown_terms: list[str],
     operators: list[dict],
     premise: dict,
@@ -311,6 +312,10 @@ def compute_severity(
         "f3": "low",
         "f4": "low",
     }
+
+    # f1: アンカー語が空 → medium（抽出失敗の可能性があり人間確認が必要）
+    if not anchor_terms:
+        sev["f1"] = "medium"
 
     # f2: UGH固有語が主対象 → high
     ugh_unknowns = [t for t in unknown_terms if is_ugh_term(t)]
@@ -339,7 +344,10 @@ def compute_severity(
     return sev
 
 
-def compute_review_flags(severity: dict[str, str]) -> dict:
+def compute_review_flags(
+    severity: dict[str, str],
+    source_requires_manual_review: bool = False,
+) -> dict:
     """review_flags を生成する。"""
     reasons: list[str] = []
     max_sev = "low"
@@ -360,12 +368,16 @@ def compute_review_flags(severity: dict[str, str]) -> dict:
             if max_sev != "high":
                 max_sev = "medium"
 
-    needs_review = max_sev in ("high", "medium")
+    # 元データの requires_manual_review を尊重する
+    if source_requires_manual_review:
+        reasons.append("source requires_manual_review=true")
+
+    needs_review = max_sev in ("high", "medium") or source_requires_manual_review
 
     # confidence
     if max_sev == "high":
         confidence = "medium"
-    elif max_sev == "medium":
+    elif max_sev == "medium" or source_requires_manual_review:
         confidence = "high"
     else:
         confidence = "high"
@@ -384,8 +396,8 @@ def process_question(q: dict) -> dict:
     operators, operator_action = extract_operators(q)
     premise = extract_premise(q)
 
-    severity = compute_severity(q, unknown_terms, operators, premise)
-    review_flags = compute_review_flags(severity)
+    severity = compute_severity(q, anchor_terms, unknown_terms, operators, premise)
+    review_flags = compute_review_flags(severity, q.get("requires_manual_review", False))
 
     result = {
         "id": q["id"],
