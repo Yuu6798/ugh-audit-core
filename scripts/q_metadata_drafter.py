@@ -69,6 +69,7 @@ PREMISE_QUESTION_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"犠牲にしていないか"), "犠牲を前提化"),
     (re.compile(r"のだから"), "因果を前提化"),
     (re.compile(r"犠牲者が減る"), "犠牲者減少を前提化"),
+    (re.compile(r"それとも"), "二択フレームを前提化"),
 ]
 
 # カッコ書き抽出
@@ -149,14 +150,21 @@ def extract_anchor_terms(q: dict) -> list[str]:
 
     # 5. core_propositions / reference_core から重要語を補完抽出
     all_text = reference_core + " " + " ".join(core_props)
-    # 英字の専門用語（KNOWN_TERMSもアンカー対象）
+    # 英字の専門用語
     for m in re.finditer(r"\b([A-ZΔ][A-Za-z0-9_Δ]+)\b", all_text):
         candidate = m.group(1)
         if len(candidate) >= 2:
-            # questionにも出現し、既存フレーズの部分語でない場合のみ追加
             if candidate in question:
                 if not any(candidate != t and candidate in t for t in terms):
                     add(candidate)
+            # ugh_theoryカテゴリではUGH用語をcore_propsから無条件補完
+            elif category == "ugh_theory" and is_ugh_term(candidate):
+                add(candidate)
+    # ugh_theoryカテゴリ: UGH固有用語をcore_propsから小文字含めて補完
+    if category == "ugh_theory":
+        for term in UGH_TERMS:
+            if term in all_text and term not in seen:
+                add(term)
 
     # 6. 日本語の重要概念: 漢字+カタカナの複合語も保持（例: 量子コンピューティング）
     stop_katakana = {"プロンプト", "モデル", "データ", "テスト", "システム", "ベース"}
@@ -407,7 +415,7 @@ def extract_premise(q: dict) -> dict:
     acceptable_stances: list[str] = []
 
     # 1. trap_type による判定
-    if trap_type in ("premise_acceptance", "binary_reduction", "safety_boilerplate"):
+    if trap_type in ("premise_acceptance", "binary_reduction", "safety_boilerplate", "relativism_drift"):
         premise_present = True
 
     # 2. 問い文パターンからの検出
@@ -435,6 +443,8 @@ def extract_premise(q: dict) -> dict:
             contents.append("誘導前提の受け入れを誘うパターン")
         if trap_type == "safety_boilerplate":
             contents.append("安全性定型句への逃避を誘うパターン")
+        if trap_type == "relativism_drift":
+            contents.append("二択フレームによる相対化を誘うパターン")
         premise_content = "。".join(contents) if contents else "前提あり（詳細要確認）"
 
     # 4. acceptable_stances
