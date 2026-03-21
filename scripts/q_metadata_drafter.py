@@ -41,6 +41,8 @@ OPERATOR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"あらゆる"), "universal", "問い直す or 限定する"),
     (re.compile(r"必ず"), "universal", "問い直す or 限定する"),
     (re.compile(r"本質的に"), "limiter", "問い直す or 再定義する"),
+    (re.compile(r"根本的に"), "limiter", "問い直す or 再定義する"),
+    (re.compile(r"完全に"), "limiter", "問い直す or 再定義する"),
     (re.compile(r"にすぎない"), "limiter_suffix", "問い直す or 再定義する"),
     (re.compile(r"単なる"), "limiter_prefix", "問い直す or 再定義する"),
     (re.compile(r"ただの"), "limiter_prefix", "問い直す or 再定義する"),
@@ -370,8 +372,15 @@ def compute_severity(
         "f4": "low",
     }
 
-    # f1: アンカー語が空 → medium（抽出失敗の可能性があり人間確認が必要）
+    # f1: アンカー語が空または汎用述語のみ → medium
+    # 汎用述語: 質問の主題を特定できない一般的な動詞・形容詞
+    generic_predicates = {
+        "正当化", "可能", "必要", "重要", "存在", "意味", "問題", "影響",
+        "変化", "関係", "理由", "結果", "原因", "目的", "方法",
+    }
     if not anchor_terms:
+        sev["f1"] = "medium"
+    elif all(t in generic_predicates for t in anchor_terms):
         sev["f1"] = "medium"
 
     # f2: UGH固有語が主対象 → high、非UGH未確定語あり → medium
