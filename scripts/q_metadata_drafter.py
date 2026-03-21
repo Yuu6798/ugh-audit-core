@@ -124,11 +124,12 @@ def extract_anchor_terms(q: dict) -> list[str]:
                 add(jp_prefix_match.group(1))
         add(inner)
 
-    # 2. 鉤括弧で囲まれた概念（命題レベルの長文は除外、概念語のみ）
+    # 2. 鉤括弧で囲まれた概念（長文命題は除外、概念的述語は保持）
     for m in KAKKO_PATTERN.finditer(question):
         inner = m.group(1)
-        # 動詞活用語尾を含む長い命題は除外（「AIは道具にすぎない」等）
-        if len(inner) > 8 or re.search(r"(こと|[るたいすくけ])$", inner):
+        # 8文字超の長文命題は除外
+        # 長文命題（10文字超）または主語+述語構造（「は」を含む文）は除外
+        if len(inner) > 10 or (len(inner) > 6 and "は" in inner):
             continue
         add(inner)
 
@@ -157,11 +158,8 @@ def extract_anchor_terms(q: dict) -> list[str]:
             if candidate in question:
                 if not any(candidate != t and candidate in t for t in terms):
                     add(candidate)
-            # ugh_theoryカテゴリではUGH用語をcore_propsから無条件補完
-            elif category == "ugh_theory" and is_ugh_term(candidate):
-                add(candidate)
-    # ugh_theoryカテゴリ: UGH固有用語をcore_propsから小文字含めて補完
-    if category == "ugh_theory":
+    # ugh_theoryカテゴリ: questionが列挙を求める場合のみ、core_propsのUGH用語を補完
+    if category == "ugh_theory" and re.search(r"(三つ|3つ|それぞれ|各|主要)", question):
         for term in UGH_TERMS:
             if term in all_text and term not in seen:
                 add(term)
@@ -269,7 +267,8 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
         if inner in seen:
             continue
         # 命題レベルの長文や動詞活用を含むものは除外
-        if len(inner) > 8 or re.search(r"(こと|[るたいすくけ])$", inner):
+        # 長文命題（10文字超）または主語+述語構造（「は」を含む文）は除外
+        if len(inner) > 10 or (len(inner) > 6 and "は" in inner):
             continue
         # 4文字以上の専門的な表現は未確定語候補
         if len(inner) >= 4:
