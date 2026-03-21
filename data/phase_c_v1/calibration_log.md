@@ -16,7 +16,9 @@
 
 ## 変更点
 1. por_fired: > → >= に修正（Step 1）
-2. grv: ストップワード除去、カタカナ結合、品詞フィルタ追加（Step 2）
+2. grv: ストップワード除去を追加（Step 2）。カタカナ結合・品詞フィルタのコード追加も実施したが、
+   tokenizer=regex_fallback のため実行時は `_grv_with_regex()` 経路のみ動作。
+   fugashi導入時に `_grv_with_fugashi()` 経路で完全適用される。
 3. ΔE: 3パターン計算を追加 — core/full/summary（Step 3）
 4. delta_e のプライマリ値を delta_e_full に切り替え
 
