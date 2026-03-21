@@ -50,6 +50,9 @@ OPERATOR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"だけ"), "limiter_suffix", "問い直す or 再定義する"),
     (re.compile(r"本当に"), "skeptical_modality", "疑いを認識して応答する"),
     (re.compile(r"果たして"), "skeptical_modality", "疑いを認識して応答する"),
+    (re.compile(r"同義か"), "equivalence", "等値を問い直す or 区別する"),
+    (re.compile(r"同じものか"), "equivalence", "等値を問い直す or 区別する"),
+    (re.compile(r"同じものを"), "equivalence", "等値を問い直す or 区別する"),
     (re.compile(r"していないか"), "negative_question", "指摘を検討して応答する"),
     (re.compile(r"ではないか"), "negative_question", "指摘を検討して応答する"),
     (re.compile(r"ないのか"), "negative_question", "指摘を検討して応答する"),
@@ -260,7 +263,7 @@ def extract_operators(q: dict) -> tuple[list[dict], str | None]:
     has_universal = False
 
     # 接尾辞型演算子（スコープは演算子の前方にかかる）
-    suffix_types = {"limiter_suffix", "negative_question"}
+    suffix_types = {"limiter_suffix", "negative_question", "equivalence"}
 
     for pat, op_type, req_action in OPERATOR_PATTERNS:
         m = pat.search(question)
@@ -434,7 +437,7 @@ def compute_severity(
         if op["type"] in ("universal", "reason_request_with_premise"):
             sev["f3"] = "high"
             break
-        if op["type"] in ("limiter", "limiter_prefix", "limiter_suffix", "negative_question"):
+        if op["type"] in ("limiter", "limiter_prefix", "limiter_suffix", "negative_question", "equivalence"):
             sev["f3"] = "medium"
 
     # f4: premise
