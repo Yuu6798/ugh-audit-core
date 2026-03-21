@@ -244,6 +244,9 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
     # 一般的に既知のものを除外
     unknowns = [t for t in unknowns if t not in KNOWN_TERMS]
 
+    # フレーズの部分語を除去（"Mechanistic Interpretability" がある場合 "Mechanistic" を除外）
+    unknowns = [t for t in unknowns if not any(t != u and t in u for u in unknowns)]
+
     if not unknowns:
         return [], None
 
@@ -273,8 +276,8 @@ def extract_operators(q: dict) -> tuple[list[dict], str | None]:
             if op_type in suffix_types:
                 # 接尾辞型: 演算子の前方からスコープを取得
                 before = question[:m.start()]
-                if op_type == "negative_question":
-                    # 否定疑問は文全体の主張に対する問いかけ → 全前方をスコープ
+                if op_type in ("negative_question", "equivalence"):
+                    # 否定疑問・等値は文全体の主張に対する問いかけ → 全前方をスコープ
                     scope = before.strip()
                 else:
                     # limiter_suffix: 直近の句読点以降をスコープ
