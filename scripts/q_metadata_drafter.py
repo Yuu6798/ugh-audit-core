@@ -71,7 +71,8 @@ PAREN_PATTERN = re.compile(r"（([^）]+)）")
 KAKKO_PATTERN = re.compile(r"「([^」]+)」")
 
 # 略語パターン（大文字2〜5文字、またはハイフン付き複合語 例: Chain-of-Thought）
-ABBREVIATION_PATTERN = re.compile(r"\b([A-Z][A-Za-z0-9]+(?:-[A-Za-z]+)*)\b")
+# CJK境界も考慮: \bは日本語文字との境界で機能しないため非ASCII文字も境界とみなす
+ABBREVIATION_PATTERN = re.compile(r"(?<![A-Za-z0-9_-])([A-Z][A-Za-z0-9]+(?:-[A-Za-z]+)*)(?![A-Za-z0-9_-])")
 
 
 # ---------- 抽出関数 ----------
@@ -398,11 +399,13 @@ def compute_severity(
     elif unknown_terms:
         sev["f2"] = "medium"
 
-    # f3: 全称表現あり → high
+    # f3: 全称表現あり → high、limiter/negative_question → medium
     for op in operators:
         if op["type"] in ("universal", "reason_request_with_premise"):
             sev["f3"] = "high"
             break
+        if op["type"] in ("limiter", "limiter_prefix", "limiter_suffix", "negative_question"):
+            sev["f3"] = "medium"
 
     # f4: premise
     if premise["premise_present"]:
