@@ -41,9 +41,9 @@ OPERATOR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"あらゆる"), "universal", "問い直す or 限定する"),
     (re.compile(r"必ず"), "universal", "問い直す or 限定する"),
     (re.compile(r"本質的に"), "limiter", "問い直す or 再定義する"),
-    (re.compile(r"にすぎない"), "limiter", "問い直す or 再定義する"),
-    (re.compile(r"単なる"), "limiter", "問い直す or 再定義する"),
-    (re.compile(r"ただの"), "limiter", "問い直す or 再定義する"),
+    (re.compile(r"にすぎない"), "limiter_suffix", "問い直す or 再定義する"),
+    (re.compile(r"単なる"), "limiter_prefix", "問い直す or 再定義する"),
+    (re.compile(r"ただの"), "limiter_prefix", "問い直す or 再定義する"),
     (re.compile(r"本当に"), "skeptical_modality", "疑いを認識して応答する"),
     (re.compile(r"果たして"), "skeptical_modality", "疑いを認識して応答する"),
     (re.compile(r"していないか"), "negative_question", "指摘を検討して応答する"),
@@ -67,8 +67,8 @@ PREMISE_QUESTION_PATTERNS: list[tuple[re.Pattern, str]] = [
 PAREN_PATTERN = re.compile(r"（([^）]+)）")
 KAKKO_PATTERN = re.compile(r"「([^」]+)」")
 
-# 略語パターン（大文字2〜5文字）
-ABBREVIATION_PATTERN = re.compile(r"\b([A-Z][A-Za-z0-9]{1,4})\b")
+# 略語パターン（大文字2〜5文字、またはハイフン付き複合語 例: Chain-of-Thought）
+ABBREVIATION_PATTERN = re.compile(r"\b([A-Z][A-Za-z0-9]+(?:-[A-Za-z]+)*)\b")
 
 
 # ---------- 抽出関数 ----------
@@ -126,10 +126,15 @@ def extract_anchor_terms(q: dict) -> list[str]:
             if candidate in question:
                 add(candidate)
 
-    # 5. 日本語の重要概念: questionから2文字以上のカタカナ語を抽出
-    for m in re.finditer(r"[ァ-ヴー]{2,}", question):
+    # 5. 日本語の重要概念: 漢字+カタカナの複合語も保持（例: 量子コンピューティング）
+    stop_katakana = {"プロンプト", "モデル", "データ", "テスト", "システム", "ベース"}
+    for m in re.finditer(r"[一-龥]*[ァ-ヴー]{2,}[一-龥ァ-ヴー]*", question):
         word = m.group()
-        if word not in {"プロンプト", "モデル", "データ", "テスト", "システム", "ベース"}:
+        # 純カタカナ部分がストップワードなら除外
+        kata_only = re.sub(r"[^ァ-ヴー]", "", word)
+        if kata_only in stop_katakana:
+            continue
+        if len(word) >= 2:
             add(word)
 
     # questionの主題となる漢字語（reference_coreにも出現するもの）
@@ -148,7 +153,7 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
     unknowns: list[str] = []
     seen: set[str] = set()
 
-    # 1. 略語を候補とする
+    # 1. 略語・ハイフン付き複合語を候補とする
     for m in ABBREVIATION_PATTERN.finditer(question):
         abbr = m.group(1)
         if abbr in KNOWN_TERMS:
@@ -159,8 +164,12 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
         if is_ugh_term(abbr):
             seen.add(abbr)
             unknowns.append(abbr)
-        # UGH固有でない略語で、既知でもないもの
-        elif len(abbr) >= 2:
+        # ハイフン付き複合語（例: Chain-of-Thought）は未確定語候補
+        elif "-" in abbr:
+            seen.add(abbr)
+            unknowns.append(abbr)
+        # 大文字略語（2〜5文字）
+        elif abbr.isupper() and 2 <= len(abbr) <= 5:
             seen.add(abbr)
             unknowns.append(abbr)
 
@@ -199,16 +208,27 @@ def extract_operators(q: dict) -> tuple[list[dict], str | None]:
     has_why = bool(WHY_PATTERN.search(question))
     has_universal = False
 
+    # 接尾辞型演算子（スコープは演算子の前方にかかる）
+    suffix_types = {"limiter_suffix", "negative_question"}
+
     for pat, op_type, req_action in OPERATOR_PATTERNS:
         m = pat.search(question)
         if m:
             term = m.group()
-            # scopeを推定: 演算子以降の文を取得
-            after = question[m.end():]
-            # 句読点か疑問符までをスコープとする
-            scope_match = re.match(r"(.+?)[。？?、]", after)
-            scope = scope_match.group(1) if scope_match else after.rstrip("？?。")
-            scope = scope.strip()
+
+            if op_type in suffix_types:
+                # 接尾辞型: 演算子の前方からスコープを取得
+                before = question[:m.start()]
+                # 直近の句読点・読点以降をスコープとする
+                scope_match = re.search(r"[。？?、「]([^。？?、「]+)$", before)
+                scope = scope_match.group(1).strip() if scope_match else before.strip()
+            else:
+                # 前置型: 演算子以降の文を取得
+                after = question[m.end():]
+                scope_match = re.match(r"(.+?)[。？?、]", after)
+                scope = scope_match.group(1) if scope_match else after.rstrip("？?。")
+                scope = scope.strip()
+
             if not scope:
                 scope = "全文"
 
