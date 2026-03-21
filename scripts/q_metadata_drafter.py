@@ -164,10 +164,25 @@ def extract_anchor_terms(q: dict) -> list[str]:
         if len(word) >= 2:
             add(word)
 
-    # questionの主題となる漢字語（reference_coreにも出現するもの）
+    # questionの主題となる漢字語（3文字以上、または2文字でも専門的なもの）
+    stop_kanji = {
+        "場合", "問題", "可能", "必要", "重要", "存在", "意味", "方法",
+        "以上", "以下", "以外", "現在", "結果", "理由", "影響", "関係",
+        "変化", "目的", "原因", "対象", "状況", "内容", "範囲", "程度",
+        "開発", "生成", "利用", "使用", "判断", "評価", "処理", "出力",
+    }
     for m in re.finditer(r"[一-龥]{2,}", question):
         word = m.group()
-        if word in reference_core and len(word) >= 2:
+        if word in stop_kanji:
+            continue
+        # 3文字以上の漢字語は専門的とみなす
+        if len(word) >= 3:
+            add(word)
+        # 2文字でもreference_core/core_propositionsに出現するか、
+        # 質問の主要対象（助詞「の」「を」「は」「が」の直前）なら追加
+        elif word in reference_core or word in " ".join(core_props):
+            add(word)
+        elif re.search(re.escape(word) + r"[をはがの]", question):
             add(word)
 
     return terms
@@ -235,7 +250,31 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
             seen.add(inner)
             unknowns.append(inner)
 
-    # 4. UGH固有用語（日本語含む）でquestion中に出現するもの
+    # 4. 鉤括弧内の日本語専門用語を未確定語候補に追加
+    for m in KAKKO_PATTERN.finditer(question):
+        inner = m.group(1)
+        if inner in seen:
+            continue
+        # 4文字以上の専門的な表現は未確定語候補
+        if len(inner) >= 4:
+            seen.add(inner)
+            unknowns.append(inner)
+
+    # 5. カタカナ専門用語（一般的でないもの）を未確定語候補に追加
+    known_katakana = {
+        "プロンプト", "モデル", "データ", "テスト", "システム", "ベース",
+        "バイアス", "アルゴリズム", "ネットワーク", "パラメータ", "パターン",
+        "コンテキスト", "トレーニング", "リスク", "コスト", "エラー",
+        "ソース", "オープン", "クローズド", "イノベーション",
+    }
+    for m in re.finditer(r"[ァ-ヴー]{4,}", question):
+        word = m.group()
+        if word in known_katakana or word in seen:
+            continue
+        seen.add(word)
+        unknowns.append(word)
+
+    # 6. UGH固有用語（日本語含む）でquestion中に出現するもの
     for term in UGH_TERMS:
         if term in question and term not in seen:
             seen.add(term)
