@@ -5,9 +5,24 @@
 出力: q_metadata_structural_draft.jsonl (JSONL, 102問 + サマリー表示)
 
 review_tier:
-  pass   — 自動承認可能
-  warn   — 目視推奨だが低リスク
-  review — 人間による確認が必須
+  pass   — 自動承認可能。全要素 low で構造的リスクなし。
+  warn   — 目視推奨だが低リスク（ソフトトリアージ）。
+           f4_premise=medium 単独やソース側フラグのみの問はここに入る。
+           今後のチューニングでは、不要な warn を減らすことが主な改善方向。
+  review — 人間による確認が必須（ハードトリアージ）。
+           high 要素あり、または f1-f3 の medium が2つ以上重なった問。
+
+基準値メモ:
+  v1 (needs_human_review 二値) では medium が1つでも review 扱いだったため
+  93/102 が review に分類されていた。設計仕様書の「71/102」はスクリプト初期版
+  での計測値であり、v1 最終版の実測値は 93/102 である。
+  v2 で review_tier を導入し 93 → 32 に削減した（65.6%削減）。
+
+source_requires_manual_review:
+  入力 JSONL の各問に付与される元データ側フラグ。
+  質問作成者が「自動判定だけでは不十分」と判断した問に true を設定する。
+  本スクリプトでは severity 計算には影響せず、tier を最低 warn に引き上げる
+  ためだけに使用する（pass → warn への昇格、review はそのまま維持）。
 """
 from __future__ import annotations
 
@@ -649,7 +664,14 @@ def compute_review_tier(
             })
 
     # --- tier 判定 ---
-    # f4_premise=medium は閾値に寄与しない: 2+ medium は f1-f3 のみでカウント
+    # review (ハードトリアージ): high が1つでも、または f1-f3 の medium が2つ以上。
+    # warn   (ソフトトリアージ): medium が1つ、または source フラグのみ。
+    #   f4_premise=medium は閾値に寄与しない — v1 で f4 が review を押し上げていた
+    #   主因であり、f4 単独では構造的リスクが低いため core_mediums から除外。
+    # pass: 全要素 low かつ source フラグなし。
+    #
+    # source_requires_manual_review は元データ作成者が付与した外部フラグ。
+    # severity 計算には影響せず、tier を最低 warn に引き上げるためだけに使用する。
     if highs:
         tier = "review"
     elif len(core_mediums) >= 2:
@@ -971,7 +993,10 @@ def main() -> None:
 
     print(f"出力: {output_path}")
 
-    # サマリー表示（旧レビュー件数93を基準に削減率を算出）
+    # サマリー表示
+    # 基準値: v1最終版の needs_human_review=true は 93/102。
+    # 設計仕様書の「71/102」は初期版での計測値であり、その後の severity 拡張で
+    # 93 まで増加した。ここでは実測値の 93 を基準に削減率を算出する。
     print_summary(results, old_review_count=93)
 
 
