@@ -34,7 +34,7 @@
   境界値(por==0.82)のサンプルがrole=test内に存在しないため差が出ていない。
 
 ### ΔE (role=test, n=288)
-- v0 平均（core のみ）: 0.516
+- v0 平均（core のみ）: 0.516（全102件、参考値。v0にはroleフィルタなし）
 - v1 delta_e_core 平均: 0.5042
 - v1 delta_e_full 平均: 0.2952
 - v1 delta_e_summary 平均: 0.4999
