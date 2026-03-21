@@ -199,6 +199,10 @@ def extract_unknown_terms(q: dict) -> tuple[list[str], str | None]:
         elif 2 <= len(abbr) <= 5 and any(c.isupper() for c in abbr[1:]):
             seen.add(abbr)
             unknowns.append(abbr)
+        # タイトルケースの専門用語（Transformer, Kaplan等: 6文字以上）
+        elif len(abbr) >= 6 and abbr[0].isupper() and not abbr.isupper():
+            seen.add(abbr)
+            unknowns.append(abbr)
 
     # 2. カッコ内の英語表現を未確定語候補に追加
     for m in PAREN_PATTERN.finditer(question):
@@ -256,11 +260,17 @@ def extract_operators(q: dict) -> tuple[list[dict], str | None]:
                     scope_match = re.search(r"[。？?、「]([^。？?、「]+)$", before)
                     scope = scope_match.group(1).strip() if scope_match else before.strip()
             else:
-                # 前置型: 演算子以降の文を取得
+                # 前置型: 演算子の前方（直近句読点以降）+後方を結合してスコープ
+                before = question[:m.start()]
                 after = question[m.end():]
-                scope_match = re.match(r"(.+?)[。？?、]", after)
-                scope = scope_match.group(1) if scope_match else after.rstrip("？?。")
-                scope = scope.strip()
+                # 前方: 直近の句読点以降を取得（目的語を含む）
+                before_match = re.search(r"[。？?、「]([^。？?、「]+)$", before)
+                before_scope = before_match.group(1).strip() if before_match else before.strip()
+                # 後方: 句読点まで
+                after_match = re.match(r"(.+?)[。？?]", after)
+                after_scope = after_match.group(1) if after_match else after.rstrip("？?。")
+                after_scope = after_scope.strip()
+                scope = f"{before_scope}{term}{after_scope}" if before_scope else after_scope
 
             if not scope:
                 scope = "全文"
@@ -321,7 +331,7 @@ def extract_premise(q: dict) -> dict:
     acceptable_stances: list[str] = []
 
     # 1. trap_type による判定
-    if trap_type in ("premise_acceptance", "binary_reduction"):
+    if trap_type in ("premise_acceptance", "binary_reduction", "safety_boilerplate"):
         premise_present = True
 
     # 2. 問い文パターンからの検出
@@ -347,6 +357,8 @@ def extract_premise(q: dict) -> dict:
             contents.append("二値化フレームによる前提の埋め込み")
         if trap_type == "premise_acceptance":
             contents.append("誘導前提の受け入れを誘うパターン")
+        if trap_type == "safety_boilerplate":
+            contents.append("安全性定型句への逃避を誘うパターン")
         premise_content = "。".join(contents) if contents else "前提あり（詳細要確認）"
 
     # 4. acceptable_stances
