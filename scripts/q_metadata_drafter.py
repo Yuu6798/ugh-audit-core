@@ -460,16 +460,16 @@ def print_summary(results: list[dict]) -> None:
     print("Qメタデータ自動下書き — サマリー")
     print("=" * 60)
 
-    print(f"\n【全体統計】")
+    print("\n【全体統計】")
     print(f"  総問数: {total}")
     print(f"  needs_human_review = true: {needs_review_count}件")
 
-    print(f"\n  severity分布:")
+    print("\n  severity分布:")
     for fname in ("f1_anchor", "f2_unknown", "f3_operator", "f4_premise"):
         s = stats[fname]
         print(f"    {fname}: high={s['high']} / medium={s['medium']} / low={s['low']}")
 
-    print(f"\n【要注意問題】(severity=high が1つ以上)")
+    print("\n【要注意問題】(severity=high が1つ以上)")
     if high_severity_items:
         for qid, highs in high_severity_items:
             print(f"  {qid}: {', '.join(highs)}")
@@ -480,7 +480,7 @@ def print_summary(results: list[dict]) -> None:
     sentinel_ids = ["q032", "q024", "q095", "q015", "q025", "q033", "q100"]
     sentinel_map = {r["id"]: r for r in results}
 
-    print(f"\n【番兵問プレビュー】")
+    print("\n【番兵問プレビュー】")
     for sid in sentinel_ids:
         if sid not in sentinel_map:
             print(f"\n  {sid}: 見つかりません")
@@ -497,7 +497,7 @@ def print_summary(results: list[dict]) -> None:
             op_terms = [o["term"] for o in meta["f3_operator"]["operators"]]
             print(f"  f3_operator.terms: {op_terms}")
         else:
-            print(f"  f3_operator.terms: []")
+            print("  f3_operator.terms: []")
         print(f"  f3_operator.severity: {meta['f3_operator']['severity_hint']}")
         print(f"  f4_premise.present: {meta['f4_premise']['premise_present']}")
         if meta["f4_premise"]["premise_content"]:
