@@ -21,8 +21,8 @@ review_tier:
 source_requires_manual_review:
   入力 JSONL の各問に付与される元データ側フラグ。
   質問作成者が「自動判定だけでは不十分」と判断した問に true を設定する。
-  本スクリプトでは severity 計算には影響せず、tier を最低 warn に引き上げる
-  ためだけに使用する（pass → warn への昇格、review はそのまま維持）。
+  本スクリプトでは severity 計算には影響せず、tier を最低 review に引き上げる
+  ために使用する（作成者の「要確認」意図を尊重）。
 """
 from __future__ import annotations
 
@@ -595,11 +595,12 @@ def compute_severity(
                 "matched_rule": f"trap_type={trap_type}",
             }
         else:
-            # safety_boilerplate, relativism_drift → low
+            # safety_boilerplate, relativism_drift — premise_present=true なら medium。
+            # 元データ作成者が trap_type を付与した以上、前提の埋め込みは認定済み。
             result["f4"] = {
-                "severity": "low",
+                "severity": "medium",
                 "trigger_text": premise.get("premise_content", ""),
-                "matched_rule": f"trap_type={trap_type}_informational",
+                "matched_rule": f"trap_type={trap_type}",
             }
     else:
         result["f4"] = {
@@ -664,28 +665,25 @@ def compute_review_tier(
             })
 
     # --- tier 判定 ---
-    # review (ハードトリアージ): high が1つでも、または f1-f3 の medium が2つ以上。
-    # warn   (ソフトトリアージ): medium が1つ、または source フラグのみ。
+    # review (ハードトリアージ): high が1つでも、f1-f3 の medium が2つ以上、
+    #   または source_requires_manual_review=true。
+    # warn   (ソフトトリアージ): medium が1つ。
     #   f4_premise=medium は閾値に寄与しない — v1 で f4 が review を押し上げていた
     #   主因であり、f4 単独では構造的リスクが低いため core_mediums から除外。
     # pass: 全要素 low かつ source フラグなし。
     #
     # source_requires_manual_review は元データ作成者が付与した外部フラグ。
-    # severity 計算には影響せず、tier を最低 warn に引き上げるためだけに使用する。
+    # 「人間の確認が必要」という作成者の意図を尊重し、最低 review に引き上げる。
     if highs:
         tier = "review"
     elif len(core_mediums) >= 2:
         tier = "review"
-    elif mediums:
-        tier = "warn"
     elif source_requires_manual_review:
+        tier = "review"
+    elif mediums:
         tier = "warn"
     else:
         tier = "pass"
-
-    # source_requires_manual_review は最低 warn に引き上げ
-    if source_requires_manual_review and tier == "pass":
-        tier = "warn"
 
     # --- primary_factor（二重計上防止）---
     primary_reason: dict | None = None

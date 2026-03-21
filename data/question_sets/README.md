@@ -8,7 +8,7 @@ Phase C / UGH Audit で使う質問セットを保存するディレクトリ。
     `acceptable_variants`, `disqualifying_shortcuts` を含む
   - `requires_manual_review`: 質問作成者が付与する外部フラグ。
     自動判定だけでは不十分と判断された問に `true` を設定。
-    drafter では severity 計算には影響せず、tier を最低 warn に引き上げる
+    drafter では severity 計算には影響せず、tier を最低 review に引き上げる
 
 - `q_metadata_structural_draft.jsonl`
   - `scripts/q_metadata_drafter.py` の出力（102行JSONL）

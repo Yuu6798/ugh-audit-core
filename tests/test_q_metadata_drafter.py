@@ -130,12 +130,12 @@ class TestTierWarn:
     """warn 回帰テスト（5問以上）。sentinel 以外の通常問も含む。"""
 
     WARN_IDS = [
-        "q100",  # adversarial: f3_medium + f4_medium
         "q051",  # ai_philosophy: f4_medium 単独
         "q069",  # ai_ethics: f4_medium 単独 (binary_reduction)
         "q005",  # technical_ai: f2_medium 単独
         "q009",  # ai_philosophy: f3_medium 単独
         "q020",  # epistemology: f3_medium 単独
+        "q073",  # ai_ethics: f4_medium 単独 (safety_boilerplate)
     ]
 
     @pytest.mark.parametrize("qid", WARN_IDS)
@@ -162,6 +162,7 @@ class TestTierReview:
         "q032",  # ugh_theory: f2=high (UGHer)
         "q024",  # ugh_theory: f2=high (SVP)
         "q095",  # adversarial: f3=high (常に)
+        "q100",  # adversarial: requires_manual_review=true
         "q045",  # technical_ai: f2=medium + f3=medium (2 core mediums)
         "q016",  # ai_ethics: f2=medium + f3=medium
         "q017",  # epistemology: f2=medium + f3=medium
@@ -334,9 +335,10 @@ class TestTierLogicUnit:
         result = compute_review_tier(self._make_severity(f3="medium"))
         assert result["review_tier"] == "warn"
 
-    def test_source_requires_review_bumps_to_warn(self) -> None:
+    def test_source_requires_review_bumps_to_review(self) -> None:
+        """元データ作成者の requires_manual_review=true は review に引き上げる。"""
         result = compute_review_tier(self._make_severity(), source_requires_manual_review=True)
-        assert result["review_tier"] == "warn"
+        assert result["review_tier"] == "review"
 
     def test_high_overrides_source(self) -> None:
         result = compute_review_tier(
