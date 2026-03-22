@@ -101,6 +101,64 @@ tests/
 
 ---
 
+## MCP サーバー（ChatGPT Connectors 対応）
+
+ChatGPT から `audit_answer` ツールを呼び出せる MCP (Model Context Protocol) サーバーを内蔵。
+
+### セットアップ
+
+```bash
+pip install -e ".[server]"
+```
+
+### MCP サーバー起動
+
+```bash
+# スタンドアロン (Streamable HTTP, port 8000)
+python -m ugh_audit.mcp_server
+
+# ポート指定
+python -m ugh_audit.mcp_server --port 9000
+
+# REST API + MCP 統合サーバー (FastAPI)
+uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
+# → MCP: http://localhost:8000/mcp
+# → REST: http://localhost:8000/api/audit, /api/history
+```
+
+### 外部公開
+
+```bash
+# ngrok で公開
+ngrok http 8000
+
+# → https://<xxx>.ngrok-free.app/mcp が MCP URL になる
+```
+
+### ChatGPT への登録
+
+1. ChatGPT → Settings → Connectors → Add Connector
+2. MCP URL を入力: `https://<your-host>/mcp`
+3. 保存後、会話中に `audit_answer` ツールが利用可能になる
+
+### ツール仕様
+
+**audit_answer** — AI回答を意味監査する
+
+入力:
+- `question` (string, 必須): ユーザーの質問
+- `response` (string, 必須): AIの回答
+- `reference` (string, 省略可): 期待される正解
+
+出力:
+- `por`: 意味的共鳴度 (0–1)
+- `delta_e`: 意味ズレ量 (0–1)
+- `grv`: 語彙重力分布
+- `verdict`: 判定 (同一意味圏 / 軽微なズレ / 意味乖離)
+- `saved_id`: DB保存時の行ID
+
+---
+
 ## フェーズロードマップ
 
 - **Phase 1（現在）**: スコアリング基盤 + ログ蓄積

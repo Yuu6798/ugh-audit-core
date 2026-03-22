@@ -1,21 +1,21 @@
 """
 ugh_audit/server.py
-ChatGPT Connector 向け API サーバー
+REST API + MCP サーバー
 
-FastAPI ベースの HTTP API。ChatGPT Connectors から OpenAPI 経由で登録可能。
+FastAPI ベースの HTTP API と MCP (Model Context Protocol) サーバーを提供する。
+ChatGPT Connectors から MCP URL (http://<host>:<port>/mcp) を登録して利用可能。
+
 主要エンドポイント:
-    POST /api/audit   — audit_answer ツール (question/response/reference → スコア)
-    GET  /api/history  — 直近の監査履歴
+    POST /api/audit   — REST: audit_answer (question/response/reference → スコア)
+    GET  /api/history  — REST: 直近の監査履歴
+    POST /mcp          — MCP: Streamable HTTP エンドポイント
 """
 from __future__ import annotations
 
-import json
-from importlib import resources
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .reference.golden_store import GoldenStore
@@ -64,13 +64,13 @@ class HistoryItem(BaseModel):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="UGH Audit — ChatGPT Connector",
+    title="UGH Audit",
     description=(
         "AI回答の意味論的監査ツール。"
         "UGHer の3指標 (PoR / ΔE / grv) で意味的誠実性を定量評価する。"
+        "\n\nMCP エンドポイント: POST /mcp"
     ),
-    version="0.1.0",
-    servers=[{"url": "/", "description": "ローカル"}],
+    version="0.2.0",
 )
 
 # CORS — ChatGPT Connectors からのリクエストを許可
@@ -80,6 +80,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------------------------------------------------------------------
+# MCP サーバーをマウント (/mcp)
+# ---------------------------------------------------------------------------
+
+from .mcp_server import mcp as _mcp_instance  # noqa: E402
+
+app.mount("/mcp", _mcp_instance.streamable_http_app())
 
 # ---------------------------------------------------------------------------
 # 共有インスタンス（起動時に初期化）
@@ -192,12 +200,3 @@ def get_history(limit: int = 20) -> List[HistoryItem]:
 @app.get("/health", include_in_schema=False)
 def health() -> dict:
     return {"status": "ok"}
-
-
-@app.get("/.well-known/ai-plugin.json", include_in_schema=False)
-def ai_plugin() -> JSONResponse:
-    """ChatGPT Plugin / Connector 用マニフェスト"""
-    ref = resources.files("ugh_audit.data").joinpath("ai-plugin.json")
-    text = ref.read_text(encoding="utf-8")
-    data = json.loads(text)
-    return JSONResponse(content=data)

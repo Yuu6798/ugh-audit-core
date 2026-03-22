@@ -136,9 +136,12 @@ def test_audit_resolves_reference_from_golden(tmp_db, tmp_path):
     assert rows[0]["reference"] == ref
 
 
-def test_ai_plugin_manifest(client):
-    resp = client.get("/.well-known/ai-plugin.json")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["name_for_model"] == "ugh_audit"
-    assert data["api"]["type"] == "openapi"
+def test_mcp_endpoint_mounted():
+    """MCP エンドポイントが /mcp にマウントされていることを検証"""
+    from ugh_audit.server import app as server_app
+
+    mcp_routes = [
+        r for r in server_app.routes
+        if hasattr(r, "path") and r.path == "/mcp"
+    ]
+    assert len(mcp_routes) == 1
