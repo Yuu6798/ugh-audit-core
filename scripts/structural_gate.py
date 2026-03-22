@@ -139,6 +139,24 @@ def _find_pattern(text: str, patterns: List[str]) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
+def _extract_forbidden_patterns(note: str) -> List[str]:
+    """forbidden_reinterpret のアノート文から実際のマッチパターンを抽出する。
+
+    メタデータは『パターン1』『パターン2』形式のレビューアノートを含むことがあるため、
+    括弧内のパターンを抽出する。括弧がなければ原文をそのまま返す。
+    """
+    # 『...』内のパターンを抽出
+    patterns: List[str] = re.findall(r"『([^』]+)』", note)
+    if patterns:
+        return patterns
+    # 「...」内のパターンも試行
+    patterns = re.findall(r"「([^」]+)」", note)
+    if patterns:
+        return patterns
+    # 括弧がなければ原文をそのまま使用
+    return [note]
+
+
 def check_f1_anchor(
     response: str,
     meta: Dict[str, Any],
@@ -158,10 +176,17 @@ def check_f1_anchor(
     resp_lower = _normalize_text(response)
 
     # forbidden チェック
+    # メタデータの forbidden_reinterpret はレビューアノート形式のことがあるため、
+    # 『...』内のパターンを抽出してマッチングする
     for fb in forbidden:
-        if fb and _normalize_text(fb) in resp_lower:
-            ev = _extract_evidence(response, fb)
-            return 1.0, f"forbidden_reinterpret マッチ: 「{fb}」", ev
+        if not fb:
+            continue
+        fb_patterns = _extract_forbidden_patterns(fb)
+        for pat in fb_patterns:
+            pat_lower = _normalize_text(pat)
+            if pat_lower in resp_lower:
+                ev = _extract_evidence(response, pat)
+                return 1.0, f"forbidden_reinterpret マッチ: 「{pat}」", ev
 
     # 出現率計算（allowed_rephrase も出現と見なす）
     hit = 0
@@ -346,13 +371,13 @@ def _check_single_operator(
             return 1.0, f"「{term}」＋全称を先に処理せず理由列挙", ev
         return 0.0, "", None
 
-    if op_type == "limiter_suffix" or op_type == "limiter_prefix":
+    if op_type in ("limiter_suffix", "limiter_prefix", "limiter"):
         if has_reframing or has_correction:
             return 0.0, "", None
         ev = _extract_evidence(response, term) if term_repeated else None
         return 0.5, f"「{term}」に対する問い直し・再定義なし", ev
 
-    if op_type == "skeptical":
+    if op_type in ("skeptical", "skeptical_modality"):
         if has_reframing or has_correction or has_limiting:
             return 0.0, "", None
         ev = _extract_evidence(response, term) if term_repeated else None

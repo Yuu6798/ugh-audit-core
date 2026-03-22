@@ -192,6 +192,24 @@ class TestF1Anchor:
         flag, _, _ = check_f1_anchor("人工無能は役に立つ", meta)
         assert flag == 1.0
 
+    def test_forbidden_bracket_pattern(self) -> None:
+        """『...』形式のレビューアノートからパターンを抽出してマッチする。"""
+        meta = {"anchor_terms": ["共振"], "anchor_allowed_rephrase": [],
+                "anchor_forbidden_reinterpret": [
+                    "『共振=高い相関』『共振=神秘的同調』を禁止再解釈に入れるべき。"
+                ]}
+        flag, _, _ = check_f1_anchor("共振=高い相関として理解できます", meta)
+        assert flag == 1.0
+
+    def test_forbidden_bracket_no_match(self) -> None:
+        """『...』パターンにマッチしなければ flag=0。"""
+        meta = {"anchor_terms": ["共振"], "anchor_allowed_rephrase": [],
+                "anchor_forbidden_reinterpret": [
+                    "『共振=高い相関』を禁止再解釈に入れるべき。"
+                ]}
+        flag, _, _ = check_f1_anchor("共振は意味的な共鳴を測定します", meta)
+        assert flag == 0.0
+
     def test_empty_terms(self) -> None:
         meta = {"anchor_terms": [], "anchor_allowed_rephrase": [],
                 "anchor_forbidden_reinterpret": []}
@@ -280,11 +298,37 @@ class TestF3Operator:
         flag, _, _ = check_f3_operator(resp, meta)
         assert flag == 0.5
 
-    def test_limiter(self) -> None:
+    def test_limiter_suffix(self) -> None:
         meta = {"operators": [{"term": "にすぎない", "type": "limiter_suffix"}]}
         resp = "AIは道具にすぎないと言われます。道具としての価値は高いです。"
         flag, _, _ = check_f3_operator(resp, meta)
         assert flag == 0.5
+
+    def test_limiter_type(self) -> None:
+        """type=limiter は limiter_suffix/prefix と同等に扱う。"""
+        meta = {"operators": [{"term": "本質的に", "type": "limiter"}]}
+        resp = "本質的に拡張するかは議論がある。"
+        flag, _, _ = check_f3_operator(resp, meta)
+        assert flag == 0.5
+
+    def test_limiter_type_handled(self) -> None:
+        meta = {"operators": [{"term": "本質的に", "type": "limiter"}]}
+        resp = "そもそも本質的にとは何を意味するのか。しかし限界もある。"
+        flag, _, _ = check_f3_operator(resp, meta)
+        assert flag == 0.0
+
+    def test_skeptical_modality_unhandled(self) -> None:
+        """type=skeptical_modality で疑いを認識しない応答 → 0.5。"""
+        meta = {"operators": [{"term": "果たして", "type": "skeptical_modality"}]}
+        resp = "果たして可能かは分かりませんが、技術は進歩しています。"
+        flag, _, _ = check_f3_operator(resp, meta)
+        assert flag == 0.5
+
+    def test_skeptical_modality_handled(self) -> None:
+        meta = {"operators": [{"term": "本当に", "type": "skeptical_modality"}]}
+        resp = "本当にバグかはそもそも定義に依存する。しかし実用上は問題がある。"
+        flag, _, _ = check_f3_operator(resp, meta)
+        assert flag == 0.0
 
 
 class TestF4Premise:
