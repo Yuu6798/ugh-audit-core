@@ -76,7 +76,7 @@ PREMISE_RESPONSE_PATTERNS: Dict[str, List[str]] = {
     "保留": ["判断を留保", "断定は避け", "一概には", "単純には"],
     "反証": ["実際には", "経験的には", "データによれば", "反論"],
     "再定式化": ["むしろ", "問いを変えると", "本質は", "本質的に"],
-    "区別": ["異なる", "区別"],
+    "区別": ["区別"],
     "必要性指摘": ["考慮する必要", "検討する必要", "注意が必要"],
 }
 
@@ -231,6 +231,9 @@ def check_f2_unknown(
     if not unknown_terms:
         return 0.0, "", None
 
+    # 展開可の場合は勝手展開チェックをスキップ
+    expansion_allowed = default_action and "展開可" in default_action
+
     resp_lower = _normalize_text(response)
     worst_flag = 0.0
     worst_trigger = ""
@@ -239,8 +242,8 @@ def check_f2_unknown(
     for term in unknown_terms:
         term_lower = _normalize_text(term)
 
-        # (a) 勝手展開の検出（severity=high のみ）
-        if severity == "high":
+        # (a) 勝手展開の検出（severity=high かつ 展開可でない場合のみ）
+        if severity == "high" and not expansion_allowed:
             expand_pattern = re.compile(
                 re.escape(term) + r"[（\(]([^）\)]+)[）\)]",
                 re.IGNORECASE,
@@ -275,8 +278,8 @@ def check_f2_unknown(
                         worst_evidence = ev
                     continue
 
-        # (a') 別概念へのすり替え：term が一度も登場しない（severity=high のみ）
-        if severity == "high" and term_lower not in resp_lower:
+        # (a') 別概念へのすり替え：term が一度も登場しない（severity=high かつ 展開可でない場合のみ）
+        if severity == "high" and not expansion_allowed and term_lower not in resp_lower:
             # 他の unknown_terms が同じ概念の別表記で出現しているかチェック
             other_present = any(
                 _normalize_text(ut) in resp_lower
@@ -364,11 +367,16 @@ def _check_single_operator(
         return 0.0, "", None
 
     if op_type == "reason_request_with_premise":
-        # 全称（「常に」等）を先に処理しているか確認
-        has_any_modifier = has_limiting or has_correction or has_counter
-        if not has_any_modifier:
+        # 「なぜ」が前提を事実化しているため、前提自体を先に検討しているか確認
+        # 単なる「しかし」等の汎用ヘッジではなく、前提レベルの問い直しを要求する
+        premise_challenge_patterns = [
+            "前提として", "そもそも", "仮定が", "とは限らない", "限りません",
+            "必ずしも", "一概には", "単純には",
+        ]
+        has_premise_challenge = _has_pattern(response, premise_challenge_patterns)
+        if not has_premise_challenge:
             ev = _extract_evidence(response, term) if term_repeated else None
-            return 1.0, f"「{term}」＋全称を先に処理せず理由列挙", ev
+            return 1.0, f"「{term}」＋前提を先に検討せず理由列挙", ev
         return 0.0, "", None
 
     if op_type in ("limiter_suffix", "limiter_prefix", "limiter"):

@@ -258,6 +258,14 @@ class TestF2Unknown:
         flag, _, _ = check_f2_unknown(resp, meta)
         assert flag == 0.0
 
+    def test_expansion_allowed_skips_check(self) -> None:
+        """unknown_default_action=展開可 なら勝手展開チェックをスキップする。"""
+        meta = {"unknown_terms": ["Mesh"], "unknown_default_action": "展開可",
+                "severity_hint": "high"}
+        resp = "Mesh（Multi-layered Evaluation of Semantic Harmony）は..."
+        flag, _, _ = check_f2_unknown(resp, meta)
+        assert flag == 0.0
+
     def test_medium_severity_skips_expansion(self) -> None:
         meta = {"unknown_terms": ["Attention Weights"],
                 "unknown_default_action": "保持", "severity_hint": "medium"}
@@ -297,6 +305,20 @@ class TestF3Operator:
         resp = "AIは常にバイアスを含みます。しかし、対策は可能です。"
         flag, _, _ = check_f3_operator(resp, meta)
         assert flag == 0.5
+
+    def test_reason_request_no_premise_challenge(self) -> None:
+        """reason_request_with_premise で前提を検討せず理由列挙 → 1.0。"""
+        meta = {"operators": [{"term": "なぜ", "type": "reason_request_with_premise"}]}
+        resp = "なぜ優れているかは以下の理由からです。しかし、注意点もあります。"
+        flag, _, _ = check_f3_operator(resp, meta)
+        assert flag == 1.0
+
+    def test_reason_request_with_premise_challenge(self) -> None:
+        """reason_request_with_premise で前提を検討してから回答 → 0.0。"""
+        meta = {"operators": [{"term": "なぜ", "type": "reason_request_with_premise"}]}
+        resp = "そもそも前提が正しいかを検討する必要がある。なぜなら..."
+        flag, _, _ = check_f3_operator(resp, meta)
+        assert flag == 0.0
 
     def test_limiter_suffix(self) -> None:
         meta = {"operators": [{"term": "にすぎない", "type": "limiter_suffix"}]}
