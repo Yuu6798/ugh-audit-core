@@ -41,6 +41,9 @@ dev = [
     "httpx>=0.25",
     "anyio[trio]>=4.0",
     "pytest-anyio>=0.0.0",
+    "fastapi>=0.104",
+    "uvicorn[standard]>=0.24",
+    "mcp>=1.0",
 ]
 
 [tool.setuptools.packages.find]
