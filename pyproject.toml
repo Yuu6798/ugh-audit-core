@@ -29,10 +29,15 @@ ja = [
 ugh3 = [
     "ugh3-metrics-lib @ git+https://github.com/Yuu6798/ugh3-metrics-lib.git",
 ]
+server = [
+    "fastapi>=0.104",
+    "uvicorn[standard]>=0.24",
+]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.0",
     "ruff>=0.1",
+    "httpx>=0.25",
 ]
 
 [tool.setuptools.packages.find]
