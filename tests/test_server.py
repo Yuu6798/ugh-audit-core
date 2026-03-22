@@ -145,3 +145,11 @@ def test_mcp_endpoint_mounted():
         if hasattr(r, "path") and r.path == "/mcp"
     ]
     assert len(mcp_routes) == 1
+
+
+def test_mcp_session_manager_starts(client):
+    """MCP セッションマネージャーがライフスパンで起動することを検証"""
+    from ugh_audit.mcp_server import mcp as mcp_instance
+
+    # TestClient のライフスパンで session_manager が起動済み
+    assert mcp_instance.session_manager is not None
