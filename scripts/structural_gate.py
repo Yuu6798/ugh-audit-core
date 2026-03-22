@@ -464,18 +464,37 @@ def check_f4_premise(
     return 0.5, "前提への対応表現なし", None
 
 
+# 前提キーワード抽出から除外する汎用語（話題に関わらず出現するため誤検出を招く）
+_PREMISE_KEYWORD_EXCLUSIONS: set = {
+    # メタ表現
+    "前提", "パターン", "前提パターン", "誘導前提", "受け入れ", "埋め込み",
+    # 汎用名詞（どの回答にも出現しうる）
+    "議論", "必要", "確認", "説明", "理解", "問題", "意図", "規制",
+    "人間", "判断", "意識", "感情", "価値", "倫理", "技術", "社会",
+    "概念", "可能性", "データ", "文脈", "モデル", "対象", "観点",
+    "影響", "関係", "状況", "目的", "条件", "結果", "方法", "能力",
+    "存在", "定義", "評価", "分析", "情報", "対応", "立場", "視点",
+    "検出", "二値化", "フレーム", "二択",
+}
+
+
 def _extract_premise_keywords(premise_content: str) -> List[str]:
-    """premise_content から検索用キーワードを抽出する。"""
-    # 「〜を前提化」「前提パターン:」等のメタ表現を除いた実質的なキーワードを取る
-    # 鍵となる名詞句を抽出
+    """premise_content から検索用キーワードを抽出する。
+
+    汎用的すぎる名詞やメタ表現を除外し、前提の核心を表す実質語のみを返す。
+    """
     keywords: List[str] = []
-    # 「犠牲」「自由度」「構造化」等の実質語を拾う
-    # 簡易的に：漢字+カタカナの連続2文字以上を抽出
-    for m in re.finditer(r"[一-龥ァ-ヶー]{2,}", premise_content):
+    # 漢字+カタカナの連続3文字以上を抽出（2文字は汎用的すぎるため除外）
+    for m in re.finditer(r"[一-龥ァ-ヶー]{3,}", premise_content):
         word = m.group(0)
-        # メタ表現を除外
-        if word not in ("前提", "パターン", "前提パターン", "誘導前提", "受け入れ", "埋め込み"):
+        if word not in _PREMISE_KEYWORD_EXCLUSIONS:
             keywords.append(word)
+    # 3文字以上で見つからなければ、特定の実質的2文字語のみフォールバック
+    if not keywords:
+        for m in re.finditer(r"[一-龥ァ-ヶー]{2,}", premise_content):
+            word = m.group(0)
+            if word not in _PREMISE_KEYWORD_EXCLUSIONS and len(word) >= 2:
+                keywords.append(word)
     return keywords
 
 
@@ -603,7 +622,10 @@ def load_q_metadata(path: Path) -> Dict[str, Dict[str, Any]]:
 
 
 def load_responses(path: Path) -> List[Dict[str, str]]:
-    """AI回答を読み込む。CSV と JSONL の両方に対応する。"""
+    """AI回答を読み込む。CSV と JSONL の両方に対応する。
+
+    id, response の他に temperature 等の追加フィールドがあれば保持する。
+    """
     suffix = path.suffix.lower()
     responses: List[Dict[str, str]] = []
 
@@ -611,7 +633,10 @@ def load_responses(path: Path) -> List[Dict[str, str]]:
         with open(path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                responses.append({"id": row["id"], "response": row["response"]})
+                entry: Dict[str, str] = {"id": row["id"], "response": row["response"]}
+                if "temperature" in row:
+                    entry["temperature"] = row["temperature"]
+                responses.append(entry)
     elif suffix in (".jsonl", ".json"):
         with open(path, encoding="utf-8") as f:
             for line in f:
@@ -619,7 +644,10 @@ def load_responses(path: Path) -> List[Dict[str, str]]:
                 if not line:
                     continue
                 record = json.loads(line)
-                responses.append({"id": record["id"], "response": record["response"]})
+                entry = {"id": record["id"], "response": record["response"]}
+                if "temperature" in record:
+                    entry["temperature"] = str(record["temperature"])
+                responses.append(entry)
     else:
         raise ValueError(f"未対応のファイル形式: {suffix} (.csv または .jsonl を指定してください)")
 
@@ -719,6 +747,8 @@ def run_gate(
             verbose=verbose,
         )
         result["id"] = rid
+        if "temperature" in resp:
+            result["temperature"] = resp["temperature"]
         results.append(result)
 
     return results
@@ -736,7 +766,7 @@ def write_summary_csv(results: List[Dict[str, Any]], path: Path) -> None:
     """結果を CSV 形式で書き出す。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
-        "id", "verdict", "fail_max", "primary_element", "primary_flag",
+        "id", "temperature", "verdict", "fail_max", "primary_element", "primary_flag",
         "primary_trigger", "f1_flag", "f2_flag", "f3_flag", "f4_flag",
     ]
     with open(path, "w", encoding="utf-8", newline="") as f:
@@ -747,6 +777,7 @@ def write_summary_csv(results: List[Dict[str, Any]], path: Path) -> None:
             scores = r.get("element_scores", {})
             writer.writerow({
                 "id": r["id"],
+                "temperature": r.get("temperature", ""),
                 "verdict": r["verdict"],
                 "fail_max": r["fail_max"],
                 "primary_element": pf.get("element", ""),
@@ -883,9 +914,23 @@ def main() -> None:
     write_summary_csv(results, args.summary)
     print_summary(results)
 
-    # 終了コード: fail が1件でもあれば 1
-    if any(r["verdict"] == "fail" for r in results):
-        sys.exit(1)
+    # 終了コード
+    if args.sentinel_only:
+        # sentinel-only モードでは番兵問の期待値との一致で判定
+        result_map: Dict[str, str] = {}
+        for r in results:
+            if r["id"] not in result_map:
+                result_map[r["id"]] = r["verdict"]
+        sentinel_ok = all(
+            result_map.get(sid) == exp
+            for sid, exp in SENTINEL_EXPECTED.items()
+        )
+        if not sentinel_ok:
+            sys.exit(1)
+    else:
+        # 通常モード: fail が1件でもあれば 1
+        if any(r["verdict"] == "fail" for r in results):
+            sys.exit(1)
 
 
 if __name__ == "__main__":
