@@ -74,17 +74,20 @@ app = FastAPI(
 )
 
 # CORS — ChatGPT Connectors からのリクエストを許可
+# Mcp-Session-Id は MCP Streamable HTTP クライアントに必要
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://chat.openai.com", "https://chatgpt.com"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Mcp-Session-Id"],
 )
 
 # ---------------------------------------------------------------------------
 # MCP サーバーをマウント (/mcp)
 # ---------------------------------------------------------------------------
 
+from .mcp_server import configure as _mcp_configure  # noqa: E402
 from .mcp_server import mcp as _mcp_instance  # noqa: E402
 
 app.mount("/mcp", _mcp_instance.streamable_http_app())
@@ -129,7 +132,10 @@ def configure(
     scorer: Optional[UGHScorer] = None,
     golden: Optional[GoldenStore] = None,
 ) -> None:
-    """テストやカスタム設定用にグローバルインスタンスを差し替える"""
+    """テストやカスタム設定用にグローバルインスタンスを差し替える
+
+    REST API (/api/*) と MCP (/mcp) の両方に反映される。
+    """
     global _scorer, _db, _golden
     if db is not None:
         _db = db
@@ -137,6 +143,8 @@ def configure(
         _scorer = scorer
     if golden is not None:
         _golden = golden
+    # MCP 側にも同じインスタンスを伝播
+    _mcp_configure(db=db, scorer=scorer, golden=golden)
 
 
 # ---------------------------------------------------------------------------

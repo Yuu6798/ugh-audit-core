@@ -30,6 +30,9 @@ mcp = FastMCP(
         "AI回答の意味論的監査ツール。"
         "UGHer の3指標 (PoR / ΔE / grv) で意味的誠実性を定量評価する。"
     ),
+    # server.py の app.mount("/mcp", ...) と組み合わせた際に
+    # /mcp/mcp にならないよう内部パスを "/" に設定
+    streamable_http_path="/",
 )
 
 # ---------------------------------------------------------------------------
@@ -142,8 +145,12 @@ def audit_answer(
 # スタンドアロン起動
 # ---------------------------------------------------------------------------
 
+_MCP_CORS_ORIGINS = ["https://chat.openai.com", "https://chatgpt.com"]
+
 if __name__ == "__main__":
     import argparse
+
+    from starlette.middleware.cors import CORSMiddleware
 
     parser = argparse.ArgumentParser(description="UGH Audit MCP Server")
     parser.add_argument("--port", type=int, default=8000)
@@ -152,4 +159,17 @@ if __name__ == "__main__":
 
     mcp.settings.host = args.host
     mcp.settings.port = args.port
-    mcp.run(transport="streamable-http")
+    mcp.settings.streamable_http_path = "/mcp"
+
+    app = mcp.streamable_http_app()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_MCP_CORS_ORIGINS,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["Mcp-Session-Id"],
+    )
+
+    import uvicorn
+
+    uvicorn.run(app, host=args.host, port=args.port)
