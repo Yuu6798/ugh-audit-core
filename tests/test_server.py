@@ -80,6 +80,19 @@ def test_audit_without_reference(client):
     assert "verdict" in resp.json()
 
 
+def test_audit_preserves_session_id(client, tmp_db):
+    """session_id を指定すると同一値で DB に保存されることを検証"""
+    for i in range(2):
+        client.post("/api/audit", json={
+            "question": f"質問{i}",
+            "response": f"回答{i}",
+            "session_id": "conv-abc",
+        })
+    rows = tmp_db.list_recent(10)
+    assert len(rows) == 2
+    assert all(r["session_id"] == "conv-abc" for r in rows)
+
+
 def test_history_empty(client):
     resp = client.get("/api/history")
     assert resp.status_code == 200

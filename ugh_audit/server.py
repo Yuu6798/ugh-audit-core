@@ -38,6 +38,9 @@ class AuditRequest(BaseModel):
     reference: Optional[str] = Field(
         None, description="期待される正解（省略時は GoldenStore から自動検索）"
     )
+    session_id: Optional[str] = Field(
+        None, description="セッションID（省略時は自動生成、同一会話の複数ターンを紐付ける）"
+    )
 
 
 class AuditResponse(BaseModel):
@@ -197,6 +200,7 @@ def audit_answer(req: AuditRequest) -> AuditResponse:
         question=req.question,
         response=req.response,
         reference=ref,
+        session_id=req.session_id,
     )
     saved_id = db.save(result)
     return AuditResponse(

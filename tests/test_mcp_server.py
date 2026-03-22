@@ -113,6 +113,19 @@ def test_audit_answer_without_reference():
     assert structured["saved_id"] >= 1
 
 
+def test_audit_answer_preserves_session_id(tmp_db):
+    """session_id を指定すると同一値で DB に保存されることを検証"""
+    for i in range(2):
+        _run(mcp.call_tool("audit_answer", {
+            "question": f"質問{i}",
+            "response": f"回答{i}",
+            "session_id": "mcp-sess-1",
+        }))
+    rows = tmp_db.list_recent(10)
+    assert len(rows) == 2
+    assert all(r["session_id"] == "mcp-sess-1" for r in rows)
+
+
 def test_audit_answer_resolves_golden_reference(tmp_db, tmp_golden):
     """reference 省略時に GoldenStore から自動解決されることを検証"""
     ref = tmp_golden.find_reference("AIは意味を持てるか？")

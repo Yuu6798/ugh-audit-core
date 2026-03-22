@@ -106,6 +106,7 @@ def audit_answer(
     question: str,
     response: str,
     reference: Optional[str] = None,
+    session_id: Optional[str] = None,
 ) -> AuditOutput:
     """AI回答を意味監査する。
 
@@ -117,6 +118,7 @@ def audit_answer(
         question: ユーザーの質問
         response: AIの回答
         reference: 期待される正解（省略時は GoldenStore から自動検索）
+        session_id: セッションID（省略時は自動生成、同一会話の複数ターンを紐付ける）
     """
     scorer = _get_scorer()
     db = _get_db()
@@ -129,6 +131,7 @@ def audit_answer(
         question=question,
         response=response,
         reference=ref,
+        session_id=session_id,
     )
     saved_id = db.save(result)
 
