@@ -5,7 +5,6 @@ MCP サーバーのテスト — audit_answer ツールの動作を検証
 from __future__ import annotations
 
 import asyncio
-import json
 
 import pytest
 
@@ -51,56 +50,67 @@ def test_tools_list_includes_audit_answer():
 
 
 def test_audit_answer_tool_schema():
-    """audit_answer のスキーマが正しいことを検証"""
+    """audit_answer の入力/出力スキーマが正しいことを検証"""
     tools = _run(mcp.list_tools())
     audit_tool = next(t for t in tools if t.name == "audit_answer")
+
+    # 入力スキーマ
     schema = audit_tool.inputSchema
     assert "question" in schema["properties"]
     assert "response" in schema["properties"]
     assert "reference" in schema["properties"]
-    # question と response は必須
     assert "question" in schema["required"]
     assert "response" in schema["required"]
 
+    # 出力スキーマ（構造化出力）
+    out = audit_tool.outputSchema
+    assert out is not None
+    for field in ("por", "delta_e", "grv", "verdict", "saved_id"):
+        assert field in out["properties"], f"{field} missing from outputSchema"
 
-def test_audit_answer_returns_structured_payload():
-    """tools/call で audit_answer を呼び、期待するペイロードが返ることを検証"""
-    content, _ = _run(mcp.call_tool("audit_answer", {
+
+def test_audit_answer_returns_structured_output():
+    """tools/call で構造化出力が返ることを検証"""
+    content, structured = _run(mcp.call_tool("audit_answer", {
         "question": "AIは意味を持てるか？",
         "response": "AIは意味を処理できます。",
         "reference": "AIは意味と共振する動的プロセスです。",
     }))
+
+    # structured dict に全フィールドが含まれる
+    assert isinstance(structured, dict)
+    assert isinstance(structured["por"], float)
+    assert isinstance(structured["delta_e"], float)
+    assert isinstance(structured["grv"], dict)
+    assert isinstance(structured["verdict"], str)
+    assert isinstance(structured["saved_id"], int)
+    assert structured["saved_id"] >= 1
+
+    # content にもテキスト表現が含まれる
     assert len(content) >= 1
-    data = json.loads(content[0].text)
-    assert "por" in data
-    assert "delta_e" in data
-    assert "grv" in data
-    assert "verdict" in data
-    assert "saved_id" in data
-    assert isinstance(data["saved_id"], int)
-    assert data["saved_id"] >= 1
+    assert "por" in content[0].text
 
 
 def test_audit_answer_saves_to_db(tmp_db):
     """audit_answer の結果が DB に保存されることを検証"""
-    _run(mcp.call_tool("audit_answer", {
+    _, structured = _run(mcp.call_tool("audit_answer", {
         "question": "テスト質問",
         "response": "テスト回答",
     }))
     rows = tmp_db.list_recent(10)
     assert len(rows) == 1
     assert rows[0]["question"] == "テスト質問"
+    assert structured["saved_id"] == rows[0]["id"]
 
 
 def test_audit_answer_without_reference():
     """reference 省略時に正常動作することを検証"""
-    content, _ = _run(mcp.call_tool("audit_answer", {
+    _, structured = _run(mcp.call_tool("audit_answer", {
         "question": "テスト",
         "response": "テスト回答",
     }))
-    data = json.loads(content[0].text)
-    assert "verdict" in data
-    assert data["saved_id"] >= 1
+    assert "verdict" in structured
+    assert structured["saved_id"] >= 1
 
 
 def test_audit_answer_resolves_golden_reference(tmp_db, tmp_golden):
@@ -120,5 +130,4 @@ def test_audit_answer_resolves_golden_reference(tmp_db, tmp_golden):
 def test_streamable_http_app_created():
     """MCP Streamable HTTP アプリが生成可能であることを検証"""
     app = mcp.streamable_http_app()
-    # Starlette アプリが返される
     assert callable(app)

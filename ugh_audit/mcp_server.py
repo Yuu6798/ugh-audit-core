@@ -11,8 +11,8 @@ ChatGPT Settings > Connectors から MCP URL を登録して利用する。
 """
 from __future__ import annotations
 
-import json
-from typing import Optional
+from dataclasses import dataclass
+from typing import Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
@@ -78,6 +78,22 @@ def configure(
 
 
 # ---------------------------------------------------------------------------
+# 出力データクラス
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AuditOutput:
+    """audit_answer ツールの構造化出力"""
+
+    por: float
+    delta_e: float
+    grv: Dict[str, float]
+    verdict: str
+    saved_id: int
+
+
+# ---------------------------------------------------------------------------
 # ツール定義
 # ---------------------------------------------------------------------------
 
@@ -87,7 +103,7 @@ def audit_answer(
     question: str,
     response: str,
     reference: Optional[str] = None,
-) -> str:
+) -> AuditOutput:
     """AI回答を意味監査する。
 
     question（質問）、response（AI回答）、reference（期待回答、省略可）を受け取り、
@@ -113,15 +129,12 @@ def audit_answer(
     )
     saved_id = db.save(result)
 
-    return json.dumps(
-        {
-            "por": round(result.por, 4),
-            "delta_e": round(result.delta_e, 4),
-            "grv": {k: round(v, 4) for k, v in result.grv.items()},
-            "verdict": result.meaning_drift,
-            "saved_id": saved_id,
-        },
-        ensure_ascii=False,
+    return AuditOutput(
+        por=round(result.por, 4),
+        delta_e=round(result.delta_e, 4),
+        grv={k: round(v, 4) for k, v in result.grv.items()},
+        verdict=result.meaning_drift,
+        saved_id=saved_id,
     )
 
 
