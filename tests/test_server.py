@@ -4,6 +4,7 @@ ChatGPT Connector API サーバーのテスト
 """
 import pytest
 
+from ugh_audit.reference.golden_store import GoldenStore
 from ugh_audit.scorer.ugh_scorer import UGHScorer
 from ugh_audit.storage.audit_db import AuditDB
 
@@ -22,14 +23,19 @@ def tmp_db(tmp_path):
 
 
 @pytest.fixture
-def client(tmp_db):
-    """テスト用クライアント（tmp_path DB を使用）"""
+def tmp_golden(tmp_path):
+    return GoldenStore(path=tmp_path / "golden.json")
+
+
+@pytest.fixture
+def client(tmp_db, tmp_golden):
+    """テスト用クライアント（tmp_path DB / GoldenStore を使用）"""
     scorer = UGHScorer(model_id="test-server")
-    configure(db=tmp_db, scorer=scorer)
+    configure(db=tmp_db, scorer=scorer, golden=tmp_golden)
     with TestClient(app) as c:
         yield c
     # リセット
-    configure(db=None, scorer=None)
+    configure(db=None, scorer=None, golden=None)
 
 
 def test_health(client):
@@ -102,6 +108,32 @@ def test_openapi_schema(client):
     schema = resp.json()
     assert "/api/audit" in schema["paths"]
     assert "/api/history" in schema["paths"]
+
+
+def test_audit_resolves_reference_from_golden(tmp_db, tmp_path):
+    """reference 省略時に GoldenStore から自動解決されることを検証"""
+    golden = GoldenStore(path=tmp_path / "golden.json")
+    # GoldenStore にはデフォルトで ugh_definition が入っている
+    # "AIは意味を持てるか？" に対して find_reference が返る
+    ref = golden.find_reference("AIは意味を持てるか？")
+    assert ref is not None  # GoldenStore が解決できることを前提確認
+
+    scorer = UGHScorer(model_id="test-server")
+    configure(db=tmp_db, scorer=scorer, golden=golden)
+    with TestClient(app) as c:
+        resp = c.post("/api/audit", json={
+            "question": "AIは意味を持てるか？",
+            "response": "AIは意味を処理できます。",
+            # reference を省略 → GoldenStore から自動解決される
+        })
+    configure(db=None, scorer=None, golden=None)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["saved_id"] >= 1
+
+    # DB に保存された reference が question ではなく GoldenStore の値であることを確認
+    rows = tmp_db.list_recent(1)
+    assert rows[0]["reference"] == ref
 
 
 def test_ai_plugin_manifest(client):

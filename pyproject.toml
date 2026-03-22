@@ -43,6 +43,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 
+[tool.setuptools.package-data]
+ugh_audit = ["data/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
