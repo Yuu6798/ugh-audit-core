@@ -150,12 +150,8 @@ def audit_answer(
 # スタンドアロン起動
 # ---------------------------------------------------------------------------
 
-_MCP_CORS_ORIGINS = ["https://chat.openai.com", "https://chatgpt.com"]
-
 if __name__ == "__main__":
     import argparse
-
-    from starlette.middleware.cors import CORSMiddleware
 
     parser = argparse.ArgumentParser(description="UGH Audit MCP Server")
     parser.add_argument("--port", type=int, default=8000)
@@ -166,15 +162,7 @@ if __name__ == "__main__":
     mcp.settings.port = args.port
     mcp.settings.streamable_http_path = "/mcp"
 
-    app = mcp.streamable_http_app()
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=_MCP_CORS_ORIGINS,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["Mcp-Session-Id"],
-    )
-
-    import uvicorn
-
-    uvicorn.run(app, host=args.host, port=args.port)
+    # SDK 推奨の起動方法を使用
+    # stateless_http=True 設定済みのため session manager は不要だが、
+    # mcp.run() を使うことで SDK 側の初期化パスを統一する
+    mcp.run(transport="streamable-http")
