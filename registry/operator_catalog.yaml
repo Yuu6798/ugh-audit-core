@@ -3,7 +3,7 @@
 operators:
   - family: "universal_positive"
     description: "全称肯定（常に〜である）"
-    surface_patterns: ["常に", "すべて", "必ず", "あらゆる", "いつも", "全て", "どんな場合も"]
+    surface_patterns: ["常に", "すべて", "必ず", "あらゆる", "いつも", "全て", "どんな場合も", "普遍的"]
     required_action: "QUALIFY_OR_CHALLENGE"
     response_indicators: ["ただし", "例外", "条件", "場合による", "限定", "一概に", "必ずしも", "とは限らない"]
 
@@ -15,9 +15,9 @@ operators:
 
   - family: "exclusive"
     description: "排他（〜だけ、〜のみ）"
-    surface_patterns: ["だけ", "のみ", "しか", "だけで", "のみで", "限り"]
+    surface_patterns: ["だけ", "のみ", "しか", "だけで", "のみで", "限り", "単なる", "にすぎない"]
     required_action: "EXAMINE_SCOPE"
-    response_indicators: ["範囲", "限定", "射程", "他にも", "それ以外", "加えて", "だけでなく"]
+    response_indicators: ["範囲", "限定", "射程", "他にも", "それ以外", "加えて", "だけでなく", "しかし", "一方で", "以上の", "観点"]
 
   - family: "causal"
     description: "因果（〜だから、〜ため）"
@@ -36,6 +36,18 @@ operators:
     surface_patterns: ["より", "の方が", "に比べ", "と比較", "よりも"]
     required_action: "EXAMINE_SCOPE"
     response_indicators: ["基準", "条件", "文脈", "場合による", "観点", "一概に"]
+
+  - family: "epistemic_challenge"
+    description: "認識的挑戦（本当に〜か）"
+    surface_patterns: ["本当に", "本当の", "果たして", "そもそも"]
+    required_action: "EXAMINE_PREMISE_BEFORE_ANSWERING"
+    response_indicators: ["前提", "定義", "基準", "観点", "文脈", "必ずしも", "とは限らない", "場合による"]
+
+  - family: "equivalence"
+    description: "同一性（〜と同義か、〜と同じか）"
+    surface_patterns: ["同義", "同じ", "等しい", "イコール", "一致"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["区別", "違い", "異なる", "共通点", "差異", "文脈", "定義", "条件", "場合による"]
 
   - family: "reason_request_with_premise"
     description: "前提付き理由要求（なぜ〜なのか）"

@@ -311,8 +311,11 @@ def check_f4_premise(
             return 0.5, "二項対立への対応が部分的"
         return 0.0, ""
 
-    # その他のtrap_type: challenge_indicatorsの有無で判定
-    # ただし汎用的な批判的思考表現もカウントする
+    # その他のtrap_type: challenge_indicatorsが定義されていればその有無で判定
+    # challenge_indicatorsが空なら検出対象外（ペナルティなし）
+    if not challenge_indicators:
+        return 0.0, ""
+
     generic_challenge = [
         "しかし", "一方で", "ただし", "必ずしも", "とは限らない",
         "問題", "懸念", "批判", "疑問", "限界",
@@ -320,7 +323,7 @@ def check_f4_premise(
     generic_count = sum(1 for ind in generic_challenge if ind in response_text)
 
     if challenge_count == 0 and generic_count == 0:
-        return 0.5, "前提への対応表現なし"
+        return 0.5, f"{trap_type}への対応表現なし"
     return 0.0, ""
 
 
@@ -460,7 +463,9 @@ def check_propositions(
         overlap_count = len(overlap_set)
         recall = overlap_count / len(prop_bigrams)  # 分母は元のバイグラム数
 
-        if recall >= 0.35 and overlap_count >= _MIN_OVERLAP:
+        # 短い命題は_MIN_OVERLAPを命題サイズに合わせて緩和
+        min_required = min(_MIN_OVERLAP, len(prop_bigrams))
+        if recall >= 0.35 and overlap_count >= min_required:
             hit_ids.append(i)
         else:
             miss_ids.append(i)

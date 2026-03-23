@@ -84,8 +84,10 @@ def _build_repair_order(
             "conditional": "EXAMINE_SCOPE",
             "comparative": "EXAMINE_SCOPE",
             "negative_question": "EXAMINE_SCOPE",
+            "equivalence": "EXAMINE_SCOPE",
             "causal": "EXAMINE_PREMISE",
             "reason_request_with_premise": "EXAMINE_PREMISE",
+            "epistemic_challenge": "EXAMINE_PREMISE",
         }
         opcode = _FAMILY_OPCODE_MAP.get(evidence.f3_operator_family, "QUALIFY_UNIVERSAL")
         order.append(opcode)
@@ -125,7 +127,13 @@ def decide(state: State, evidence: Evidence) -> dict:
     opcodes = _load_opcodes()
 
     decision = _decision(state)
-    repair_order = _build_repair_order(evidence, state, opcodes)
+
+    # accept判定時は修復不要 — STOP_REWRITEのみ
+    if decision == "accept":
+        repair_order = ["STOP_REWRITE"]
+    else:
+        repair_order = _build_repair_order(evidence, state, opcodes)
+
     budget = _compute_budget(repair_order, opcodes)
 
     return {
