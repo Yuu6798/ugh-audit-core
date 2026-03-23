@@ -129,9 +129,26 @@ def check_f1_anchor(
     if not q_keywords and not term_groups:
         return 0.0
 
+    # ドメイン語彙マップ: 予約語の全surface（canonical + aliases）を収集
+    # 回答がドメイン語彙を使っていれば主題に沿っていると判定
+    domain_surfaces: List[str] = []
+    if reserved_terms:
+        for term_def in reserved_terms:
+            c = term_def.get("canonical", "")
+            if c:
+                domain_surfaces.append(c)
+            domain_surfaces.extend(a for a in term_def.get("aliases", []) if a)
+
     # response_textでの出現率
-    # 通常キーワード: 各キーワードが含まれていれば1ヒット
-    hit_count = sum(1 for kw in q_keywords if kw in response_text)
+    # 通常キーワード: 直接出現 or ドメイン語彙の存在でヒット
+    domain_in_response = [ds for ds in domain_surfaces if ds in response_text]
+    hit_count = 0
+    for kw in q_keywords:
+        if kw in response_text:
+            hit_count += 1
+        elif domain_in_response:
+            # キーワード自体は無いがドメイン語彙が回答にある → 主題に沿っている
+            hit_count += 1
     total = len(q_keywords)
 
     # 予約語グループ: グループ内のいずれかが含まれていれば1ヒット
@@ -353,7 +370,7 @@ def _extract_content_bigrams(text: str) -> set:
     """テキストから内容語バイグラム集合を抽出する
 
     漢字2文字ペア、カタカナ3文字以上、英単語をキーとして使用。
-    ひらがな・句読点・空白は除去して漢字/カタカナ/英字のみ対象。
+    否定表現（ではない、ない等）も極性情報として保持する。
     """
     bigrams: set = set()
 
@@ -362,6 +379,11 @@ def _extract_content_bigrams(text: str) -> set:
     for run in kanji_runs:
         for i in range(len(run) - 1):
             bigrams.add(run[i:i + 2])
+
+    # 否定表現: 漢字+否定パターンを極性マーカーとして抽出
+    negation_patterns = re.findall(r'([\u4e00-\u9fff]{1,4})(ではない|でない|ではなく|しない|できない|ない)', text)
+    for kanji_part, neg in negation_patterns:
+        bigrams.add(kanji_part + neg)
 
     # カタカナ語（3文字以上で意味のある語）
     kata_words = re.findall(r'[\u30a0-\u30ff]{3,}', text)
@@ -484,9 +506,11 @@ def check_propositions(
         # 類義語拡張: 命題側のバイグラムに類義語を追加
         expanded = _expand_with_synonyms(prop_bigrams)
 
-        # acceptable_variants: 命題と共通バイグラムがあるvariantのみ適用
+        # acceptable_variants: 命題と十分な共通バイグラムがあるvariantのみ適用
+        # 偶然の1トークン一致による膨張を防止（共通率30%以上を要求）
         for vbg in all_variant_bigrams:
-            if vbg & prop_bigrams:
+            common = vbg & prop_bigrams
+            if len(common) >= max(2, len(prop_bigrams) * 0.3):
                 expanded |= vbg
 
         # 拡張後のバイグラムがresp側にどれだけ含まれるかを見る（再現率）
