@@ -52,6 +52,9 @@ pip install -e ".[dev]"
 # フル機能（sentence-transformers + 日本語形態素解析）
 pip install -e ".[full]"
 
+# サーバーデプロイ（REST API + MCP + スコアリングバックエンド）
+pip install -e ".[server]"
+
 # 日本語対応のみ追加
 pip install -e ".[ja]"
 
@@ -89,12 +92,13 @@ print(result)
 
 ```
 ugh_audit/
-├── scorer/         # UGH指標スコアリング（ugh3-metrics-lib呼び出し）
+├── scorer/         # UGH指標スコアリング（3層フォールバック）
 ├── storage/        # SQLite永続化
 ├── reference/      # referenceセット管理（golden store）
 ├── collector/      # ログ収集ユーティリティ
-└── report/         # Phase Mapレポート生成
-scripts/
+├── report/         # Phase Mapレポート生成
+├── server.py       # REST API + MCP 統合サーバー (FastAPI)
+└── mcp_server.py   # MCP スタンドアロンサーバー
 examples/
 tests/
 ```
@@ -104,10 +108,12 @@ tests/
 ## MCP サーバー（ChatGPT Connectors 対応）
 
 ChatGPT から `audit_answer` ツールを呼び出せる MCP (Model Context Protocol) サーバーを内蔵。
+`stateless_http` モードで動作するため、マルチワーカー / ロードバランサー環境でも安定稼働する。
 
 ### セットアップ
 
 ```bash
+# サーバー + スコアリングバックエンド一括インストール
 pip install -e ".[server]"
 ```
 
@@ -125,6 +131,14 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 # → MCP: http://localhost:8000/mcp
 # → REST: http://localhost:8000/api/audit, /api/history
 ```
+
+### REST API エンドポイント
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| POST | `/api/audit` | AI回答を意味監査（question, response, reference?, session_id?） |
+| GET | `/api/history` | 直近の監査履歴を取得 |
+| POST | `/mcp` | MCP Streamable HTTP エンドポイント |
 
 ### 外部公開
 
@@ -148,7 +162,8 @@ ngrok http 8000
 入力:
 - `question` (string, 必須): ユーザーの質問
 - `response` (string, 必須): AIの回答
-- `reference` (string, 省略可): 期待される正解
+- `reference` (string, 省略可): 期待される正解（省略時は GoldenStore から自動検索）
+- `session_id` (string, 省略可): セッションID（同一会話の複数ターンを紐付ける。省略時は自動生成）
 
 出力:
 - `por`: 意味的共鳴度 (0–1)
@@ -156,6 +171,14 @@ ngrok http 8000
 - `grv`: 語彙重力分布
 - `verdict`: 判定 (同一意味圏 / 軽微なズレ / 意味乖離)
 - `saved_id`: DB保存時の行ID
+
+### 環境変数
+
+| 変数名 | 説明 | デフォルト |
+|--------|------|-----------|
+| `UGH_AUDIT_DB` | SQLite DB ファイルパス | `~/.ugh_audit/audit.db` |
+
+読み取り専用コンテナやサーバーレス環境では `UGH_AUDIT_DB=/tmp/audit.db` のように書き込み可能なパスを指定する。
 
 ---
 

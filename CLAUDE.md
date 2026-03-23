@@ -29,7 +29,9 @@ ugh_audit/
 ├── collector/        # audit_collector.py — スコアリング+保存パイプライン
 ├── storage/          # audit_db.py — SQLite永続化 (audit_runs table)
 ├── reference/        # golden_store.py — リファレンスセット管理 (JSON)
-└── report/           # phase_map.py — テキスト/CSVレポート生成
+├── report/           # phase_map.py — テキスト/CSVレポート生成
+├── server.py         # REST API + MCP 統合サーバー (FastAPI)
+└── mcp_server.py     # MCP スタンドアロンサーバー (stateless_http)
 tests/                # pytest (フィクスチャはtmp_path, モック不使用)
 examples/             # basic_audit.py — E2Eサンプル
 ```
@@ -45,11 +47,14 @@ UGHScorerは3層フォールバックで動作する:
 ## Development Setup
 
 ```bash
-# 基本インストール (minimal backend)
+# 基本インストール (minimal backend + テスト + サーバー依存)
 pip install -e ".[dev]"
 
-# フル機能
+# フル機能 (sentence-transformers + 日本語形態素解析)
 pip install -e ".[full]"
+
+# サーバーデプロイ (REST API + MCP + スコアリングバックエンド)
+pip install -e ".[server]"
 
 # ugh3バックエンド
 pip install -e ".[ugh3]"
@@ -114,6 +119,14 @@ python examples/basic_audit.py
 | Golden Store | リファレンスセット | `~/.ugh_audit/golden_store.json` |
 | Audit DB | 監査ログ | `~/.ugh_audit/audit.db` |
 
+### 環境変数
+
+| 変数名 | 説明 | デフォルト |
+|--------|------|-----------|
+| `UGH_AUDIT_DB` | SQLite DB ファイルパス | `~/.ugh_audit/audit.db` |
+
+読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` で書き込み可能パスを指定する。
+
 ## Key Thresholds
 
 | 定数 | 値 | 場所 |
@@ -166,16 +179,42 @@ git push -u origin <branch-name>
 
 PR作成時は上記のcompareリンクをユーザーに提示し、ユーザー自身がGitHub上でPRを作成する。
 
+## Server
+
+### 起動方法
+
+```bash
+# REST API + MCP 統合サーバー
+uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
+
+# MCP スタンドアロン
+python -m ugh_audit.mcp_server --port 8000
+```
+
+### エンドポイント
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| POST | `/api/audit` | AI回答を意味監査 |
+| GET | `/api/history` | 直近の監査履歴 |
+| POST | `/mcp` | MCP Streamable HTTP |
+
+### 設計方針
+
+- MCP は `stateless_http=True` で動作（マルチワーカー/LB対応）
+- `session_id` を REST/MCP 両方でオプショナルに受け付け、会話単位の分析に対応
+- sentence-transformers モデルロード失敗時は `logging.warning` で通知
+
 ## CI Pipeline
 
 GitHub Actions (`.github/workflows/ci.yml`):
 
 1. Python 3.10 / 3.11 / 3.12 マトリクス
-2. `pip install -e ".[dev]"` (minimal backend)
+2. `pip install -e ".[dev]"` (dev extra にサーバー依存を含む)
 3. `ruff check .` — lint
-4. `pytest -q --tb=short` — test
+4. `pytest -q --tb=short` — test (REST/MCP テスト含む)
 
-CI通過 = lint clean + 全テストpass (minimal backend)
+CI通過 = lint clean + 全テストpass
 
 ## Important Notes
 
