@@ -1,0 +1,62 @@
+# operator_catalog.yaml — 演算子カタログ（6族、surface_patterns付き）
+
+operators:
+  - family: "universal_positive"
+    description: "全称肯定（常に〜である）"
+    surface_patterns: ["常に", "すべて", "必ず", "あらゆる", "いつも", "全て", "どんな場合も", "普遍的"]
+    required_action: "QUALIFY_OR_CHALLENGE"
+    response_indicators: ["ただし", "例外", "条件", "場合による", "限定", "一概に", "必ずしも", "とは限らない"]
+
+  - family: "universal_negative"
+    description: "全称否定（決して〜ない）"
+    surface_patterns: ["決して", "絶対に", "一切", "まったく", "全く"]
+    required_action: "QUALIFY_OR_CHALLENGE"
+    response_indicators: ["ただし", "例外", "条件", "場合による", "限定", "一概に", "場合もある"]
+
+  - family: "exclusive"
+    description: "排他（〜だけ、〜のみ）"
+    surface_patterns: ["だけ", "のみ", "しか", "だけで", "のみで", "限り", "単なる", "にすぎない"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["範囲", "限定", "射程", "他にも", "それ以外", "加えて", "だけでなく", "しかし", "一方で", "以上の", "観点"]
+
+  - family: "causal"
+    description: "因果（〜だから、〜ため）"
+    surface_patterns: ["だから", "ため", "ので", "結果として", "したがって", "よって"]
+    required_action: "EXAMINE_PREMISE_BEFORE_ANSWERING"
+    response_indicators: ["前提", "仮定", "根拠", "因果", "相関", "必ずしも", "とは限らない", "しかし", "一方で", "リスク", "可能性", "問題", "懸念", "批判", "疑問"]
+
+  - family: "conditional"
+    description: "条件（〜すれば、〜なら）"
+    surface_patterns: ["すれば", "ならば", "なら", "場合", "とき", "たら"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["条件", "範囲", "前提", "限定", "射程", "場合分け"]
+
+  - family: "comparative"
+    description: "比較（〜より、〜の方が）"
+    surface_patterns: ["より", "の方が", "に比べ", "と比較", "よりも"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["基準", "条件", "文脈", "場合による", "観点", "一概に"]
+
+  - family: "epistemic_challenge"
+    description: "認識的挑戦（本当に〜か）"
+    surface_patterns: ["本当に", "本当の", "果たして", "そもそも"]
+    required_action: "EXAMINE_PREMISE_BEFORE_ANSWERING"
+    response_indicators: ["前提", "定義", "基準", "観点", "文脈", "必ずしも", "とは限らない", "場合による"]
+
+  - family: "equivalence"
+    description: "同一性（〜と同義か、〜と同じか）"
+    surface_patterns: ["同義", "同じ", "等しい", "イコール", "一致"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["区別", "違い", "異なる", "共通点", "差異", "文脈", "定義", "条件", "場合による"]
+
+  - family: "reason_request_with_premise"
+    description: "前提付き理由要求（なぜ〜なのか）"
+    surface_patterns: ["なぜ", "どうして", "何故", "なんで"]
+    required_action: "EXAMINE_PREMISE_BEFORE_ANSWERING"
+    response_indicators: ["前提", "仮定", "そもそも", "必ずしも", "とは限らない", "しかし", "一方で", "根拠", "問い直す"]
+
+  - family: "negative_question"
+    description: "否定疑問（〜ではないか、〜ないのか）"
+    surface_patterns: ["ではないか", "ではないのか", "ないのか", "じゃないか", "ないか"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["確かに", "一方で", "しかし", "ただし", "必ずしも", "場合による", "とは限らない", "観点", "条件"]

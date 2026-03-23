@@ -1,0 +1,100 @@
+# output_schema.yaml — 出力JSON定義 + decision logic + 出力例
+
+output:
+  evidence:
+    question_id: "str — 問題ID"
+    f1_anchor: "float — 主題逸脱 (0.0 / 0.5 / 1.0)"
+    f2_unknown: "float — 用語捏造 (0.0 / 0.5 / 1.0)"
+    f3_operator: "float — 演算子無処理 (0.0 / 0.5 / 1.0)"
+    f4_premise: "float — 前提受容 (0.0 / 0.5 / 1.0)"
+    f2_detail: "str — f2検出詳細"
+    f4_detail: "str — f4検出詳細"
+    propositions_hit: "int — ヒットした命題数"
+    propositions_total: "int — 全命題数"
+    hit_ids: "list[int] — ヒットした命題インデックス"
+    miss_ids: "list[int] — ミスした命題インデックス"
+
+  state:
+    S: "float — 構造完全性 [0,1]"
+    C: "float — 命題被覆率 [0,1]"
+    delta_e: "float — 意味距離 [0,1]"
+    delta_e_bin: "int — ΔEビン (1-4)"
+    C_bin: "int — Cビン (1-3)"
+    por_state: "str — PoR状態"
+    grv_tag: "str — none | low | moderate | high"
+
+  policy:
+    decision: "str — accept | rewrite | regenerate"
+    repair_order: "list[str] — 修復opcode列（末尾STOP_REWRITE）"
+
+  budget:
+    total_cost: "int — repair_orderの合計コスト"
+    opcode_count: "int — opcode数"
+
+# Decision Logic（検証済み: 20/20一致）
+decision_logic:
+  rules:
+    - condition: "delta_e_bin == 1"
+      decision: "accept"
+    - condition: "delta_e_bin == 2 and C_bin >= 2"
+      decision: "accept"
+    - condition: "delta_e_bin == 2 and C_bin == 1"
+      decision: "rewrite"
+    - condition: "delta_e_bin == 3"
+      decision: "rewrite"
+    - condition: "delta_e_bin == 4"
+      decision: "regenerate"
+
+# Binning定義
+binning:
+  delta_e_bin:
+    1: "ΔE ≤ 0.02"
+    2: "0.02 < ΔE ≤ 0.12"
+    3: "0.12 < ΔE ≤ 0.35"
+    4: "ΔE > 0.35"
+  C_bin:
+    1: "C < 0.34"
+    2: "0.34 ≤ C < 0.67"
+    3: "C ≥ 0.67"
+
+# grv_tag定義
+grv_tag:
+  none: "grv情報なし"
+  low: "語彙重力の偏りが小さい"
+  moderate: "語彙重力に中程度の偏りあり"
+  high: "語彙重力に顕著な偏りあり"
+
+# 出力例
+example:
+  evidence:
+    question_id: "q001"
+    f1_anchor: 0.0
+    f2_unknown: 1.0
+    f3_operator: 0.0
+    f4_premise: 0.0
+    f2_detail: "「PoR」を「Probability of Relevance」に勝手展開"
+    f4_detail: ""
+    propositions_hit: 0
+    propositions_total: 3
+    hit_ids: []
+    miss_ids: [0, 1, 2]
+  state:
+    S: 0.375
+    C: 0.0
+    delta_e: 0.594
+    delta_e_bin: 4
+    C_bin: 1
+    por_state: "inactive"
+    grv_tag: "none"
+  policy:
+    decision: "regenerate"
+    repair_order:
+      - "PRESERVE_TERM"
+      - "BLOCK_REINTERPRETATION"
+      - "ADD_PROPOSITION"
+      - "ADD_PROPOSITION"
+      - "ADD_PROPOSITION"
+      - "STOP_REWRITE"
+  budget:
+    total_cost: 8
+    opcode_count: 6

@@ -1,0 +1,46 @@
+# metapatch_opcodes.yaml — 資産修正命令（11 opcodes）
+
+opcodes:
+  UPDATE_REFERENCE:
+    description: "リファレンスの内容を更新する"
+    cost: 3
+
+  ADD_PROPOSITION:
+    description: "命題をcore_propositionsに追加する"
+    cost: 2
+
+  REMOVE_PROPOSITION:
+    description: "命題をcore_propositionsから削除する"
+    cost: 1
+
+  UPDATE_TRAP_TYPE:
+    description: "trap_typeを変更する"
+    cost: 2
+
+  ADD_DISQUALIFYING:
+    description: "disqualifying_shortcutsに追加する"
+    cost: 1
+
+  ADD_ACCEPTABLE_VARIANT:
+    description: "acceptable_variantsに追加する"
+    cost: 1
+
+  UPDATE_ANCHOR_TERMS:
+    description: "アンカー語を更新する"
+    cost: 1
+
+  ADD_RESERVED_TERM:
+    description: "予約語辞書に新語を追加する"
+    cost: 2
+
+  UPDATE_OPERATOR_PATTERN:
+    description: "演算子パターンを更新する"
+    cost: 1
+
+  UPDATE_PREMISE_FRAME:
+    description: "前提フレーム定義を更新する"
+    cost: 2
+
+  MARK_MANUAL_REVIEW:
+    description: "手動レビュー対象にマークする"
+    cost: 0
