@@ -266,6 +266,7 @@ def check_f3_operator(
             "より": r'[^。]*より[もは]',
             "なら": r'[^。]*なら[ばば、。]',
             "たら": r'[^。]*たら[、。]',
+            "ので": r'ので(?!はない)',  # 「のではないか」内の「ので」を除外
         }
         op_found = False
         for pat in surface_patterns:
