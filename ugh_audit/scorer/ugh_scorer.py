@@ -9,11 +9,14 @@ UGH指標スコアラー
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from .models import AuditResult
+
+_logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------ #
 # Step 0: ugh3-metrics-lib 防御的 import
@@ -49,8 +52,12 @@ try:
     _ST_MODEL = _ST("paraphrase-multilingual-MiniLM-L12-v2")  # 多言語モデル
     _NP = _np_module
     _ST_AVAILABLE = True
-except Exception:
-    pass
+except Exception as _st_err:
+    _logger.warning(
+        "sentence-transformers バックエンドが無効です (モデルのロードに失敗)。"
+        "minimal stub にフォールバックします: %s",
+        _st_err,
+    )
 
 # ------------------------------------------------------------------ #
 # Step 2: fugashi トークナイザー可用性チェック

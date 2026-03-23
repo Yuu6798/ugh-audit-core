@@ -12,6 +12,7 @@ ChatGPT Settings > Connectors から MCP URL を登録して利用する。
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -56,7 +57,9 @@ def _get_scorer() -> UGHScorer:
 def _get_db() -> AuditDB:
     global _db
     if _db is None:
-        _db = AuditDB()
+        import os
+        db_path = os.environ.get("UGH_AUDIT_DB")
+        _db = AuditDB(db_path=Path(db_path) if db_path else None)
     return _db
 
 
