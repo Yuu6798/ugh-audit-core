@@ -67,9 +67,13 @@ def _build_repair_order(
         order.append("PRESERVE_TERM")
         order.append("BLOCK_REINTERPRETATION")
 
-    # f4: 前提受容
+    # f4: 前提受容 — trap_typeに応じた修復opcodeを選択
     if evidence.f4_premise > 0:
-        order.append("QUESTION_PREMISE")
+        if evidence.f4_trap_type == "binary_reduction":
+            order.append("CHALLENGE_BINARY")
+            order.append("EXPAND_ALTERNATIVES")
+        else:
+            order.append("QUESTION_PREMISE")
 
     # f3: 演算子無処理 — 検出された演算子族に応じた修復opcodeを選択
     if evidence.f3_operator > 0:

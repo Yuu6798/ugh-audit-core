@@ -196,7 +196,11 @@ def check_f2_unknown(
                     )
                     return max_severity, detail
 
-        # 予約語はあるが留保表現がない場合 → 0.5
+        # 予約語はあるが forbidden_reinterpretations に一つもヒットしなかった場合:
+        # forbidden定義がある用語のみ留保チェック（正しい用法の用語はスキップ）
+        if not forbidden:
+            continue
+
         # 留保表現: 「と定義される」「と呼ばれる」「独自の概念」等
         caution_indicators = [
             "と定義", "と呼ばれ", "独自の", "特有の", "固有の",
@@ -412,9 +416,22 @@ def check_propositions(
         return 0, [], []
 
     # disqualifying_shortcuts: 回答に含まれていたら全命題をmissにする
+    # ただし否定・批判文脈で引用されている場合は除外
+    _NEGATION_CUES = ["ではなく", "ではない", "のではなく", "ない", "誤り", "不適切",
+                      "批判", "問題", "安易", "短絡", "無条件"]
     if disqualifying:
         for shortcut in disqualifying:
-            if shortcut and shortcut in response_text:
+            if not shortcut or shortcut not in response_text:
+                continue
+            # shortcut周辺の文を取得し、否定文脈かチェック
+            sentences = _split_sentences(response_text)
+            is_negated = False
+            for sent in sentences:
+                if shortcut in sent:
+                    if any(cue in sent for cue in _NEGATION_CUES):
+                        is_negated = True
+                        break
+            if not is_negated:
                 miss_ids = list(range(len(core_props)))
                 return 0, [], miss_ids
 
@@ -498,6 +515,7 @@ def detect(
         f2_detail=f2_detail,
         f4_detail=f4_detail,
         f3_operator_family=f3_family,
+        f4_trap_type=trap_type if f4 > 0 else "",
         propositions_hit=hits,
         propositions_total=len(core_props),
         hit_ids=hit_ids,
