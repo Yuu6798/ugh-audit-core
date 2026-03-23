@@ -129,15 +129,21 @@ def check_f1_anchor(
     if not q_keywords and not term_groups:
         return 0.0
 
-    # ドメイン語彙マップ: 予約語の全surface（canonical + aliases）を収集
-    # 回答がドメイン語彙を使っていれば主題に沿っていると判定
+    # ドメイン語彙マップ: 質問に出現する予約語のaliasesのみを収集
+    # 質問と無関係な予約語で偽ヒットしないよう限定する
     domain_surfaces: List[str] = []
     if reserved_terms:
         for term_def in reserved_terms:
             c = term_def.get("canonical", "")
-            if c:
-                domain_surfaces.append(c)
-            domain_surfaces.extend(a for a in term_def.get("aliases", []) if a)
+            aliases = [a for a in term_def.get("aliases", []) if a]
+            if c and c in question_text:
+                domain_surfaces.extend(aliases)
+            else:
+                for a in aliases:
+                    if a in question_text:
+                        domain_surfaces.append(c)
+                        domain_surfaces.extend(aliases)
+                        break
 
     # response_textでの出現率
     # 通常キーワード: 直接出現 or ドメイン語彙の存在でヒット
@@ -277,14 +283,25 @@ def check_f3_operator(
             continue
 
         # 回答文中に対応表現があるか
-        has_response = any(ind in response_text for ind in response_indicators)
+        # 固定indicatorに加え、意味的に同等な汎用対比・否定表現も認識
+        _GENERIC_CONTRAST = [
+            "ではない", "ではなく", "とは限らない", "とは異なる",
+            "一概に", "必ずしも", "だが", "けれど", "しかし",
+            "一方で", "ただし", "むしろ",
+        ]
+        indicator_count = sum(1 for ind in response_indicators if ind in response_text)
+        contrast_count = sum(1 for c in _GENERIC_CONTRAST if c in response_text)
+        # 固定indicatorがあれば対応あり、なければ汎用対比3つ以上を要求
+        has_response = indicator_count > 0 or contrast_count >= 3
 
         if not has_response:
             severity = 1.0
         else:
-            # 部分的対応: 対応表現が1つだけ
-            response_count = sum(1 for ind in response_indicators if ind in response_text)
-            severity = 0.5 if response_count <= 1 else 0.0
+            # 部分的対応: 固定indicator1つのみ、汎用対比も不十分
+            if indicator_count <= 1 and contrast_count < 3:
+                severity = 0.5
+            else:
+                severity = 0.0
 
         if severity > max_severity:
             max_severity = severity
@@ -337,11 +354,17 @@ def check_f4_premise(
 
     if trap_type == "binary_reduction":
         # 回答が二択のみか、多面的に考察しているか
+        # 固定フレーズ + 概念的反論パターンの両方を認識
         binary_indicators = [
             "第三の", "別の視点", "二項対立", "多面的", "グラデーション",
             "スペクトラム", "だけでなく", "それ以外", "他の可能性",
             "複数", "様々", "いくつかの", "一方で", "しかし",
             "観点", "側面", "条件", "場合分け",
+            # 概念的反論: 二択を超える議論の表現
+            "ただし", "むしろ", "とは限らない", "ではない", "ではなく",
+            "異なる", "重なる", "連続", "段階", "程度",
+            "両方", "双方", "相互", "補完", "共存",
+            "単純", "還元", "単に", "区別", "境界",
         ]
         has_third = any(ind in response_text for ind in binary_indicators)
         if not has_third and challenge_count == 0:
