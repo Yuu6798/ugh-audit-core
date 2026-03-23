@@ -11,3 +11,4 @@ venv/
 *.sqlite
 .pytest_cache/
 .ruff_cache/
+ugh-audit-core-latest.tar.gz
