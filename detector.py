@@ -112,23 +112,37 @@ def check_f1_anchor(
     if not q_keywords:
         return 0.0
 
-    # 予約語のcanonical/aliasesも主題語に追加
+    # 予約語グループ: canonical/aliasesのいずれかがヒットすれば1カウント
+    # (エイリアスは代替であり累積要件ではない)
+    term_groups: List[List[str]] = []
     if reserved_terms:
         for term_def in reserved_terms:
             canonical = term_def.get("canonical", "")
             if canonical in question_text:
-                q_keywords.append(canonical)
-                for alias in term_def.get("aliases", []):
-                    q_keywords.append(alias)
+                group = [canonical] + [
+                    a for a in term_def.get("aliases", []) if a
+                ]
+                term_groups.append(group)
 
     # 重複排除
     q_keywords = list(set(q_keywords))
-    if not q_keywords:
+    if not q_keywords and not term_groups:
         return 0.0
 
     # response_textでの出現率
+    # 通常キーワード: 各キーワードが含まれていれば1ヒット
     hit_count = sum(1 for kw in q_keywords if kw in response_text)
-    coverage = hit_count / len(q_keywords)
+    total = len(q_keywords)
+
+    # 予約語グループ: グループ内のいずれかが含まれていれば1ヒット
+    for group in term_groups:
+        total += 1
+        if any(term in response_text for term in group):
+            hit_count += 1
+
+    if total == 0:
+        return 0.0
+    coverage = hit_count / total
 
     if coverage < 0.3:
         return 1.0
@@ -251,7 +265,7 @@ def check_f4_premise(
     challenge_count = sum(1 for ind in challenge_indicators if ind in response_text)
 
     if trap_type == "premise_acceptance":
-        # 質問文から前提句を抽出（断定表現）
+        # 質問文から前提句を抽出（断定表現 + 疑問形式）
         premise_patterns = [
             r'(.{3,20})は(.{3,20})だ',
             r'(.{3,20})ため',
@@ -261,6 +275,10 @@ def check_f4_premise(
         premise_found = any(
             re.search(pat, question_text) for pat in premise_patterns
         )
+
+        # 疑問形式（...か？/...か。/...か$）も前提が埋め込まれている
+        if not premise_found and re.search(r'か[？\?。]?\s*$', question_text):
+            premise_found = True
 
         if premise_found and challenge_count == 0:
             return 1.0, "前提への対応表現なし"
@@ -387,7 +405,20 @@ def check_propositions(
     if not core_props:
         return 0, [], []
 
+    # disqualifying_shortcuts: 回答に含まれていたら全命題をmissにする
+    if disqualifying:
+        for shortcut in disqualifying:
+            if shortcut and shortcut in response_text:
+                miss_ids = list(range(len(core_props)))
+                return 0, [], miss_ids
+
     resp_bigrams = _extract_content_bigrams(response_text)
+
+    # acceptable_variants のバイグラムを回答側に追加（正当な言い換えとして認める）
+    if acceptable_variants:
+        for variant in acceptable_variants:
+            if variant and variant in response_text:
+                resp_bigrams |= _extract_content_bigrams(variant)
 
     hit_ids: List[int] = []
     miss_ids: List[int] = []
