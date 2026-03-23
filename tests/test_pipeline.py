@@ -375,17 +375,17 @@ class TestHA20DirectionMatch:
         assert len(ha20_results) == 20
 
     def test_direction_match_threshold(self, ha20_results):
-        """方向性一致が閾値（14/20）以上であること
+        """方向性一致が閾値（18/20）以上であること
 
-        現状: 15/20。パターンマッチのみで embedding/LLM なしのため、
-        意味的に等価だが語彙が異なる表現の検出に限界がある。
+        類義語辞書 + 最小overlap要件により 18/20 を達成。
+        残り2件 (q019, q100) は単漢字動詞幹の検出限界 / 命題概念の不在。
         """
         match_count = sum(1 for r in ha20_results if r["matched"])
         total = len(ha20_results)
         ratio = match_count / total
 
-        # 最低保証: 14/20 (70%)
-        assert match_count >= 14, (
+        # 成功基準: 18/20 (90%)
+        assert match_count >= 18, (
             f"Direction match {match_count}/{total} ({ratio:.0%}) < 14/20. "
             f"Failures: {[r['id'] for r in ha20_results if not r['matched']]}"
         )

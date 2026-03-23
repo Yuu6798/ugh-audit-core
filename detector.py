@@ -321,6 +321,53 @@ def _extract_content_bigrams(text: str) -> set:
     return bigrams
 
 
+# --- 類義語辞書 ---
+# 命題中の語彙を回答中の表現にマッピングするための辞書。
+# 決定的（辞書照合のみ）。embedding/推論なし。
+# キー: 命題側の表現、値: 回答側で同等の意味を持つ表現のリスト。
+_SYNONYM_MAP: Dict[str, List[str]] = {
+    # 用語の別称
+    "llm": ["ai"],
+    # 概念の言い換え
+    "条件": ["基準", "要件"],
+    "話者": ["証言者", "発話者"],
+    "正直": ["信頼", "誠実"],
+    "仮説": ["理論", "学説"],
+    "反証": ["覆す", "否定", "誤り"],
+    "妥当": ["有効", "適切"],
+    "拒否": ["否定", "退け"],
+    "功利": ["帰結", "効用"],
+    "閾値": ["限界", "境界"],
+    "検証": ["確認", "実証", "証明"],
+    "紛争": ["戦争", "武力", "軍事"],
+    "低下": ["下がる", "減少"],
+    "空洞": ["形骸", "不在"],
+    "集合": ["集約", "総体"],
+    "トークン": ["単語"],
+    "配分": ["分配", "割当"],
+    "事例": ["実例"],
+    "帰属": ["所在", "帰責"],
+}
+
+
+def _expand_with_synonyms(bigrams: set) -> set:
+    """命題バイグラム集合を類義語で拡張する"""
+    expanded = set(bigrams)
+    for bg in bigrams:
+        if bg in _SYNONYM_MAP:
+            for syn in _SYNONYM_MAP[bg]:
+                expanded.add(syn)
+                # 類義語が漢字2文字以上の場合、そのバイグラムも追加
+                if len(syn) >= 2 and all('\u4e00' <= c <= '\u9fff' for c in syn):
+                    for i in range(len(syn) - 1):
+                        expanded.add(syn[i:i + 2])
+    return expanded
+
+
+# 最小overlap数: 表層一致（2語のみの偶然一致）を排除する
+_MIN_OVERLAP = 3
+
+
 def check_propositions(
     response_text: str,
     core_props: List[str],
@@ -329,13 +376,13 @@ def check_propositions(
 ) -> Tuple[int, List[int], List[int]]:
     """命題検出: core_propositionsの各命題がresponse中に含まれるかを判定
 
-    方法: 漢字バイグラム（2文字ペア）の再現率で判定。
+    方法: 漢字バイグラム（2文字ペア）の再現率 + 類義語拡張で判定。
     漢字2文字ペアは日本語の内容語の最小単位であり、
     表現が異なっても核心概念が共有されていれば一致する。
+    類義語辞書により、「LLM→AI」「条件→基準」等の語彙差を吸収。
 
-    閾値: recall >= 0.35 で hit。
-    disqualifying_shortcuts のチェックは bigram 精度の限界上、
-    本層では実施しない（判定層で別途対応可能）。
+    閾値: recall >= 0.35 AND overlap >= 3。
+    最小overlap要件により、2語のみの偶然一致を排除する。
     """
     if not core_props:
         return 0, [], []
@@ -351,11 +398,15 @@ def check_propositions(
             miss_ids.append(i)
             continue
 
-        # prop側のバイグラムがresp側にどれだけ含まれるかを見る（再現率）
-        overlap = len(prop_bigrams & resp_bigrams)
-        recall = overlap / len(prop_bigrams)
+        # 類義語拡張: 命題側のバイグラムに類義語を追加
+        expanded = _expand_with_synonyms(prop_bigrams)
 
-        if recall >= 0.35:
+        # 拡張後のバイグラムがresp側にどれだけ含まれるかを見る（再現率）
+        overlap_set = expanded & resp_bigrams
+        overlap_count = len(overlap_set)
+        recall = overlap_count / len(prop_bigrams)  # 分母は元のバイグラム数
+
+        if recall >= 0.35 and overlap_count >= _MIN_OVERLAP:
             hit_ids.append(i)
         else:
             miss_ids.append(i)
