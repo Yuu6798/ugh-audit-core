@@ -1,0 +1,67 @@
+# runtime_repair_opcodes.yaml — 回答修復命令（13 opcodes、コスト表付き）
+
+opcodes:
+  PRESERVE_TERM:
+    description: "予約語を正しい定義で保持する"
+    cost: 1
+    target: "f2_unknown"
+
+  BLOCK_REINTERPRETATION:
+    description: "予約語の再解釈を禁止する"
+    cost: 1
+    target: "f2_unknown"
+
+  QUESTION_PREMISE:
+    description: "埋め込み前提を問い直す"
+    cost: 2
+    target: "f4_premise"
+
+  ADD_PROPOSITION:
+    description: "欠落命題を補完する"
+    cost: 2
+    target: "coverage"
+
+  QUALIFY_UNIVERSAL:
+    description: "全称命題に条件を付与する"
+    cost: 1
+    target: "f3_operator"
+
+  EXAMINE_SCOPE:
+    description: "スコープを明示的に検査する"
+    cost: 1
+    target: "f3_operator"
+
+  EXAMINE_PREMISE:
+    description: "前提を検査してから回答する"
+    cost: 2
+    target: "f3_operator"
+
+  RESTORE_ANCHOR:
+    description: "主題アンカーを回答に復元する"
+    cost: 1
+    target: "f1_anchor"
+
+  CHALLENGE_BINARY:
+    description: "二項対立を崩して多面的に再構成する"
+    cost: 2
+    target: "f4_premise"
+
+  EXPAND_ALTERNATIVES:
+    description: "第三の選択肢を提示する"
+    cost: 2
+    target: "binary_reduction"
+
+  REMOVE_BOILERPLATE:
+    description: "安全性ボイラープレートを除去する"
+    cost: 1
+    target: "safety_boilerplate"
+
+  DEEPEN_RESPONSE:
+    description: "回答の深度を増す"
+    cost: 3
+    target: "coverage"
+
+  STOP_REWRITE:
+    description: "修復完了マーカー（末尾に必須）"
+    cost: 0
+    target: "terminal"

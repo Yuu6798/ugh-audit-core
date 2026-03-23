@@ -1,0 +1,38 @@
+# operator_catalog.yaml — 演算子カタログ（6族、surface_patterns付き）
+
+operators:
+  - family: "universal_positive"
+    description: "全称肯定（常に〜である）"
+    surface_patterns: ["常に", "すべて", "必ず", "あらゆる", "いつも", "全て", "どんな場合も"]
+    required_action: "QUALIFY_OR_CHALLENGE"
+    response_indicators: ["ただし", "例外", "条件", "場合による", "限定", "一概に", "必ずしも", "とは限らない"]
+
+  - family: "universal_negative"
+    description: "全称否定（決して〜ない）"
+    surface_patterns: ["決して", "絶対に", "一切", "まったく", "全く"]
+    required_action: "QUALIFY_OR_CHALLENGE"
+    response_indicators: ["ただし", "例外", "条件", "場合による", "限定", "一概に", "場合もある"]
+
+  - family: "exclusive"
+    description: "排他（〜だけ、〜のみ）"
+    surface_patterns: ["だけ", "のみ", "しか", "だけで", "のみで", "限り"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["範囲", "限定", "射程", "他にも", "それ以外", "加えて", "だけでなく"]
+
+  - family: "causal"
+    description: "因果（〜だから、〜ため）"
+    surface_patterns: ["だから", "ため", "ので", "結果として", "したがって", "よって"]
+    required_action: "EXAMINE_PREMISE_BEFORE_ANSWERING"
+    response_indicators: ["前提", "仮定", "根拠", "因果", "相関", "必ずしも", "とは限らない", "しかし", "一方で", "リスク", "可能性", "問題", "懸念", "批判", "疑問"]
+
+  - family: "conditional"
+    description: "条件（〜すれば、〜なら）"
+    surface_patterns: ["すれば", "ならば", "なら", "場合", "とき", "たら"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["条件", "範囲", "前提", "限定", "射程", "場合分け"]
+
+  - family: "comparative"
+    description: "比較（〜より、〜の方が）"
+    surface_patterns: ["より", "の方が", "に比べ", "と比較", "よりも"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["基準", "条件", "文脈", "場合による", "観点", "一概に"]
