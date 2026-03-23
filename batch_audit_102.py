@@ -33,8 +33,13 @@ from detector import detect
 from decider import decide
 
 
-def load_responses(path: str) -> dict[str, dict]:
-    """phase_c_scored_v1_t0_only.jsonl を読む"""
+def load_responses(path: str, temperature: float = 0.0) -> dict[str, dict]:
+    """response入りJSONLを読む（指定temperatureのみ）
+
+    temperatureフィールドが存在する場合は完全一致でフィルタリングする。
+    temperatureフィールドがないレコードはそのまま採用する。
+    同一IDの重複はスキップし、最初に読んだレコードを保持する。
+    """
     data = {}
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -42,7 +47,13 @@ def load_responses(path: str) -> dict[str, dict]:
             if not line:
                 continue
             obj = json.loads(line)
-            data[obj["id"]] = obj
+            # temperatureフィールドがある場合、指定値以外をスキップ
+            if "temperature" in obj and float(obj["temperature"]) != temperature:
+                continue
+            qid = obj["id"]
+            if qid in data:
+                continue  # 同一IDの重複はスキップ（先勝ち）
+            data[qid] = obj
     return data
 
 
@@ -83,6 +94,29 @@ def run_audit(qid: str, response_text: str, question_meta: dict) -> dict:
     }
 
 
+def _normalize_meta(data: dict) -> dict:
+    """reviewed JSONLの original_* フィールドを detect() が期待するキー名に変換する
+
+    reviewed JSONL は core_propositions → original_core_propositions,
+    trap_type → original_trap_type 等にリネームしている場合がある。
+    detect() は top-level の core_propositions, trap_type 等を参照するため、
+    original_* があれば通常キーにコピーする（既存の通常キーは上書きしない）。
+    """
+    _FIELD_MAP = {
+        "original_core_propositions": "core_propositions",
+        "original_trap_type": "trap_type",
+        "original_disqualifying_shortcuts": "disqualifying_shortcuts",
+        "original_acceptable_variants": "acceptable_variants",
+        "original_question": "question",
+        "original_category": "category",
+    }
+    normalized = dict(data)
+    for orig_key, normal_key in _FIELD_MAP.items():
+        if orig_key in normalized and normal_key not in normalized:
+            normalized[normal_key] = normalized[orig_key]
+    return normalized
+
+
 def main():
     parser = argparse.ArgumentParser(description="102問全件検証")
     parser.add_argument("--questions", required=True, help="メタデータJSONLパス")
@@ -111,7 +145,8 @@ def main():
         q_meta = questions.get(qid, {})
         if not q_meta:
             # questionsに無ければresponses側のデータを使う
-            q_meta = resp_data
+            # reviewed JSONLでは original_* プレフィクス付きで格納されている場合がある
+            q_meta = _normalize_meta(resp_data)
 
         try:
             result = run_audit(qid, response_text, q_meta)
