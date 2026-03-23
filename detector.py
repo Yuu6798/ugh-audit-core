@@ -189,6 +189,9 @@ def check_f2_unknown(
 
             for fb in forbidden:
                 fb_surface = fb.get("surface", "")
+                # forbidden surfaceがcanonicalのsubstringならスキップ（自己ペナルティ防止）
+                if fb_surface and fb_surface in canonical:
+                    continue
                 if fb_surface and _sentence_contains(sentence, fb_surface):
                     max_severity = 1.0
                     detail = (
@@ -233,7 +236,26 @@ def check_f3_operator(
         family = op.get("family", "")
 
         # 質問文中に演算子が存在するか
-        op_found = any(pat in question_text for pat in surface_patterns)
+        # 短い汎用パターン（3文字以下）はregexで文脈を確認して偽陽性を抑制
+        _CONTEXTUAL_PATTERNS = {
+            "ため": r'[^。]*ため[だである。]',
+            "場合": r'[^。]*場合[はにの、]',
+            "より": r'[^。]*より[もは]',
+            "なら": r'[^。]*なら[ばば、。]',
+            "たら": r'[^。]*たら[、。]',
+        }
+        op_found = False
+        for pat in surface_patterns:
+            if pat not in question_text:
+                continue
+            ctx_re = _CONTEXTUAL_PATTERNS.get(pat)
+            if ctx_re:
+                if re.search(ctx_re, question_text):
+                    op_found = True
+                    break
+            else:
+                op_found = True
+                break
         if not op_found:
             continue
 
@@ -443,12 +465,12 @@ def check_propositions(
     resp_bigrams = _extract_content_bigrams(response_text)
 
     # acceptable_variants: 回答中に出現するvariantのバイグラムを収集
-    # 命題側の拡張に使い、正当な言い換えを命題カバーとみなす
-    variant_bigrams: set = set()
+    # 命題ごとに関連性を判定して選択的に適用する
+    all_variant_bigrams: List[set] = []
     if acceptable_variants:
         for variant in acceptable_variants:
             if variant and variant in response_text:
-                variant_bigrams |= _extract_content_bigrams(variant)
+                all_variant_bigrams.append(_extract_content_bigrams(variant))
 
     hit_ids: List[int] = []
     miss_ids: List[int] = []
@@ -461,8 +483,11 @@ def check_propositions(
 
         # 類義語拡張: 命題側のバイグラムに類義語を追加
         expanded = _expand_with_synonyms(prop_bigrams)
-        # acceptable_variantsのバイグラムも命題側に追加
-        expanded |= variant_bigrams
+
+        # acceptable_variants: 命題と共通バイグラムがあるvariantのみ適用
+        for vbg in all_variant_bigrams:
+            if vbg & prop_bigrams:
+                expanded |= vbg
 
         # 拡張後のバイグラムがresp側にどれだけ含まれるかを見る（再現率）
         overlap_set = expanded & resp_bigrams

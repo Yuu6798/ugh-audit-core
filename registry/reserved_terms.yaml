@@ -68,5 +68,7 @@ terms:
     canonical: "意味位相空間"
     aliases: ["semantic phase space"]
     forbidden_reinterpretations:
-      - surface: "位相空間"
+      - surface: "トポロジカル空間"
         note: "数学のトポロジカル空間と直接同一視"
+      - surface: "topological space"
+        note: "数学の位相空間概念と直接同一視"
