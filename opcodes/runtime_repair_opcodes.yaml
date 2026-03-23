@@ -1,0 +1,26 @@
+version: 0.1
+opcodes:
+  preserve_anchor:
+    cost: 1
+    stage: runtime
+  clarify_scope:
+    cost: 1
+    stage: runtime
+  broaden_context:
+    cost: 1
+    stage: runtime
+  elevate_salience:
+    cost: 1
+    stage: runtime
+  tighten_proposition_coverage:
+    cost: 1
+    stage: runtime
+  repair_operator_mismatch:
+    cost: 2
+    stage: runtime
+  repair_forbidden_reinterpret:
+    cost: 2
+    stage: runtime
+  request_missing_reasoning:
+    cost: 1
+    stage: runtime

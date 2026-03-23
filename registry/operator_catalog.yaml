@@ -1,0 +1,55 @@
+version: 0.1
+canonical_opcodes:
+  - code: preserve_anchor
+    kind: structural
+    description: 既存の問いの係留点を保持する
+    cost: 1
+  - code: clarify_scope
+    kind: structural
+    description: 問いの射程を明確化する
+    cost: 1
+  - code: broaden_context
+    kind: structural
+    description: 文脈を補って視野を広げる
+    cost: 1
+  - code: elevate_salience
+    kind: emphasis
+    description: 重要度を高く再配置する
+    cost: 1
+  - code: tighten_proposition_coverage
+    kind: proposition
+    description: core proposition の被覆率を高める
+    cost: 1
+  - code: repair_operator_mismatch
+    kind: structural
+    description: operator 不整合を修復する
+    cost: 2
+  - code: repair_forbidden_reinterpret
+    kind: structural
+    description: 禁止再解釈を除去する
+    cost: 2
+  - code: request_missing_reasoning
+    kind: reasoning
+    description: 理由要求への応答を追加する
+    cost: 1
+legacy_action_map:
+  clarify:
+    - clarify_scope
+  broaden:
+    - broaden_context
+  promote_to_high:
+    - elevate_salience
+  tighten:
+    - tighten_proposition_coverage
+  preserve:
+    - preserve_anchor
+primary_fail_map:
+  f1:
+    - preserve_anchor
+  f2:
+    - repair_operator_mismatch
+  f3:
+    - request_missing_reasoning
+  f4:
+    - repair_forbidden_reinterpret
+  none: []

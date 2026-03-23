@@ -1,0 +1,16 @@
+version: 0.1
+premise_frames:
+  default:
+    description: 汎用前提フレーム
+    fields:
+      - question
+      - original_core_propositions
+      - original_disqualifying_shortcuts
+      - structural_meta
+  structural_review:
+    description: reviewed metadata 由来の前提フレーム
+    fields:
+      - review_tier
+      - review_detail
+      - original_trap_type
+      - structural_meta

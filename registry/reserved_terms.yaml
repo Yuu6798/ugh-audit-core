@@ -1,0 +1,18 @@
+version: 0.1
+reserved_terms:
+  structural_fail_labels:
+    - f1
+    - f2
+    - f3
+    - f4
+  canonical_decisions:
+    - same_meaning
+    - minor_drift
+    - meaning_drift
+    - unknown
+  legacy_actions:
+    - clarify
+    - broaden
+    - promote_to_high
+    - tighten
+    - preserve

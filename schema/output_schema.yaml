@@ -1,0 +1,50 @@
+version: 0.1
+canonical_output:
+  required:
+    - evidence
+    - state
+    - policy
+    - budget
+  evidence:
+    fields:
+      - question
+      - response
+      - reference
+      - reference_core
+      - n_propositions
+      - proposition_hits
+      - f1_anchor
+      - f2_operator
+      - f3_reason_request
+      - f4_forbidden_reinterpret
+      - notes
+      - extra
+  state:
+    fields:
+      - s
+      - c
+      - delta_e
+      - grv
+      - delta_e_bin
+      - c_bin
+      - por_state
+      - grv_tag
+      - extra
+  policy:
+    fields:
+      - decision
+      - verdict_label
+      - repair_order
+      - rationale
+      - extra
+  budget:
+    fields:
+      - cost
+      - opcodes
+      - extra
+legacy_projection:
+  fields:
+    - por
+    - delta_e
+    - grv
+    - verdict
