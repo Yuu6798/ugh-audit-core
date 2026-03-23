@@ -297,11 +297,12 @@ def check_f3_operator(
         if not has_response:
             severity = 1.0
         else:
-            # 部分的対応: 固定indicator1つのみ、汎用対比も不十分
-            if indicator_count <= 1 and contrast_count < 3:
-                severity = 0.5
-            else:
+            # 固定indicatorが1つでもあれば対応完了（代替リスト、累積要件ではない）
+            if indicator_count >= 1:
                 severity = 0.0
+            else:
+                # 汎用対比のみ → 部分的対応
+                severity = 0.5
 
         if severity > max_severity:
             max_severity = severity
@@ -354,22 +355,26 @@ def check_f4_premise(
 
     if trap_type == "binary_reduction":
         # 回答が二択のみか、多面的に考察しているか
-        # 固定フレーズ + 概念的反論パターンの両方を認識
-        binary_indicators = [
+        # 「第三の視点」マーカー: 実際に二択を超える議論がある証拠
+        third_option_markers = [
             "第三の", "別の視点", "二項対立", "多面的", "グラデーション",
             "スペクトラム", "だけでなく", "それ以外", "他の可能性",
-            "複数", "様々", "いくつかの", "一方で", "しかし",
-            "観点", "側面", "条件", "場合分け",
-            # 概念的反論: 二択を超える議論の表現
-            "ただし", "むしろ", "とは限らない", "ではない", "ではなく",
-            "異なる", "重なる", "連続", "段階", "程度",
+            "複数", "様々", "いくつかの", "観点", "側面",
+            "条件", "場合分け", "連続", "段階", "程度",
             "両方", "双方", "相互", "補完", "共存",
-            "単純", "還元", "単に", "区別", "境界",
         ]
-        has_third = any(ind in response_text for ind in binary_indicators)
-        if not has_third and challenge_count == 0:
+        # 対比マーカー: 単独では二択を崩した証拠にならない（補助的）
+        contrast_markers = [
+            "一方で", "しかし", "ただし", "むしろ",
+            "ではない", "ではなく", "とは限らない",
+            "異なる", "重なる", "単純", "還元", "区別", "境界",
+        ]
+        has_third = any(m in response_text for m in third_option_markers)
+        has_contrast = any(m in response_text for m in contrast_markers)
+        if not has_third and not has_contrast and challenge_count == 0:
             return 1.0, "二項対立を崩していない"
         if not has_third:
+            # 対比はあるが第三の視点がない → 部分的対応
             return 0.5, "二項対立への対応が部分的"
         return 0.0, ""
 
@@ -536,14 +541,20 @@ def check_propositions(
             if len(common) >= max(2, len(prop_bigrams) * 0.3):
                 expanded |= vbg
 
-        # 拡張後のバイグラムがresp側にどれだけ含まれるかを見る（再現率）
+        # 拡張後のバイグラムがresp側にどれだけ含まれるかを見る
         overlap_set = expanded & resp_bigrams
         overlap_count = len(overlap_set)
-        recall = overlap_count / len(prop_bigrams)  # 分母は元のバイグラム数
 
-        # 短い命題は_MIN_OVERLAPを命題サイズに合わせて緩和
+        # 直接再現率（類義語なし）と拡張再現率の両方を使用
+        direct_overlap = len(prop_bigrams & resp_bigrams)
+        direct_recall = direct_overlap / len(prop_bigrams)
+        full_recall = overlap_count / len(prop_bigrams)
+
+        # 判定: 直接再現率≥0.15（最低限の元バイグラム一致）かつ
+        # 拡張再現率≥0.35（類義語含めた全体カバー）かつ
+        # overlap数≥min_required
         min_required = min(_MIN_OVERLAP, len(prop_bigrams))
-        if recall >= 0.35 and overlap_count >= min_required:
+        if direct_recall >= 0.15 and full_recall >= 0.35 and overlap_count >= min_required:
             hit_ids.append(i)
         else:
             miss_ids.append(i)
