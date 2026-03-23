@@ -420,18 +420,20 @@ def check_propositions(
 
     # disqualifying_shortcuts: 回答に含まれていたら全命題をmissにする
     # ただし否定・批判文脈で引用されている場合は除外
-    _NEGATION_CUES = ["ではなく", "ではない", "のではなく", "ない", "誤り", "不適切",
-                      "批判", "問題", "安易", "短絡", "無条件"]
+    _NEGATION_CUES = ["ではなく", "ではない", "のではなく", "誤り", "不適切",
+                      "批判", "安易", "短絡"]
     if disqualifying:
         for shortcut in disqualifying:
             if not shortcut or shortcut not in response_text:
                 continue
             # shortcut周辺の文を取得し、否定文脈かチェック
+            # shortcutを除去した文脈で否定cueを探す（自己否定防止）
             sentences = _split_sentences(response_text)
             is_negated = False
             for sent in sentences:
                 if shortcut in sent:
-                    if any(cue in sent for cue in _NEGATION_CUES):
+                    context = sent.replace(shortcut, "")
+                    if any(cue in context for cue in _NEGATION_CUES):
                         is_negated = True
                         break
             if not is_negated:
@@ -440,11 +442,13 @@ def check_propositions(
 
     resp_bigrams = _extract_content_bigrams(response_text)
 
-    # acceptable_variants のバイグラムを回答側に追加（正当な言い換えとして認める）
+    # acceptable_variants: 回答中に出現するvariantのバイグラムを収集
+    # 命題側の拡張に使い、正当な言い換えを命題カバーとみなす
+    variant_bigrams: set = set()
     if acceptable_variants:
         for variant in acceptable_variants:
             if variant and variant in response_text:
-                resp_bigrams |= _extract_content_bigrams(variant)
+                variant_bigrams |= _extract_content_bigrams(variant)
 
     hit_ids: List[int] = []
     miss_ids: List[int] = []
@@ -457,6 +461,8 @@ def check_propositions(
 
         # 類義語拡張: 命題側のバイグラムに類義語を追加
         expanded = _expand_with_synonyms(prop_bigrams)
+        # acceptable_variantsのバイグラムも命題側に追加
+        expanded |= variant_bigrams
 
         # 拡張後のバイグラムがresp側にどれだけ含まれるかを見る（再現率）
         overlap_set = expanded & resp_bigrams

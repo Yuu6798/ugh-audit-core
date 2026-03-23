@@ -53,6 +53,14 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 
+[tool.setuptools]
+py-modules = ["audit", "detector", "decider", "ugh_calculator"]
+
+[tool.setuptools.package-data]
+registry = ["*.yaml"]
+opcodes = ["*.yaml"]
+
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
