@@ -37,6 +37,7 @@ class Evidence:
     f4_premise: float = 0.0      # 前提受容 (0.0 / 0.5 / 1.0)
     f2_detail: str = ""          # f2検出詳細
     f4_detail: str = ""          # f4検出詳細
+    f3_operator_family: str = "" # 検出された演算子族
     propositions_hit: int = 0    # ヒット命題数
     propositions_total: int = 0  # 全命題数
     hit_ids: List[int] = field(default_factory=list)   # ヒット命題インデックス

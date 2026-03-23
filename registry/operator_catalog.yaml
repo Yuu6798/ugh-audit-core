@@ -36,3 +36,15 @@ operators:
     surface_patterns: ["より", "の方が", "に比べ", "と比較", "よりも"]
     required_action: "EXAMINE_SCOPE"
     response_indicators: ["基準", "条件", "文脈", "場合による", "観点", "一概に"]
+
+  - family: "reason_request_with_premise"
+    description: "前提付き理由要求（なぜ〜なのか）"
+    surface_patterns: ["なぜ", "どうして", "何故", "なんで"]
+    required_action: "EXAMINE_PREMISE_BEFORE_ANSWERING"
+    response_indicators: ["前提", "仮定", "そもそも", "必ずしも", "とは限らない", "しかし", "一方で", "根拠", "問い直す"]
+
+  - family: "negative_question"
+    description: "否定疑問（〜ではないか、〜ないのか）"
+    surface_patterns: ["ではないか", "ではないのか", "ないのか", "じゃないか", "ないか"]
+    required_action: "EXAMINE_SCOPE"
+    response_indicators: ["確かに", "一方で", "しかし", "ただし", "必ずしも", "場合による", "とは限らない", "観点", "条件"]

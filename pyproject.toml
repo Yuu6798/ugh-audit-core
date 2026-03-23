@@ -14,6 +14,7 @@ keywords = ["UGH", "PoR", "semantic", "audit", "AI", "UGHer"]
 
 dependencies = [
     "numpy>=1.24",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]

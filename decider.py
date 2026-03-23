@@ -71,9 +71,20 @@ def _build_repair_order(
     if evidence.f4_premise > 0:
         order.append("QUESTION_PREMISE")
 
-    # f3: 演算子無処理
+    # f3: 演算子無処理 — 検出された演算子族に応じた修復opcodeを選択
     if evidence.f3_operator > 0:
-        order.append("QUALIFY_UNIVERSAL")
+        _FAMILY_OPCODE_MAP = {
+            "universal_positive": "QUALIFY_UNIVERSAL",
+            "universal_negative": "QUALIFY_UNIVERSAL",
+            "exclusive": "EXAMINE_SCOPE",
+            "conditional": "EXAMINE_SCOPE",
+            "comparative": "EXAMINE_SCOPE",
+            "negative_question": "EXAMINE_SCOPE",
+            "causal": "EXAMINE_PREMISE",
+            "reason_request_with_premise": "EXAMINE_PREMISE",
+        }
+        opcode = _FAMILY_OPCODE_MAP.get(evidence.f3_operator_family, "QUALIFY_UNIVERSAL")
+        order.append(opcode)
 
     # f1: 主題逸脱
     if evidence.f1_anchor > 0:

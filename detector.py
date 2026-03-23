@@ -214,16 +214,19 @@ def check_f3_operator(
     question_text: str,
     response_text: str,
     operators: List[dict],
-) -> float:
+) -> Tuple[float, str]:
     """f3_operator（演算子無処理）を検出する
 
-    question_text 中の演算子パターンをスキャン → response_text が対応しているか判定
+    question_text 中の演算子パターンをスキャン → response_text が対応しているか判定。
+    (severity, detected_family) を返す。
     """
     max_severity = 0.0
+    detected_family = ""
 
     for op in operators:
         surface_patterns = op.get("surface_patterns", [])
         response_indicators = op.get("response_indicators", [])
+        family = op.get("family", "")
 
         # 質問文中に演算子が存在するか
         op_found = any(pat in question_text for pat in surface_patterns)
@@ -234,14 +237,17 @@ def check_f3_operator(
         has_response = any(ind in response_text for ind in response_indicators)
 
         if not has_response:
-            max_severity = max(max_severity, 1.0)
+            severity = 1.0
         else:
             # 部分的対応: 対応表現が1つだけ
             response_count = sum(1 for ind in response_indicators if ind in response_text)
-            if response_count <= 1:
-                max_severity = max(max_severity, 0.5)
+            severity = 0.5 if response_count <= 1 else 0.0
 
-    return max_severity
+        if severity > max_severity:
+            max_severity = severity
+            detected_family = family
+
+    return max_severity, detected_family
 
 
 def check_f4_premise(
@@ -473,7 +479,7 @@ def detect(
     f2, f2_detail = check_f2_unknown(response_text, reserved_terms)
 
     # f3: 演算子無処理
-    f3 = check_f3_operator(question_text, response_text, operators)
+    f3, f3_family = check_f3_operator(question_text, response_text, operators)
 
     # f4: 前提受容
     f4, f4_detail = check_f4_premise(question_text, response_text, trap_type, frames)
@@ -491,6 +497,7 @@ def detect(
         f4_premise=f4,
         f2_detail=f2_detail,
         f4_detail=f4_detail,
+        f3_operator_family=f3_family,
         propositions_hit=hits,
         propositions_total=len(core_props),
         hit_ids=hit_ids,
