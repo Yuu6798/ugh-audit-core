@@ -21,24 +21,71 @@ AIの回答が「意味的に誠実だったか」を定量的に評価・記録
 
 ## アーキテクチャ
 
+### Audit Engine（構造的意味監査パイプライン）
+
+推論ゼロ・決定的パターンマッチのみで動作する3層パイプライン。
+
 ```
-[質問 Q]
+[質問 Q + メタデータ]  →  [AI回答 R]
     │
     ▼
-[AI回答 R]
+┌──────────────────────────────────┐
+│  detector.py  (検出層)           │
+│  テキスト → Evidence             │
+│  f1: 主題逸脱   f2: 用語捏造    │
+│  f3: 演算子無処理 f4: 前提受容   │
+│  + 命題カバレッジ                │
+├──────────────────────────────────┤
+│  ugh_calculator.py (電卓層)      │
+│  Evidence → State                │
+│  S(構造完全性) C(命題被覆率)     │
+│  ΔE(意味距離)  ビン分類          │
+├──────────────────────────────────┤
+│  decider.py (判定層)             │
+│  State + Evidence → Policy       │
+│  accept / rewrite / regenerate   │
+│  + repair_order (修復opcode列)   │
+└──────────────────────────────────┘
+```
+
+#### 検出層の4指標
+
+| 指標 | 検出内容 | データソース |
+|------|---------|-------------|
+| **f1_anchor** | 主題逸脱 — 質問キーワードが回答に不在 | `_extract_keywords` + 予約語aliases |
+| **f2_unknown** | 用語捏造 — 予約語の禁止再解釈 | `registry/reserved_terms.yaml` |
+| **f3_operator** | 演算子無処理 — 全称/排他/因果等の演算子に未対応 | `registry/operator_catalog.yaml` |
+| **f4_premise** | 前提受容 — 埋め込み前提を無批判に受容 | `registry/premise_frames.yaml` |
+
+#### 判定ロジック
+
+| ΔE bin | C bin | 判定 |
+|--------|-------|------|
+| 1 | — | accept |
+| 2 | ≥ 2 | accept |
+| 2 | 1 | rewrite |
+| 3 | — | rewrite |
+| 4 | — | regenerate |
+
+#### 修復opcode
+
+判定が `rewrite` / `regenerate` の場合、検出された問題に応じた修復命令列（repair_order）を生成。
+opcodeは `opcodes/runtime_repair_opcodes.yaml` に定義（13種、コスト表付き）。
+
+### UGH Audit Layer（PoR/ΔE/grv スコアリング）
+
+```
+[質問 Q + AI回答 R + Reference]
     │
     ▼
-┌─────────────────────────┐
-│   UGH Audit Layer       │
-│  scorer/ugh_scorer.py   │
-│  PoR / ΔE / grv 計算   │
-└─────────────────────────┘
+┌──────────────────────────────────┐
+│  scorer/ugh_scorer.py            │
+│  PoR / ΔE / grv 計算            │
+│  3層フォールバック               │
+└──────────────────────────────────┘
     │
     ▼
-[SQLite 蓄積]
-    │
-    ▼
-[Phase Map レポート]
+[SQLite 蓄積] → [Phase Map レポート]
 ```
 
 ---
@@ -91,14 +138,24 @@ print(result)
 ## ディレクトリ構成
 
 ```
+# Audit Engine（構造的意味監査）
+audit.py              # パイプライン統合 (detect → calculate → decide)
+detector.py           # 検出層 — テキスト → Evidence
+ugh_calculator.py     # 電卓層 — Evidence → State
+decider.py            # 判定層 — State + Evidence → Policy
+registry/             # YAML辞書（予約語・演算子・前提フレーム）
+opcodes/              # 修復opcode定義
+
+# UGH Audit Layer（PoR/ΔE/grv スコアリング）
 ugh_audit/
-├── scorer/         # UGH指標スコアリング（3層フォールバック）
-├── storage/        # SQLite永続化
-├── reference/      # referenceセット管理（golden store）
-├── collector/      # ログ収集ユーティリティ
-├── report/         # Phase Mapレポート生成
-├── server.py       # REST API + MCP 統合サーバー (FastAPI)
-└── mcp_server.py   # MCP スタンドアロンサーバー
+├── scorer/           # UGH指標スコアリング（3層フォールバック）
+├── storage/          # SQLite永続化
+├── reference/        # referenceセット管理（golden store）
+├── collector/        # ログ収集ユーティリティ
+├── report/           # Phase Mapレポート生成
+├── server.py         # REST API + MCP 統合サーバー (FastAPI)
+└── mcp_server.py     # MCP スタンドアロンサーバー
+
 examples/
 tests/
 ```
@@ -184,9 +241,10 @@ ngrok http 8000
 
 ## フェーズロードマップ
 
-- **Phase 1（現在）**: スコアリング基盤 + ログ蓄積
-- **Phase 2**: referenceセット設計（Human-golden / Cross-model / Self-baseline）
-- **Phase 3**: Phase Map可視化 + パターン分析
+- **Phase 1**: スコアリング基盤 + ログ蓄積
+- **Phase 2（現在）**: Audit Engine — 構造的意味監査パイプライン（detector / calculator / decider）
+- **Phase 3**: referenceセット設計（Human-golden / Cross-model / Self-baseline）
+- **Phase 4**: Phase Map可視化 + パターン分析
 
 ---
 
