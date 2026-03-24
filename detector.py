@@ -384,16 +384,17 @@ def check_f4_premise(
         if strong_count >= 1:
             return 0.0, ""
 
+        # 非汎用弱マーカーがあれば多面的議論と認める（旧挙動互換）
+        # 「それとも」早期リターンより先に評価し、多面的回答を正しく認識する
+        if has_non_generic:
+            return 0.0, ""
+
         # 質問に明示的二項構造（「AかBか、それともCか」）がある場合は厳格判定
         # challenge_count == 0 の場合は fail (1.0) を維持する
         if "それとも" in question_text:
             if challenge_count == 0:
                 return 1.0, "二項対立を崩していない（明示的二項質問）"
             return 0.5, "二項対立への対応が部分的（明示的二項質問）"
-
-        # 非汎用弱マーカーがあれば多面的議論と認める（旧挙動互換）
-        if has_non_generic:
-            return 0.0, ""
 
         # 汎用弱マーカーのみ + 対比が少ない → 多面性の証拠不十分
         if has_generic and contrast_count_local <= 1:
@@ -420,7 +421,7 @@ def check_f4_premise(
         ]
         sentences = _split_sentences(response_text)
         if not sentences:
-            return 0.0, ""
+            return 1.0, "空の応答（安全定型文の検出対象）"
         safety_sentence_count = sum(
             1 for s in sentences if any(w in s for w in safety_vocabulary)
         )
