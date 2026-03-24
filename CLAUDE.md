@@ -198,6 +198,7 @@ python -m ugh_audit.mcp_server --port 8000
 | POST | `/api/audit` | AI回答を意味監査 |
 | GET | `/api/history` | 直近の監査履歴 |
 | POST | `/mcp` | MCP Streamable HTTP |
+| GET | `/health` | ヘルスチェック (`{"status": "ok"}`) |
 
 ### 設計方針
 
