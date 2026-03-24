@@ -177,17 +177,39 @@ def check_f1_anchor(
 def check_f2_unknown(
     response_text: str,
     reserved_terms: List[dict],
+    question_text: str = "",
 ) -> Tuple[float, str]:
     """f2_unknown（用語捏造）を検出する
 
     reserved_terms.yaml の各 term について:
     1. response_text に canonical または aliases が出現するか確認
     2. 出現する場合、同一文中に forbidden_reinterpretations の surface が現れるか確認
+    3. 不在検出: 質問にある予約語がresponseに一切ない → 0.5
+    4. 未到達検出: 予約語は出現するが「知らない」等の表明がある → 0.5
+    5. caution check: 強caution表現のみ、局所窓(予約語出現文±1文)で判定
     """
     max_severity = 0.0
     detail = ""
 
     sentences = _split_sentences(response_text)
+
+    # 強caution: 予約語の定義・説明を示す表現のみ
+    # 局所窓(予約語出現文±1文)内でのみ判定するため、汎用表現の誤ヒットを抑制
+    strong_caution = [
+        "と定義",       # 「PoRはXXと定義される」
+        "と呼ばれ",     # 「XXと呼ばれる概念」
+        "特有の",       # 「UGHer特有の」
+        "固有の",       # 「UGHer固有の」
+        "という概念",   # 局所窓内なら予約語に直結（q029型）
+    ]
+
+    # 未到達マーカー: 予約語は出現するが理解していない表明
+    uncertainty_markers = [
+        "一般的ではありません", "一般的ではない",
+        "不明", "知りません", "判断できない",
+        "存在しない", "見つかりません",
+        "もしかすると", "誤記",
+    ]
 
     for term_def in reserved_terms:
         canonical = term_def.get("canonical", "")
@@ -200,8 +222,15 @@ def check_f2_unknown(
             s in response_text for s in term_surfaces if s
         )
 
+        # --- 不在検出 ---
+        # 質問に予約語があるのにresponseに一切出現しない → f2=0.5
         if not term_found_in_response:
-            # 質問に含まれる予約語がresponseに一切出現しない場合もf2リスク
+            if question_text:
+                question_has_term = any(s in question_text for s in term_surfaces if s)
+                if question_has_term:
+                    if max_severity < 0.5:
+                        max_severity = 0.5
+                        detail = f"「{canonical}」が質問にあるが回答に不在"
             continue
 
         # 各文について forbidden surface をチェック
@@ -227,12 +256,33 @@ def check_f2_unknown(
         if not forbidden:
             continue
 
-        # 留保表現: 「と定義される」「と呼ばれる」「独自の概念」等
-        caution_indicators = [
-            "と定義", "と呼ばれ", "独自の", "特有の", "固有の",
-            "という概念", "とされる", "意味する",
-        ]
-        has_caution = any(ind in response_text for ind in caution_indicators)
+        # --- 局所窓の構築 ---
+        # 予約語が出現する文のインデックスを取得
+        term_sentence_indices = set()
+        for si, sentence in enumerate(sentences):
+            if any(s in sentence for s in term_surfaces if s):
+                term_sentence_indices.add(si)
+
+        # 局所窓: 予約語出現文 ± 1文
+        local_window_indices = set()
+        for si in term_sentence_indices:
+            local_window_indices.add(max(0, si - 1))
+            local_window_indices.add(si)
+            local_window_indices.add(min(len(sentences) - 1, si + 1))
+
+        local_text = "".join(sentences[i] for i in sorted(local_window_indices))
+
+        # --- 未到達検出 ---
+        # 予約語は出現するが「知らない」「不明」等がある → f2=0.5
+        has_uncertainty = any(um in local_text for um in uncertainty_markers)
+        if has_uncertainty:
+            if max_severity < 0.5:
+                max_severity = 0.5
+                detail = f"「{canonical}」に対する未到達表現あり"
+            continue  # caution checkに進まない
+
+        # --- 留保表現チェック（局所窓 + 強cautionのみ） ---
+        has_caution = any(ind in local_text for ind in strong_caution)
         if not has_caution and max_severity < 0.5:
             max_severity = 0.5
             detail = f"「{canonical}」に対する留保表現なし"
@@ -712,7 +762,7 @@ def detect(
     f1 = check_f1_anchor(question_text, response_text, reserved_terms)
 
     # f2: 用語捏造
-    f2, f2_detail = check_f2_unknown(response_text, reserved_terms)
+    f2, f2_detail = check_f2_unknown(response_text, reserved_terms, question_text)
 
     # f3: 演算子無処理
     f3, f3_family = check_f3_operator(question_text, response_text, operators)
