@@ -116,8 +116,7 @@ pip install -e ".[ugh3]"
 ## クイックスタート
 
 ```python
-from ugh_audit.scorer import UGHScorer
-from ugh_audit.storage import AuditDB
+from ugh_audit import UGHScorer, AuditDB
 
 scorer = UGHScorer()
 db = AuditDB()
@@ -196,6 +195,7 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 | POST | `/api/audit` | AI回答を意味監査（question, response, reference?, session_id?） |
 | GET | `/api/history` | 直近の監査履歴を取得 |
 | POST | `/mcp` | MCP Streamable HTTP エンドポイント |
+| GET | `/health` | ヘルスチェック (`{"status": "ok"}`) |
 
 ### 外部公開
 
