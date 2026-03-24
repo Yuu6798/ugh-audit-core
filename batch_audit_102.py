@@ -112,6 +112,14 @@ def main():
         if not q_meta:
             # questionsに無ければresponses側のデータを使う
             q_meta = resp_data
+        else:
+            # responses側のtrap_type等をq_metaに補完（questions側に無い場合）
+            for key in ("trap_type", "question", "category"):
+                if not q_meta.get(key) and resp_data.get(key):
+                    q_meta[key] = resp_data[key]
+            # original_* フィールドを標準名にフォールバック
+            if not q_meta.get("trap_type") and q_meta.get("original_trap_type"):
+                q_meta["trap_type"] = q_meta["original_trap_type"]
 
         try:
             result = run_audit(qid, response_text, q_meta)
