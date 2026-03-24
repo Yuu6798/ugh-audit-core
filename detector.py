@@ -385,7 +385,10 @@ def check_f4_premise(
             return 0.0, ""
 
         # 質問に明示的二項構造（「AかBか、それともCか」）がある場合は厳格判定
+        # challenge_count == 0 の場合は fail (1.0) を維持する
         if "それとも" in question_text:
+            if challenge_count == 0:
+                return 1.0, "二項対立を崩していない（明示的二項質問）"
             return 0.5, "二項対立への対応が部分的（明示的二項質問）"
 
         # 非汎用弱マーカーがあれば多面的議論と認める（旧挙動互換）
