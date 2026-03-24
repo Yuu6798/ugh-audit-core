@@ -19,18 +19,19 @@ def load_jsonl(path: Path) -> list[dict]:
 
 def main() -> None:
     base = Path(__file__).resolve().parent
+    repo_root = base.parent.parent
 
     # --- 1. phase_c t=0.0 データ (102件) ---
-    phase_c = load_jsonl(base / "data" / "phase_c_scored_v1_t0_only.jsonl")
+    phase_c = load_jsonl(repo_root / "data" / "phase_c_scored_v1_t0_only.jsonl")
     print(f"Phase C t=0.0: {len(phase_c)} records")
 
     # --- 2. 100q question set (core_propositions を含む) ---
-    qs_path = base / "data" / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
+    qs_path = repo_root / "data" / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
     question_set = {r["id"]: r for r in load_jsonl(qs_path)}
     print(f"Question set: {len(question_set)} questions")
 
     # --- 3. human annotation 20件 ---
-    ha_path = base / "data" / "human_annotation_20" / "human_annotation_20_completed.csv"
+    ha_path = repo_root / "data" / "human_annotation_20" / "human_annotation_20_completed.csv"
     human_annot: dict[str, dict] = {}
     with open(ha_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
