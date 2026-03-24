@@ -12,3 +12,4 @@ venv/
 .pytest_cache/
 .ruff_cache/
 ugh-audit-core-latest.tar.gz
+audit_102_results.csv
