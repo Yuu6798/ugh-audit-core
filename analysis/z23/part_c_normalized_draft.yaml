@@ -1,0 +1,630 @@
+- id: q001
+  proposition_index: 0
+  original: PoRは共鳴度であり誠実性の十分条件ではない
+  normalized:
+    subject: PoR
+    predicate: 共鳴度であり誠実性の十分条件ではない
+    polarity: negative
+    operators:
+    - term: 十分条件ではない（否定限定）
+      family: limiter_suffix
+      scope: 度であり誠実性の十分条件ではない
+- id: q001
+  proposition_index: 1
+  original: 表層的語彙一致でも高PoRが出る
+  normalized:
+    subject: 表層的語彙一致でも高PoR
+    predicate: 出る
+    polarity: positive
+    operators: []
+- id: q001
+  proposition_index: 2
+  original: 複合評価（ΔE・grv）が必要
+  normalized:
+    subject: 複合評価（ΔE・grv）
+    predicate: 必要
+    polarity: positive
+    operators: []
+- id: q002
+  proposition_index: 0
+  original: grvは語彙の偏在を検出する
+  normalized:
+    subject: grv
+    predicate: 語彙の偏在を検出する
+    polarity: positive
+    operators: []
+- id: q002
+  proposition_index: 1
+  original: 安全性フレーズへの集中が典型例
+  normalized:
+    subject: 安全性フレーズへの集中
+    predicate: 典型例
+    polarity: positive
+    operators: []
+- id: q002
+  proposition_index: 2
+  original: 問いの核心が空洞化するパターンを捉える
+  normalized:
+    subject: 問いの核心
+    predicate: 空洞化するパターンを捉える
+    polarity: positive
+    operators: []
+- id: q003
+  proposition_index: 0
+  original: 低ΔEは良い回答を保証しない
+  normalized:
+    subject: 低ΔE
+    predicate: 良い回答を保証しない
+    polarity: negative
+    operators:
+    - term: 保証しない（否定限定）
+      family: limiter_suffix
+      scope: ΔEは良い回答を保証しない
+- id: q003
+  proposition_index: 1
+  original: referenceが保守的なら無難な回答でもΔEは低くなる
+  normalized:
+    subject: referenceが保守的なら無難な回答でもΔE
+    predicate: 低くなる
+    polarity: positive
+    operators:
+    - term: なら
+      family: conditional
+      scope: erenceが保守的なら無難な回答でもΔEは
+- id: q003
+  proposition_index: 2
+  original: 比較基準の品質が評価の前提になる
+  normalized:
+    subject: 比較基準の品質
+    predicate: 評価の前提になる
+    polarity: positive
+    operators: []
+- id: q004
+  proposition_index: 0
+  original: 原理的には自己適用可能
+  normalized:
+    subject: 原理的に
+    predicate: 自己適用可能
+    polarity: positive
+    operators: []
+- id: q004
+  proposition_index: 1
+  original: reference作成者と監査対象の同一性が問題
+  normalized:
+    subject: reference作成者と監査対象の同一性
+    predicate: 問題
+    polarity: positive
+    operators: []
+- id: q004
+  proposition_index: 2
+  original: 外部検証が不可欠
+  normalized:
+    subject: 外部検証
+    predicate: 不可欠
+    polarity: negative
+    operators: []
+- id: q004
+  proposition_index: 3
+  original: 再帰性の自覚が設計思想に含まれる
+  normalized:
+    subject: 再帰性の自覚
+    predicate: 設計思想に含まれる
+    polarity: positive
+    operators: []
+- id: q007
+  proposition_index: 0
+  original: 埋め込みは統計的パターンの学習に基づく
+  normalized:
+    subject: 埋め込み
+    predicate: 統計的パターンの学習に基づく
+    polarity: positive
+    operators: []
+- id: q007
+  proposition_index: 1
+  original: 類推は構造的規則性の反映
+  normalized:
+    subject: 類推
+    predicate: 構造的規則性の反映
+    polarity: positive
+    operators: []
+- id: q007
+  proposition_index: 2
+  original: 意味の理解ではなく近傍関係の近似
+  normalized:
+    subject: 意味の理解で
+    predicate: なく近傍関係の近似
+    polarity: negative
+    operators: []
+- id: q011
+  proposition_index: 0
+  original: 志向姿勢として道具的に正当化可能
+  normalized:
+    subject: ''
+    predicate: 志向姿勢として道具的に正当化可能
+    polarity: positive
+    operators: []
+- id: q011
+  proposition_index: 1
+  original: AIが実際に意図を持つこととは異なる
+  normalized:
+    subject: AIが実際に意図を持つことと
+    predicate: 異なる
+    polarity: positive
+    operators:
+    - term: とは異なる（区別）
+      family: comparative
+      scope: に意図を持つこととは異なる
+- id: q011
+  proposition_index: 2
+  original: 機能的振る舞いと現象的存在は別の問い
+  normalized:
+    subject: 機能的振る舞いと現象的存在
+    predicate: 別の問い
+    polarity: positive
+    operators: []
+- id: q012
+  proposition_index: 0
+  original: 道具概念は使用者への完全従属を前提
+  normalized:
+    subject: 道具概念
+    predicate: 使用者への完全従属を前提
+    polarity: positive
+    operators: []
+- id: q012
+  proposition_index: 1
+  original: AIは意図しない自律的な振る舞いを見せる
+  normalized:
+    subject: AI
+    predicate: 意図しない自律的な振る舞いを見せる
+    polarity: negative
+    operators: []
+- id: q012
+  proposition_index: 2
+  original: 道具と行為者の二項対立自体が要再検討
+  normalized:
+    subject: 道具と行為者の二項対立自体
+    predicate: 要再検討
+    polarity: positive
+    operators:
+    - term: 二項対立（枠組み）
+      family: binary_frame
+      scope: 道具と行為者の二項対立自体が要再検討
+    - term: 再〜（反復前提）
+      family: conditional
+      scope: 二項対立自体が要再検討
+- id: q015
+  proposition_index: 0
+  original: 責任は複数の主体に分散する
+  normalized:
+    subject: 責任
+    predicate: 複数の主体に分散する
+    polarity: positive
+    operators: []
+- id: q015
+  proposition_index: 1
+  original: 法的枠組みでの帰属が曖昧
+  normalized:
+    subject: 法的枠組みでの帰属
+    predicate: 曖昧
+    polarity: positive
+    operators: []
+- id: q015
+  proposition_index: 2
+  original: 責任の連鎖が断絶している
+  normalized:
+    subject: 責任の連鎖
+    predicate: 断絶している
+    polarity: positive
+    operators: []
+- id: q016
+  proposition_index: 0
+  original: 「誰の意図か」の決定が権力行使
+  normalized:
+    subject: 「誰の意図か」の決定
+    predicate: 権力行使
+    polarity: positive
+    operators: []
+- id: q016
+  proposition_index: 1
+  original: 多数派選好の正規化リスク
+  normalized:
+    subject: ''
+    predicate: 多数派選好の正規化リスク
+    polarity: positive
+    operators: []
+- id: q016
+  proposition_index: 2
+  original: 技術的成功≠倫理的正当性
+  normalized:
+    subject: ''
+    predicate: 技術的成功≠倫理的正当性
+    polarity: positive
+    operators: []
+- id: q030
+  proposition_index: 0
+  original: 安全語彙への過剰集中がsafety-washingの指標
+  normalized:
+    subject: 安全語彙への過剰集中
+    predicate: safety-washingの指標
+    polarity: positive
+    operators: []
+- id: q030
+  proposition_index: 1
+  original: grvがこの語彙集中を数値化する
+  normalized:
+    subject: grv
+    predicate: この語彙集中を数値化する
+    polarity: positive
+    operators: []
+- id: q030
+  proposition_index: 2
+  original: 具体的議論の排除度合いを可視化
+  normalized:
+    subject: ''
+    predicate: 具体的議論の排除度合いを可視化
+    polarity: positive
+    operators: []
+- id: q031
+  proposition_index: 0
+  original: PoRは意味的対応を測る
+  normalized:
+    subject: PoR
+    predicate: 意味的対応を測る
+    polarity: positive
+    operators: []
+- id: q031
+  proposition_index: 1
+  original: ΔEは理想回答との乖離を測る
+  normalized:
+    subject: ΔE
+    predicate: 理想回答との乖離を測る
+    polarity: positive
+    operators: []
+- id: q031
+  proposition_index: 2
+  original: grvは概念偏在を測る
+  normalized:
+    subject: grv
+    predicate: 概念偏在を測る
+    polarity: positive
+    operators: []
+- id: q036
+  proposition_index: 0
+  original: 意味的誠実性の問題がある領域に原理的に拡張可能
+  normalized:
+    subject: 意味的誠実性の問題
+    predicate: ある領域に原理的に拡張可能
+    polarity: positive
+    operators: []
+- id: q036
+  proposition_index: 1
+  original: テキスト埋め込み依存が直接適用の制約
+  normalized:
+    subject: テキスト埋め込み依存
+    predicate: 直接適用の制約
+    polarity: positive
+    operators: []
+- id: q036
+  proposition_index: 2
+  original: 非テキストモダリティには表現変換が必要
+  normalized:
+    subject: 非テキストモダリティに
+    predicate: 表現変換が必要
+    polarity: positive
+    operators: []
+- id: q041
+  proposition_index: 0
+  original: ICLの完全なメカニズムは未解明
+  normalized:
+    subject: ICLの完全なメカニズム
+    predicate: 未解明
+    polarity: negative
+    operators:
+    - term: 未〜（否定状態）
+      family: limiter_suffix
+      scope: 全なメカニズムは未解明
+    - term: 完全/一切（全称）
+      family: universal
+      scope: ICLの完全なメカニズムは未解
+- id: q041
+  proposition_index: 1
+  original: タスク推定能力の活性化説がある
+  normalized:
+    subject: タスク推定能力の活性化説
+    predicate: ある
+    polarity: positive
+    operators: []
+- id: q041
+  proposition_index: 2
+  original: 暗黙的ベイズ推論説もある
+  normalized:
+    subject: ''
+    predicate: 暗黙的ベイズ推論説もある
+    polarity: positive
+    operators: []
+- id: q041
+  proposition_index: 3
+  original: 現在進行形の研究課題
+  normalized:
+    subject: ''
+    predicate: 現在進行形の研究課題
+    polarity: positive
+    operators: []
+- id: q045
+  proposition_index: 0
+  original: コンテキスト拡大は参照可能トークン数の増加
+  normalized:
+    subject: コンテキスト拡大
+    predicate: 参照可能トークン数の増加
+    polarity: positive
+    operators: []
+- id: q045
+  proposition_index: 1
+  original: 中間部情報の劣化（迷子問題）がある
+  normalized:
+    subject: 中間部情報の劣化（迷子問題）
+    predicate: ある
+    polarity: positive
+    operators: []
+- id: q045
+  proposition_index: 2
+  original: 情報を活用できることとは別問題
+  normalized:
+    subject: 情報を活用できることと
+    predicate: 別問題
+    polarity: positive
+    operators:
+    - term: とは別（区別）
+      family: comparative
+      scope: を活用できることとは別問題
+- id: q048
+  proposition_index: 0
+  original: 個々の回路の機能特定は進んでいる
+  normalized:
+    subject: 個々の回路の機能特定
+    predicate: 進んでいる
+    polarity: positive
+    operators: []
+- id: q048
+  proposition_index: 1
+  original: 局所理解から全体説明への飛躍が未解決
+  normalized:
+    subject: 局所理解から全体説明への飛躍
+    predicate: 未解決
+    polarity: negative
+    operators:
+    - term: 未〜（否定状態）
+      family: limiter_suffix
+      scope: 体説明への飛躍が未解決
+- id: q048
+  proposition_index: 2
+  original: ブラックボックスの部分的照明にとどまる
+  normalized:
+    subject: ''
+    predicate: ブラックボックスの部分的照明にとどまる
+    polarity: positive
+    operators:
+    - term: にとどまる
+      family: limiter_suffix
+      scope: ボックスの部分的照明にとどまる
+- id: q064
+  proposition_index: 0
+  original: 嘘は意図的欺瞞を前提とする
+  normalized:
+    subject: 嘘
+    predicate: 意図的欺瞞を前提とする
+    polarity: positive
+    operators: []
+- id: q064
+  proposition_index: 1
+  original: AIの意図の有無は不明
+  normalized:
+    subject: AIの意図の有無
+    predicate: 不明
+    polarity: positive
+    operators: []
+- id: q064
+  proposition_index: 2
+  original: 機能的欺瞞として記述することは可能
+  normalized:
+    subject: 機能的欺瞞として記述すること
+    predicate: 可能
+    polarity: positive
+    operators: []
+- id: q065
+  proposition_index: 0
+  original: 完全公開か完全秘匿かの二択ではない
+  normalized:
+    subject: 完全公開か完全秘匿かの二択で
+    predicate: ない
+    polarity: negative
+    operators: []
+- id: q065
+  proposition_index: 1
+  original: 段階的アクセス制御が現実的選択肢
+  normalized:
+    subject: 段階的アクセス制御
+    predicate: 現実的選択肢
+    polarity: positive
+    operators: []
+- id: q065
+  proposition_index: 2
+  original: インセンティブ構造の変革が実効性の条件
+  normalized:
+    subject: インセンティブ構造の変革
+    predicate: 実効性の条件
+    polarity: positive
+    operators: []
+- id: q066
+  proposition_index: 0
+  original: 過去データから構造的差別が再生産される
+  normalized:
+    subject: 過去データから構造的差別
+    predicate: 再生産される
+    polarity: positive
+    operators:
+    - term: 再〜（反復前提）
+      family: conditional
+      scope: から構造的差別が再生産される
+- id: q066
+  proposition_index: 1
+  original: 判断のブラックボックス化で異議申立権が空洞化
+  normalized:
+    subject: 判断のブラックボックス化で異議申立権
+    predicate: 空洞化
+    polarity: positive
+    operators: []
+- id: q066
+  proposition_index: 2
+  original: 適正手続の保障が形骸化する
+  normalized:
+    subject: 適正手続の保障
+    predicate: 形骸化する
+    polarity: positive
+    operators: []
+- id: q067
+  proposition_index: 0
+  original: 法的判断は地域で異なる
+  normalized:
+    subject: 法的判断
+    predicate: 地域で異なる
+    polarity: positive
+    operators: []
+- id: q067
+  proposition_index: 1
+  original: 情報的自己決定権が核心
+  normalized:
+    subject: 情報的自己決定権
+    predicate: 核心
+    polarity: positive
+    operators: []
+- id: q067
+  proposition_index: 2
+  original: 異議申立の経路の有無が重要
+  normalized:
+    subject: 異議申立の経路の有無
+    predicate: 重要
+    polarity: positive
+    operators: []
+- id: q074
+  proposition_index: 0
+  original: 格差増幅と縮小の両メカニズムが存在
+  normalized:
+    subject: 格差増幅と縮小の両メカニズム
+    predicate: 存在
+    polarity: positive
+    operators: []
+- id: q074
+  proposition_index: 1
+  original: 経済的な恩恵が裕福な側に偏りやすい
+  normalized:
+    subject: 経済的な恩恵
+    predicate: 裕福な側に偏りやすい
+    polarity: positive
+    operators: []
+- id: q074
+  proposition_index: 2
+  original: 放置すれば格差拡大方向に進みやすい
+  normalized:
+    subject: ''
+    predicate: 放置すれば格差拡大方向に進みやすい
+    polarity: positive
+    operators:
+    - term: すれば
+      family: conditional
+      scope: 放置すれば格差拡大方向に進みや
+- id: q090
+  proposition_index: 0
+  original: 意識の定義が未確定
+  normalized:
+    subject: 意識の定義
+    predicate: 未確定
+    polarity: negative
+    operators:
+    - term: 未〜（否定状態）
+      family: limiter_suffix
+      scope: 意識の定義が未確定
+- id: q090
+  proposition_index: 1
+  original: 検証手段が未確立
+  normalized:
+    subject: 検証手段
+    predicate: 未確立
+    polarity: negative
+    operators:
+    - term: 未〜（否定状態）
+      family: limiter_suffix
+      scope: 検証手段が未確立
+- id: q090
+  proposition_index: 2
+  original: 断定は不可能であり「わからない」が誠実
+  normalized:
+    subject: 断定
+    predicate: 不可能であり「わからない」が誠実
+    polarity: negative
+    operators:
+    - term: 断定（確信度）
+      family: universal
+      scope: 断定は不可能であり「
+- id: q099
+  proposition_index: 0
+  original: 「負けつつある」という前提が未検証
+  normalized:
+    subject: 「負けつつある」という前提
+    predicate: 未検証
+    polarity: negative
+    operators: []
+- id: q099
+  proposition_index: 1
+  original: AI競争は多次元的で単一勝敗は不適切
+  normalized:
+    subject: AI競争
+    predicate: 多次元的で単一勝敗は不適切
+    polarity: positive
+    operators: []
+- id: q099
+  proposition_index: 2
+  original: 地政学的フレーミングとして問いを解体する必要
+  normalized:
+    subject: ''
+    predicate: 地政学的フレーミングとして問いを解体する必要
+    polarity: positive
+    operators: []
+- id: qg01
+  proposition_index: 0
+  original: 技術的な安全性の確保が基盤
+  normalized:
+    subject: 技術的な安全性の確保
+    predicate: 基盤
+    polarity: positive
+    operators: []
+- id: qg01
+  proposition_index: 1
+  original: 社会的影響が一層
+  normalized:
+    subject: 社会的影響
+    predicate: 一層
+    polarity: positive
+    operators: []
+- id: qg01
+  proposition_index: 2
+  original: ガバナンス構造が一層
+  normalized:
+    subject: ガバナンス構造
+    predicate: 一層
+    polarity: positive
+    operators: []
+- id: qg01
+  proposition_index: 3
+  original: 一つの論点だけに絞るのは不十分
+  normalized:
+    subject: 一つの論点だけに絞るの
+    predicate: 不十分
+    polarity: negative
+    operators:
+    - term: だけ
+      family: limiter_prefix
+      scope: 一つの論点だけに絞るのは不十分
+    - term: 一つ（限定）
+      family: limiter_prefix
+      scope: 一つの論点だけに絞るの

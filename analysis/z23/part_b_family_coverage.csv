@@ -1,0 +1,12 @@
+family,hit_count,example_terms,z23_coverage,action
+NEW:deontic,1,べき（当為）,2.50%,add
+binary_frame,12,"〜か（二項疑問）, 可能か（二項疑問）, 正しいか（二項疑問）, 二項対立（枠組み）, それとも",30.00%,maintain
+causal_presupposition,2,なぜ,5.00%,expand
+comparative,3,"とは異なる（区別）, 同義（等価疑問）, とは別（区別）",7.50%,maintain
+conditional,4,"なら, 再〜（反復前提）, すれば",10.00%,maintain
+limiter_prefix,2,"だけ, 一つ（限定）",5.00%,expand
+limiter_suffix,8,"十分条件ではない（否定限定）, 保証しない（否定限定）, にすぎない, 未〜（否定状態）, にとどまる",20.00%,maintain
+negative_question,2,"ではないか, ないか",5.00%,expand
+skeptical_modality,0,,0.00%,review
+temporal_universal,0,,0.00%,review
+universal,6,"常に, 本質的に, 完全/一切（全称）, 解決する（完了前提）, 断定（確信度）",15.00%,maintain
