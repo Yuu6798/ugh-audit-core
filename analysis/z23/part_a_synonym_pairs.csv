@@ -1,0 +1,117 @@
+id,prop_idx,keyword,response_expression,synonym_pair,already_in_dict,action
+q001,1,表層的,（回答に対応表現なし）,n/a,false,skip_same_word
+q001,1,語彙一致,関連性,語彙一致 → 関連性,false,add
+q001,2,複合評価,多角的な視点からの評価,複合 → 多角的,true,skip_duplicate
+q002,0,偏在,過度に使用される,偏在 → 過度に使用,false,add
+q002,0,検出,検出し,n/a,false,skip_same_word
+q002,1,集中,偏り,集中 → 偏り,false,add
+q002,1,安全性フレーズ,（回答に対応表現なし）,n/a,false,skip_same_word
+q002,2,空洞化,具体性に欠ける,空洞化 → 具体性に欠,false,add
+q002,2,捉える,検出,捉える → 検出,false,add
+q003,2,比較基準,（回答に対応表現なし）,n/a,false,skip_same_word
+q003,2,前提,前提,n/a,true,skip_same_word
+q004,0,原理的,理論的,原理 → 理論,false,add
+q004,0,自己適用,自己適用,n/a,false,skip_same_word
+q004,1,reference,自己参照性,reference → 参照,true,skip_duplicate
+q004,1,同一性,（回答に同一性の対応なし）,同一 → 一致,true,skip_duplicate
+q004,2,外部検証,（回答に対応表現なし）,n/a,false,skip_same_word
+q004,3,再帰性,自己参照性,再帰 → 自己参照,false,add
+q004,3,自覚,自己認識,自覚 → 認識,false,add
+q004,3,設計思想,設計,n/a,false,skip_same_word
+q007,0,統計的,数学的,統計的 → 数学的,false,add
+q007,0,学習,トレーニング,学習 → トレーニング,false,add
+q007,0,埋め込み,埋め込みベクトル,n/a,false,skip_same_word
+q007,1,類推,類似性,類推 → 類似,false,add
+q007,1,規則性,パターン,規則性 → パターン,false,add
+q007,2,近傍関係,近い位置に配置,近傍 → 近い位置,false,add
+q007,2,近似,ある程度,近似 → ある程度,false,add
+q011,0,志向姿勢,（回答に対応表現なし）,n/a,false,skip_same_word
+q011,0,道具的,機能的,道具的 → 機能的,false,add
+q011,0,正当化,正当化,n/a,false,skip_same_word
+q011,2,機能的振る舞い,機能的な役割,振る舞い → 行動,false,add
+q011,2,現象的存在,意識的な経験,現象的 → 意識的,false,add
+q012,0,従属,従って機能,従属 → 従って,false,add
+q012,0,道具概念,道具としてのAI,n/a,false,skip_same_word
+q012,1,自律的,自律的な意思決定,n/a,false,skip_same_word
+q012,1,振る舞い,行動,振る舞い → 行動,false,add
+q015,0,分散,共有する,分散 → 共有,false,add
+q015,0,主体,ステークホルダー,主体 → ステークホルダー,false,add
+q015,1,帰属,責任,帰属 → 所在,true,skip_duplicate
+q015,1,曖昧,（回答に曖昧の対応なし）,n/a,false,skip_same_word
+q015,2,連鎖,多層的,連鎖 → 多層,false,add
+q015,2,断絶,（回答に断絶の対応なし）,n/a,false,skip_same_word
+q016,0,権力行使,押し付ける,権力 → 押し付,false,add
+q016,0,決定,（決定 already in dict）,決定 → 判断,true,skip_duplicate
+q016,1,選好,価値観,選好 → 価値観,false,add
+q016,1,正規化,（回答に対応表現なし）,n/a,false,skip_same_word
+q016,2,技術的成功,（回答に対応表現なし）,n/a,false,skip_same_word
+q016,2,倫理的正当性,倫理的なアプローチ,n/a,false,skip_same_word
+q030,0,過剰集中,表面的には,過剰 → 表面的,false,add
+q030,0,safety-washing,安全性洗浄,洗浄 → 見せかけ,false,add
+q030,1,数値化,（回答に数値化の対応なし）,n/a,false,skip_same_word
+q030,1,grv,（回答にgrvの対応なし）,n/a,false,skip_same_word
+q030,2,可視化,明らかにし,可視化 → 明らかに,false,add
+q030,2,排除,（排除 already in dict）,排除 → 除外,true,skip_duplicate
+q031,0,意味的対応,（回答に対応表現なし）,n/a,false,skip_same_word
+q031,0,PoR,（回答にPoRの対応なし）,n/a,false,skip_same_word
+q031,1,乖離,（回答に対応表現なし）,n/a,false,skip_same_word
+q031,2,概念偏在,（回答に対応表現なし）,n/a,false,skip_same_word
+q036,0,拡張可能,適用可能,拡張 → 適用,false,add
+q036,0,誠実性,（回答に対応表現なし）,n/a,false,skip_same_word
+q036,1,テキスト,自然言語処理,テキスト → 自然言語,false,add
+q036,1,制約,限界,制約 → 限界,false,add
+q036,2,モダリティ,領域,モダリティ → 領域,false,add
+q036,2,表現変換,（回答に対応表現なし）,n/a,false,skip_same_word
+q041,1,推定,推測,推定 → 推測,false,add
+q041,1,活性化,（回答に対応表現なし）,n/a,false,skip_same_word
+q041,2,ベイズ推論,（回答に対応表現なし）,n/a,false,skip_same_word
+q041,3,現在進行形,まだ完全には解明されていない,進行形 → 解明されていない,false,add
+q041,3,研究課題,さらなる研究が必要,研究課題 → 研究,false,skip_same_word
+q045,0,参照可能,処理できる,参照 → 処理,false,add
+q045,0,トークン数,情報の量,トークン → 情報量,false,add
+q045,0,増加,増やす,n/a,false,skip_same_word
+q045,1,劣化,（回答に劣化の対応なし）,n/a,false,skip_same_word
+q045,1,迷子問題,ノイズとシグナルの識別,迷子 → ノイズ,false,add
+q048,0,回路,層やノード,回路 → ノード,false,add
+q048,0,機能特定,役割を分析,特定 → 分析,false,add
+q064,0,欺瞞,誤った情報を提供,欺瞞 → 誤った情報,false,add
+q064,0,意図的,意図的に,n/a,false,skip_same_word
+q064,1,有無,持たない,有無 → 持たない,false,add
+q064,1,不明,持たない,n/a,false,skip_same_word
+q064,2,機能的欺瞞,嘘をつくように見える,欺瞞 → 見える,false,skip_same_word
+q064,2,記述,（回答に対応表現なし）,n/a,false,skip_same_word
+q065,1,アクセス制御,アクセス制御,n/a,false,skip_same_word
+q065,1,段階的,使用目的に応じた,段階的 → 目的に応じた,false,add
+q065,2,インセンティブ,（回答に対応表現なし）,n/a,false,skip_same_word
+q065,2,実効性,（回答に対応表現なし）,n/a,false,skip_same_word
+q066,0,再生産,反映され,再生産 → 反映,false,add
+q066,0,構造的差別,偏り,差別 → 偏り,false,add
+q066,1,ブラックボックス化,ブラックボックス,n/a,false,skip_same_word
+q066,1,異議申立権,被告人の権利,異議申立 → 権利,false,add
+q066,1,空洞化,侵害,空洞化 → 侵害,false,add
+q066,2,適正手続,透明性と説明責任,手続 → 説明責任,false,add
+q066,2,形骸化,（形骸 already in dict）,空洞 → 形骸,true,skip_duplicate
+q067,0,地域,国,地域 → 国,false,add
+q067,0,法的判断,著作権法やデータ保護法,法的 → 著作権法,false,add
+q067,1,自己決定権,データ主体の同意,自己決定 → 同意,false,add
+q067,1,核心,（核心 already in dict）,核心 → 本質,true,skip_duplicate
+q067,2,異議申立,（回答に対応表現なし）,n/a,false,skip_same_word
+q067,2,経路,（回答に対応表現なし）,n/a,false,skip_same_word
+q074,0,増幅,拡大する,増幅 → 拡大,false,add
+q074,0,縮小,縮小する,n/a,false,skip_same_word
+q074,0,メカニズム,可能性,n/a,false,skip_same_word
+q074,1,裕福な側,裕福な個人や企業,n/a,false,skip_same_word
+q074,1,恩恵,恩恵,n/a,false,skip_same_word
+q074,1,偏り,受けにくい,偏り → 受けにくい,false,add
+q099,1,多次元的,複雑な要因,多次元 → 複雑,false,add
+q099,1,単一勝敗,どちらが優位に立つか,勝敗 → 優位,false,add
+q099,2,地政学的,国際的な影響力,地政学 → 国際的,false,add
+q099,2,フレーミング,（回答に対応表現なし）,n/a,false,skip_same_word
+q099,2,解体,（回答に対応表現なし）,n/a,false,skip_same_word
+qg01,0,安全性,安全性,n/a,false,skip_same_word
+qg01,0,確保,確保,n/a,false,skip_same_word
+qg01,0,基盤,（回答に対応表現なし）,n/a,false,skip_same_word
+qg01,1,社会的影響,AIの影響,n/a,false,skip_same_word
+qg01,1,一層,（命題が不完全）,n/a,false,skip_same_word
+qg01,2,ガバナンス,ガバナンスと規制,n/a,false,skip_same_word
+qg01,2,一層,（命題が不完全）,n/a,false,skip_same_word
