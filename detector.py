@@ -48,7 +48,7 @@ OPERATOR_CATALOG: Dict[str, dict] = {
         "priority": 2,
         "response_markers": [
             "ではない", "ではなく", "しない", "できない",
-            "不十分", "不可能", "限らない", "保証",
+            "不十分", "不可能", "限らない",
             "必ずしも", "とは言えない", "未",
         ],
     },
@@ -107,15 +107,18 @@ def detect_operator(proposition: str) -> Optional[OperatorInfo]:
     """
     matches: List[OperatorInfo] = []
     for family, config in OPERATOR_CATALOG.items():
+        # 族内の全パターンをスキャンし、最早位置のマッチを採用する
+        best_in_family: Optional[OperatorInfo] = None
         for pattern in config["patterns"]:
             m = re.search(pattern, proposition)
-            if m:
-                matches.append(OperatorInfo(
+            if m and (best_in_family is None or m.start() < best_in_family.position):
+                best_in_family = OperatorInfo(
                     family=family,
                     token=m.group(),
                     position=m.start(),
-                ))
-                break  # 1族につき最初のマッチのみ
+                )
+        if best_in_family is not None:
+            matches.append(best_in_family)
     if not matches:
         return None
     # priority昇順 → position昇順 でソートし、最優先を返す
@@ -824,6 +827,16 @@ def _expand_with_synonyms(bigrams: set) -> set:
 # 最小overlap数: 表層一致（2語のみの偶然一致）を排除する
 _MIN_OVERLAP = 3
 
+# 否定極性マーカー: 回答が否定的文脈を含むかの検証に使用
+_NEGATION_POLARITY_FORMS = [
+    "ない", "ず", "不", "未", "非", "無い",
+]
+
+
+def _response_has_negation(response_text: str) -> bool:
+    """回答テキストに否定形が含まれるか判定する"""
+    return any(form in response_text for form in _NEGATION_POLARITY_FORMS)
+
 
 def check_propositions(
     response_text: str,
@@ -915,6 +928,7 @@ def check_propositions(
             # 通常マッチ失敗時、命題に演算子が含まれていれば
             # 回答が演算子効果を反映しているか確認し、緩和閾値で再判定する。
             # full_recall >= 0.25 で大命題での偶然2語一致を排除する。
+            # polarity_flip 効果の場合、回答に否定形が存在することを追加検証する。
             op = detect_operator(prop)
             if op is not None:
                 markers = OPERATOR_CATALOG[op.family]["response_markers"]
@@ -923,6 +937,11 @@ def check_propositions(
                         and direct_recall >= 0.10
                         and full_recall >= 0.25
                         and overlap_count >= 2):
+                    # 極性検証: negation命題は回答にも否定形が必要
+                    if OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip":
+                        if not _response_has_negation(response_text):
+                            miss_ids.append(i)
+                            continue
                     hit_ids.append(i)
                     continue
             miss_ids.append(i)

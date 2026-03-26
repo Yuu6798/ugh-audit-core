@@ -197,3 +197,23 @@ class TestNoRegression:
         response = "モデル評価は必要だ"
         hits, hit_ids, miss_ids = check_propositions(response, props)
         assert 0 in miss_ids, f"弱overlap命題が偽回収された: hit_ids={hit_ids}"
+
+    def test_polarity_contradiction_rejected(self):
+        """否定命題に対し肯定回答は極性不一致で回収しない
+
+        レビュー指摘: 回収パスで「保証」概念があっても否定形がなければ却下。
+        通常マッチ閾値未達 + 演算子回収候補だが極性不一致のケース。
+        """
+        props = ["複合評価の保証は困難であり単純化しない"]
+        response = "評価は保証されています。結果を信頼して問題ありません"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"極性矛盾が偽回収された: hit_ids={hit_ids}"
+
+    def test_earliest_match_in_family(self):
+        """detect_operatorが族内で最早位置のパターンを返す"""
+        # 「二項対立」(pos=3) は「よりも」(pos=10+) より先に出現
+        result = detect_operator("道具二項対立の構造よりも重要")
+        assert result is not None
+        assert result.family == "binary_frame"
+        assert result.token == "二項対立"
+        assert result.position == 2
