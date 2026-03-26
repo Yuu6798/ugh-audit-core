@@ -66,7 +66,7 @@
   normalized:
     subject: referenceが保守的なら無難な回答でもΔE
     predicate: 低くなる
-    polarity: positive
+    polarity: conditional
     operators:
     - term: なら
       family: conditional
@@ -101,7 +101,7 @@
   normalized:
     subject: 外部検証
     predicate: 不可欠
-    polarity: negative
+    polarity: positive
     operators: []
 - id: q004
   proposition_index: 3
@@ -528,7 +528,7 @@
   normalized:
     subject: ''
     predicate: 放置すれば格差拡大方向に進みやすい
-    polarity: positive
+    polarity: conditional
     operators:
     - term: すれば
       family: conditional

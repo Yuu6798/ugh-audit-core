@@ -169,12 +169,21 @@ def deduplicate_operators(ops: list[dict]) -> list[dict]:
 
 def determine_polarity(text: str) -> str:
     """命題の極性を判定。否定 > 条件 > 肯定 の優先度。"""
-    neg_patterns = ["ではない", "でない", "しない", "できない", "ない$",
-                    "ず$", "不可", "未確", "未解", "未検証",
-                    "保証しない", "ではなく", "にすぎない"]
-    cond_markers = ["場合", "もし", "仮に", "条件付き", "ときに"]
+    neg_patterns = [
+        "ではない", "でない", "しない", "できない", "ない$",
+        "ず$", "不可能", "未確", "未解", "未検証",
+        "保証しない", "ではなく", "にすぎない",
+    ]
+    # 「不可欠」等の非否定語を除外してから「不可」を判定
+    neg_substr_exclude = {"不可": ["不可欠", "不可分", "不可避"]}
+    cond_markers = ["場合", "もし", "仮に", "条件付き", "ときに",
+                    "なら", "ならば", "すれば", "たら"]
     for m in neg_patterns:
         if re.search(m, text):
+            return "negative"
+    # 除外付き部分文字列チェック
+    for term, exclusions in neg_substr_exclude.items():
+        if term in text and not any(ex in text for ex in exclusions):
             return "negative"
     for m in cond_markers:
         if m in text:
@@ -508,6 +517,7 @@ def main() -> None:
             assert row["term"] not in CONTENT_WORDS, f"内容語誤抽出: {row['term']}"
     print("✓ 内容語の誤抽出: 0件")
 
+    assert scope_empty_rate <= 10.0, f"scope 空欄率: {scope_empty_rate:.1f}% > 10%"
     print(f"✓ scope 空欄率: {scope_empty_rate:.1f}% (≤ 10%)")
 
     print("\n=== 全チェック合格 ===")
