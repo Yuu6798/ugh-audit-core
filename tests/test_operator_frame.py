@@ -258,3 +258,20 @@ class TestNoRegression:
         response = "指標に依存するのが必要かもしれません"
         hits, hit_ids, miss_ids = check_propositions(response, props)
         assert 0 in miss_ids, f"推量ませんが偽回収した: hit_ids={hit_ids}"
+
+    def test_binary_with_negative_deontic_checks_polarity(self):
+        """binary_frame選出時でも命題に「べきではない」があれば極性検証する"""
+        # 「か...かの」(binary) + 「べきではない」(deontic neg) の共起
+        props = ["単純か複雑かの二択に依存すべきではない"]
+        response = "二択に依存するのが必要であり重要だ"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"binary+neg_deonticが偽回収された: hit_ids={hit_ids}"
+
+    def test_skeptical_not_blocked_by_polarity(self):
+        """skeptical命題「とは限らない」は極性検証なしで回収可能"""
+        props = ["精度が高いとは限らない"]
+        response = "精度が高い可能性はあるが必ずしも保証されるものではない"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        # skeptical命題は極性チェック不要で回収されるべき
+        # (通常マッチまたは演算子回収のいずれかでhit)
+        assert 0 in hit_ids, f"skeptical命題がブロックされた: miss_ids={miss_ids}"

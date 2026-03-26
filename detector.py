@@ -963,12 +963,14 @@ def check_propositions(
                         and direct_recall >= 0.10
                         and full_recall >= 0.25
                         and overlap_count >= 2):
-                    # 極性検証: 否定を含む演算子は回答にも否定形が必要
-                    # polarity_flip (negation族) に加え、
-                    # 「べきではない」等の否定含みdeonticも対象
+                    # 極性検証: 否定命題は回答にも否定形が必要
+                    # polarity_flip (negation族) と、命題に否定deontic表現が
+                    # ある場合に適用。op.token ではなく命題テキストを直接検査し、
+                    # binary_frame 選出時のバイパスと skeptical 誤発火を防ぐ。
+                    _NEG_DEONTIC = ("べきではない", "すべきではない")
                     needs_polarity = (
                         OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip"
-                        or "ない" in op.token
+                        or any(nd in prop for nd in _NEG_DEONTIC)
                     )
                     if needs_polarity and not _response_has_negation(response_text):
                         miss_ids.append(i)
