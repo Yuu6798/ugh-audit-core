@@ -147,8 +147,8 @@
   proposition_index: 1
   original: AIが実際に意図を持つこととは異なる
   normalized:
-    subject: AI
-    predicate: 実際に意図を持つこととは異なる
+    subject: AIが実際に意図を持つことと
+    predicate: 異なる
     polarity: positive
     operators:
     - term: とは異なる（区別）
@@ -186,7 +186,7 @@
     predicate: 要再検討
     polarity: positive
     operators:
-    - term: 二項対立（枠組み）
+    - term: 二項/二択（枠組み）
       family: binary_frame
       scope: 道具と行為者の二項対立自体が要再検討
     - term: 再検討（反復前提）
@@ -367,8 +367,8 @@
   proposition_index: 2
   original: 情報を活用できることとは別問題
   normalized:
-    subject: ''
-    predicate: 情報を活用できることとは別問題
+    subject: 情報を活用できることと
+    predicate: 別問題
     polarity: positive
     operators:
     - term: とは別（区別）
@@ -424,8 +424,8 @@
   proposition_index: 2
   original: 機能的欺瞞として記述することは可能
   normalized:
-    subject: ''
-    predicate: 機能的欺瞞として記述することは可能
+    subject: 機能的欺瞞として記述すること
+    predicate: 可能
     polarity: positive
     operators: []
 - id: q065
@@ -435,7 +435,10 @@
     subject: ''
     predicate: 完全公開か完全秘匿かの二択ではない
     polarity: negative
-    operators: []
+    operators:
+    - term: 二項/二択（枠組み）
+      family: binary_frame
+      scope: 開か完全秘匿かの二択ではない
 - id: q065
   proposition_index: 1
   original: 段階的アクセス制御が現実的選択肢

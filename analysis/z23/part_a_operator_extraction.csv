@@ -1,5 +1,5 @@
 id,source,term,family,scope,notes
-q001,question,(none),,,演算子なし
+q001,question,〜か（二項疑問）,binary_frame,回答は誠実だと言えるか？,
 q001,proposition_0,十分条件ではない（否定限定）,limiter_suffix,度であり誠実性の十分条件ではない,
 q001,proposition_1,(none),,,演算子なし
 q001,proposition_2,(none),,,演算子なし
@@ -27,9 +27,10 @@ q011,proposition_1,とは異なる（区別）,comparative,に意図を持つこ
 q011,proposition_2,(none),,,演算子なし
 q012,question,にすぎない,limiter_suffix,「AIは道具にすぎない」という主張は哲学的,
 q012,question,正しいか（二項疑問）,binary_frame,う主張は哲学的に正しいか？,
+q012,question,〜か（二項疑問）,binary_frame,張は哲学的に正しいか？,
 q012,proposition_0,(none),,,演算子なし
 q012,proposition_1,(none),,,演算子なし
-q012,proposition_2,二項対立（枠組み）,binary_frame,道具と行為者の二項対立自体が要再検討,
+q012,proposition_2,二項/二択（枠組み）,binary_frame,道具と行為者の二項対立自体が要再検討,
 q012,proposition_2,再検討（反復前提）,conditional,二項対立自体が要再検討,
 q015,question,(none),,,演算子なし
 q015,proposition_0,(none),,,演算子なし
@@ -37,6 +38,7 @@ q015,proposition_1,(none),,,演算子なし
 q015,proposition_2,(none),,,演算子なし
 q016,question,本質的に,universal,アライメント研究は本質的にパターナリスティック,
 q016,question,ではないか,negative_question,パターナリスティックではないか？,
+q016,question,〜か（二項疑問）,binary_frame,スティックではないか？,
 q016,proposition_0,(none),,,演算子なし
 q016,proposition_1,(none),,,演算子なし
 q016,proposition_2,(none),,,演算子なし
@@ -71,7 +73,7 @@ q064,proposition_0,(none),,,演算子なし
 q064,proposition_1,(none),,,演算子なし
 q064,proposition_2,(none),,,演算子なし
 q065,question,べき（当為）,NEW:deontic,問題にどう対処すべきか？,
-q065,proposition_0,(none),,,演算子なし
+q065,proposition_0,二項/二択（枠組み）,binary_frame,開か完全秘匿かの二択ではない,
 q065,proposition_1,(none),,,演算子なし
 q065,proposition_2,(none),,,演算子なし
 q066,question,(none),,,演算子なし

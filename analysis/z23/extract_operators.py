@@ -91,14 +91,14 @@ IMPLICIT_PATTERNS: list[tuple[str, str, str]] = [
     (r"保証しない", "保証しない（否定限定）", "limiter_suffix"),
     (r"可能か", "可能か（二項疑問）", "binary_frame"),
     (r"正しいか", "正しいか（二項疑問）", "binary_frame"),
-    (r"(?:する|できる|なる)か[？?]?$", "〜か（二項疑問）", "binary_frame"),
+    (r"(?:する|できる|なる|れる|える|く|い)か[？?]?$", "〜か（二項疑問）", "binary_frame"),
     (r"未[解確検]", "未〜（否定状態）", "limiter_suffix"),
     (r"とは別", "とは別（区別）", "comparative"),
     (r"とは異なる", "とは異なる（区別）", "comparative"),
     (r"(?:一切)(?:な|に|の)", "一切（全称）", "universal"),
     (r"完全に(?!は)", "完全に（全称）", "universal"),
     (r"べき", "べき（当為）", "NEW:deontic"),
-    (r"(?:二[項択]|二つ)(?:対立|の)", "二項対立（枠組み）", "binary_frame"),
+    (r"(?:二[項択]|二つ)(?:対立|の)?", "二項/二択（枠組み）", "binary_frame"),
     (r"再検討", "再検討（反復前提）", "conditional"),
     (r"(?:拡大|縮小)する", "拡大/縮小する（方向前提）", "binary_frame"),
     (r"断定", "断定（確信度）", "universal"),
@@ -204,8 +204,8 @@ def determine_polarity(text: str) -> str:
 
 def extract_subject_predicate(text: str) -> tuple[str, str]:
     """命題から主語・述語を簡易抽出。「では」「には」等の複合助詞での誤分割を回避。"""
-    # 「では」「には」「とは」「からは」等の直前での分割を避ける
-    no_split_prefixes = ["で", "に", "と", "から", "より", "まで", "へ"]
+    # 「では」「には」等の複合助詞での誤分割を回避（ただし「ことは」は正常分割）
+    no_split_prefixes = ["で", "に", "から", "より", "まで", "へ"]
     for particle in ["は", "が"]:
         if particle in text:
             idx = text.index(particle)
