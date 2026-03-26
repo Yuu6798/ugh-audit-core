@@ -48,6 +48,7 @@ OPERATOR_CATALOG: Dict[str, dict] = {
         "priority": 2,
         "response_markers": [
             "ではない", "ではなく", "しない", "できない",
+            "ではありません", "ありません",
             "不十分", "不可能", "限らない",
             "必ずしも", "とは言えない",
             "未解", "未確", "未検", "未整", "未発",
@@ -975,7 +976,13 @@ def check_propositions(
             op = detect_operator(prop)
             if op is not None:
                 markers = OPERATOR_CATALOG[op.family]["response_markers"]
-                marker_found = any(m in response_text for m in markers)
+                # マーカーチェックを概念近傍にスコーピング
+                marker_found = False
+                for sent in _split_sentences(response_text):
+                    if any(bg in sent for bg in overlap_set):
+                        if any(m in sent for m in markers):
+                            marker_found = True
+                            break
                 if (marker_found
                         and direct_recall >= 0.10
                         and full_recall >= 0.25
