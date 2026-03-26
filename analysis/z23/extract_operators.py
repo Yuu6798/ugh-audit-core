@@ -205,12 +205,16 @@ def determine_polarity(text: str) -> str:
 def extract_subject_predicate(text: str) -> tuple[str, str]:
     """命題から主語・述語を簡易抽出。「では」「には」等の複合助詞での誤分割を回避。"""
     # 「では」「には」等の複合助詞での誤分割を回避（ただし「ことは」は正常分割）
-    no_split_prefixes = ["で", "に", "から", "より", "まで", "へ"]
+    no_split_prefixes = ["で", "に", "と", "から", "より", "まで", "へ"]
     for particle in ["は", "が"]:
         if particle in text:
             idx = text.index(particle)
             # 助詞「は」の直前が複合助詞の一部なら次の出現を探す
-            if particle == "は" and idx > 0 and text[idx - 1] in no_split_prefixes:
+            # ただし「ことは」（こと + は）は正常な主語分割として許可
+            is_compound = (
+                particle == "は" and idx > 0 and text[idx - 1] in no_split_prefixes
+            )
+            if is_compound and not (idx >= 2 and text[idx - 2:idx] == "こと"):
                 # 次の「は」を探す
                 rest = text[idx + 1:]
                 if particle in rest:
@@ -485,7 +489,7 @@ def main() -> None:
         f"（{(len(part_c_entries) - len(p_with_ops))/len(part_c_entries):.1%}）。"
         "改善余地の大半は主語・述語レベルの語彙不一致にある",
         "- **synonym expansion の現状**: 第1ラウンド（60語マップ）で21→16件に改善したが、"
-        "残り57命題の多くは専門用語の言い換えが未カバー",
+        f"残り{len(part_c_entries) - len(p_with_ops)}命題の多くは専門用語の言い換えが未カバー",
         f"- **演算子枠の位置づけ**: 演算子あり{len(p_with_ops)}命題は "
         f"limiter_suffix({prop_family_counter.get('limiter_suffix', 0)}), "
         f"conditional({prop_family_counter.get('conditional', 0)}) が中心。"

@@ -147,8 +147,8 @@
   proposition_index: 1
   original: AIが実際に意図を持つこととは異なる
   normalized:
-    subject: AIが実際に意図を持つことと
-    predicate: 異なる
+    subject: AI
+    predicate: 実際に意図を持つこととは異なる
     polarity: positive
     operators:
     - term: とは異なる（区別）
@@ -367,8 +367,8 @@
   proposition_index: 2
   original: 情報を活用できることとは別問題
   normalized:
-    subject: 情報を活用できることと
-    predicate: 別問題
+    subject: ''
+    predicate: 情報を活用できることとは別問題
     polarity: positive
     operators:
     - term: とは別（区別）
