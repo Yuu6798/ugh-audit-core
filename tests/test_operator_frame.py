@@ -267,6 +267,26 @@ class TestNoRegression:
         hits, hit_ids, miss_ids = check_propositions(response, props)
         assert 0 in miss_ids, f"binary+neg_deonticが偽回収された: hit_ids={hit_ids}"
 
+    def test_beki_denai_variant_checks_polarity(self):
+        """「すべきでない」(は抜き形) でも極性検証が発火する
+
+        概念overlap を通常閾値未満に抑え、recovery path に入るケース。
+        """
+        props = ["個別事象の過度な一般化をすべきでない"]
+        response = "一般化が必要であり求められる状況だ"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"べきでない(は抜き)が偽回収された: hit_ids={hit_ids}"
+
+    def test_unrelated_negation_not_counted(self):
+        """無関係な副文の否定形は極性ゲートを通過しない
+
+        概念近傍文には否定なし、別文に「不明」がある。
+        """
+        props = ["個別事象の過度な一般化をすべきではない"]
+        response = "一般化が求められる。別件の結論は不明だ"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"無関係な不明で偽回収された: hit_ids={hit_ids}"
+
     def test_skeptical_not_blocked_by_polarity(self):
         """skeptical命題「とは限らない」は極性検証なしで回収可能"""
         props = ["精度が高いとは限らない"]

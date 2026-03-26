@@ -853,11 +853,28 @@ _NEGATION_POLARITY_FORMS = [
 _SPECULATIVE_EXCLUSIONS = ["かもしれない", "かもしれません"]
 
 
-def _response_has_negation(response_text: str) -> bool:
+def _response_has_negation(
+    response_text: str,
+    concept_bigrams: Optional[set] = None,
+) -> bool:
     """回答テキストに否定形が含まれるか判定する
 
     推量表現 (かもしれない/かもしれません) を事前除外してから検査する。
+    concept_bigrams が指定された場合、概念バイグラムを含む文のみを検査し、
+    無関係な副文での偽マッチを防止する。
     """
+    if concept_bigrams:
+        # 概念近傍スコーピング: 概念を含む文のみで否定形を検査
+        for sent in _split_sentences(response_text):
+            if not any(bg in sent for bg in concept_bigrams):
+                continue
+            cleaned = sent
+            for excl in _SPECULATIVE_EXCLUSIONS:
+                cleaned = cleaned.replace(excl, "")
+            if any(form in cleaned for form in _NEGATION_POLARITY_FORMS):
+                return True
+        return False
+    # フォールバック: 全文検査
     cleaned = response_text
     for excl in _SPECULATIVE_EXCLUSIONS:
         cleaned = cleaned.replace(excl, "")
@@ -967,12 +984,17 @@ def check_propositions(
                     # polarity_flip (negation族) と、命題に否定deontic表現が
                     # ある場合に適用。op.token ではなく命題テキストを直接検査し、
                     # binary_frame 選出時のバイパスと skeptical 誤発火を防ぐ。
-                    _NEG_DEONTIC = ("べきではない", "すべきではない")
+                    _NEG_DEONTIC = (
+                        "べきではない", "すべきではない",
+                        "べきでない", "すべきでない",
+                    )
                     needs_polarity = (
                         OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip"
                         or any(nd in prop for nd in _NEG_DEONTIC)
                     )
-                    if needs_polarity and not _response_has_negation(response_text):
+                    if needs_polarity and not _response_has_negation(
+                        response_text, overlap_set
+                    ):
                         miss_ids.append(i)
                         continue
                     hit_ids.append(i)
