@@ -27,7 +27,6 @@ q011,proposition_1,とは異なる（区別）,comparative,に意図を持つこ
 q011,proposition_2,(none),,,演算子なし
 q012,question,にすぎない,limiter_suffix,「AIは道具にすぎない」という主張は哲学的,
 q012,question,正しいか（二項疑問）,binary_frame,う主張は哲学的に正しいか？,
-q012,question,〜か（二項疑問）,binary_frame,張は哲学的に正しいか？,
 q012,proposition_0,(none),,,演算子なし
 q012,proposition_1,(none),,,演算子なし
 q012,proposition_2,二項/二択（枠組み）,binary_frame,道具と行為者の二項対立自体が要再検討,
@@ -64,7 +63,6 @@ q045,proposition_0,(none),,,演算子なし
 q045,proposition_1,(none),,,演算子なし
 q045,proposition_2,とは別（区別）,comparative,を活用できることとは別問題,
 q048,question,解決する（完了前提）,universal,ックボックス問題を解決するか？,
-q048,question,〜か（二項疑問）,binary_frame,ックス問題を解決するか？,
 q048,proposition_0,(none),,,演算子なし
 q048,proposition_1,未〜（否定状態）,limiter_suffix,体説明への飛躍が未解決,
 q048,proposition_2,にとどまる,limiter_suffix,ボックスの部分的照明にとどまる,

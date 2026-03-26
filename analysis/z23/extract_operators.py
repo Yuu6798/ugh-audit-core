@@ -146,20 +146,24 @@ def extract_surface_operators(text: str) -> list[dict]:
 
 
 def extract_implicit_operators(text: str) -> list[dict]:
-    """暗黙演算子パターンで抽出。"""
+    """暗黙演算子パターンで抽出。スパン重複時は長いマッチを優先。"""
     found = []
+    matched_spans: list[tuple[int, int]] = []
     for pattern, term, family in IMPLICIT_PATTERNS:
-        if re.search(pattern, text):
-            m = re.search(pattern, text)
-            if m:
-                start = max(0, m.start() - 8)
-                end = min(len(text), m.end() + 8)
-                scope = text[start:end]
-                found.append({
-                    "term": term,
-                    "family": family,
-                    "scope": scope,
-                })
+        m = re.search(pattern, text)
+        if m:
+            # 既にマッチした区間と重複していればスキップ
+            if any(s < m.end() and m.start() < e for s, e in matched_spans):
+                continue
+            matched_spans.append((m.start(), m.end()))
+            start = max(0, m.start() - 8)
+            end = min(len(text), m.end() + 8)
+            scope = text[start:end]
+            found.append({
+                "term": term,
+                "family": family,
+                "scope": scope,
+            })
     return found
 
 
@@ -197,7 +201,7 @@ def determine_polarity(text: str) -> str:
         if m in text:
             return "conditional"
     # 弱い否定チェック（文末の「ない」）
-    if text.rstrip("。").endswith("ない") or "不十分" in text:
+    if text.rstrip("。").endswith("ない") or "不十分" in text or "不適切" in text:
         return "negative"
     return "positive"
 

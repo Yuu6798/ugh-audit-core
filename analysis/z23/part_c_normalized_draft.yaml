@@ -580,7 +580,7 @@
   normalized:
     subject: AI競争
     predicate: 多次元的で単一勝敗は不適切
-    polarity: positive
+    polarity: negative
     operators: []
 - id: q099
   proposition_index: 2

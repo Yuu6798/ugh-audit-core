@@ -4,9 +4,9 @@
 
 - Z_23 全23問を処理完了
 - question演算子あり: 16/23問
-- 総演算子抽出数: 42件（surface + implicit）
+- 総演算子抽出数: 40件（surface + implicit）
 - 演算子なし記録: 63件（命題レベル含む）
-- 上位族: binary_frame(16), limiter_suffix(9), universal(5), conditional(3), comparative(3)
+- 上位族: binary_frame(14), limiter_suffix(9), universal(5), conditional(3), comparative(3)
 
 ### 主要パターン
 - binary_frame族: 「〜か？」形式の二項疑問が多数。Z_23の質問構造に頻出
