@@ -189,7 +189,7 @@
     - term: 二項対立（枠組み）
       family: binary_frame
       scope: 道具と行為者の二項対立自体が要再検討
-    - term: 再〜（反復前提）
+    - term: 再検討（反復前提）
       family: conditional
       scope: 二項対立自体が要再検討
 - id: q015
@@ -323,9 +323,6 @@
     - term: 未〜（否定状態）
       family: limiter_suffix
       scope: 全なメカニズムは未解明
-    - term: 完全/一切（全称）
-      family: universal
-      scope: ICLの完全なメカニズムは未解
 - id: q041
   proposition_index: 1
   original: タスク推定能力の活性化説がある
@@ -462,10 +459,7 @@
     subject: 過去データから構造的差別
     predicate: 再生産される
     polarity: positive
-    operators:
-    - term: 再〜（反復前提）
-      family: conditional
-      scope: から構造的差別が再生産される
+    operators: []
 - id: q066
   proposition_index: 1
   original: 判断のブラックボックス化で異議申立権が空洞化
