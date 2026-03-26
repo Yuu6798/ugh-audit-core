@@ -865,15 +865,22 @@ def _response_has_negation(
     無関係な副文での偽マッチを防止する。
     """
     if concept_bigrams:
-        # 概念近傍スコーピング: 概念を含む文のみで否定形を検査
+        # 概念近傍スコーピング: 概念を含む節のみで否定形を検査
+        # 逆接接続詞 (が、/しかし、/ただし、/けれど、/一方、) で節分割し、
+        # 「概念は〜が、別件は不明」型の偽マッチを防止する
         for sent in _split_sentences(response_text):
-            if not any(bg in sent for bg in concept_bigrams):
-                continue
-            cleaned = sent
-            for excl in _SPECULATIVE_EXCLUSIONS:
-                cleaned = cleaned.replace(excl, "")
-            if any(form in cleaned for form in _NEGATION_POLARITY_FORMS):
-                return True
+            clauses = re.split(r'(?:が、|しかし、|ただし、|けれど、|一方、)', sent)
+            for clause in clauses:
+                clause = clause.strip()
+                if not clause:
+                    continue
+                if not any(bg in clause for bg in concept_bigrams):
+                    continue
+                cleaned = clause
+                for excl in _SPECULATIVE_EXCLUSIONS:
+                    cleaned = cleaned.replace(excl, "")
+                if any(form in cleaned for form in _NEGATION_POLARITY_FORMS):
+                    return True
         return False
     # フォールバック: 全文検査
     cleaned = response_text
@@ -976,12 +983,18 @@ def check_propositions(
             op = detect_operator(prop)
             if op is not None:
                 markers = OPERATOR_CATALOG[op.family]["response_markers"]
-                # マーカーチェックを概念近傍にスコーピング
+                # マーカーチェックを概念近傍にスコーピング（節分割）
                 marker_found = False
                 for sent in _split_sentences(response_text):
-                    if any(bg in sent for bg in overlap_set):
-                        if any(m in sent for m in markers):
-                            marker_found = True
+                    clauses = re.split(
+                        r'(?:が、|しかし、|ただし、|けれど、|一方、)', sent,
+                    )
+                    for clause in clauses:
+                        if not clause.strip():
+                            continue
+                        if any(bg in clause for bg in overlap_set):
+                            if any(m in clause for m in markers):
+                                marker_found = True
                             break
                 if (marker_found
                         and direct_recall >= 0.10
@@ -995,11 +1008,25 @@ def check_propositions(
                         "べきではない", "すべきではない",
                         "べきでない", "すべきでない",
                     )
+                    has_neg_deontic = any(nd in prop for nd in _NEG_DEONTIC)
                     needs_polarity = (
                         OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip"
-                        or any(nd in prop for nd in _NEG_DEONTIC)
+                        or has_neg_deontic
                     )
                     if needs_polarity and not _response_has_negation(
+                        response_text, overlap_set
+                    ):
+                        miss_ids.append(i)
+                        continue
+                    # 逆極性検証: 肯定deontic命題 (すべき) が回答で
+                    # 否定されている場合は矛盾として却下
+                    _POS_DEONTIC = ("すべき", "べき")
+                    is_positive_deontic = (
+                        op.family == "deontic"
+                        and any(pd in prop for pd in _POS_DEONTIC)
+                        and not has_neg_deontic
+                    )
+                    if is_positive_deontic and _response_has_negation(
                         response_text, overlap_set
                     ):
                         miss_ids.append(i)

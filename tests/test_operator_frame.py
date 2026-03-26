@@ -287,6 +287,21 @@ class TestNoRegression:
         hits, hit_ids, miss_ids = check_propositions(response, props)
         assert 0 in miss_ids, f"無関係な不明で偽回収された: hit_ids={hit_ids}"
 
+    def test_positive_deontic_rejected_when_negated(self):
+        """肯定deontic「すべき」命題が回答で否定されていたら却下"""
+        props = ["個別事象の過度な一般化をすべき"]
+        response = "一般化はすべきではない。慎重な対応が求められる"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"肯定deonticの逆極性が偽回収された: hit_ids={hit_ids}"
+
+    def test_clause_split_prevents_false_negation(self):
+        """逆接接続詞で結ばれた副節の否定は概念近傍と見なさない"""
+        props = ["個別事象の過度な一般化をすべきではない"]
+        # 「が、」で結ばれた副節に「不明」がある
+        response = "一般化が求められるが、別件の結論は不明だ"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"副節の否定で偽回収された: hit_ids={hit_ids}"
+
     def test_skeptical_not_blocked_by_polarity(self):
         """skeptical命題「とは限らない」は極性検証なしで回収可能"""
         props = ["精度が高いとは限らない"]
