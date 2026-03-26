@@ -9,11 +9,118 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 import yaml
 
 from ugh_calculator import Evidence
+
+
+# --- 演算子検出 ---
+
+class OperatorInfo(NamedTuple):
+    """命題中の演算子検出結果"""
+    family: str      # 演算子族 (negation / deontic / skeptical_modality / binary_frame)
+    token: str       # マッチしたトークン
+    position: int    # 命題中の開始位置
+
+
+# 演算子カタログ: 族定義と検出パターン
+# priority が小さいほど共起時に優先される
+# 共起ルール:
+#   deontic + negation → deontic 優先 (「べきではない」は当為表現)
+#   skeptical_modality + binary_frame → binary_frame 優先
+OPERATOR_CATALOG: Dict[str, dict] = {
+    "negation": {
+        "patterns": [
+            r"ではない",
+            r"でない",
+            r"にならない",
+            r"しない",
+            r"できない",
+            r"不十分",
+            r"不可能",
+            r"未[\u4e00-\u9fff]{1,4}",
+            r"保証しない",
+            r"[\u4e00-\u9fff]ない$",
+        ],
+        "effect": "polarity_flip",
+        "priority": 2,
+        "response_markers": [
+            "ではない", "ではなく", "しない", "できない",
+            "不十分", "不可能", "限らない", "保証",
+            "必ずしも", "とは言えない", "未",
+        ],
+    },
+    "deontic": {
+        "patterns": [
+            r"べきではない",
+            r"すべきではない",
+            r"すべき",
+            r"べき",
+        ],
+        "effect": "normative_flag",
+        "priority": 1,
+        "response_markers": [
+            "べき", "すべき", "必要", "求められる",
+            "義務", "当為", "規範",
+        ],
+    },
+    "skeptical_modality": {
+        "patterns": [
+            r"かもしれない",
+            r"とは限らない",
+            r"可能性がある",
+            r"不確[実定]",
+            r"明確ではない",
+        ],
+        "effect": "certainty_downgrade",
+        "priority": 3,
+        "response_markers": [
+            "かもしれない", "可能性", "必ずしも",
+            "とは限らない", "不確実", "不明", "断定できない",
+        ],
+    },
+    "binary_frame": {
+        "patterns": [
+            r"ではなく",
+            r"よりも",
+            r"二項対立",
+            r"二択",
+            r"か[\u4e00-\u9fff]*かの",
+        ],
+        "effect": "contrastive_split",
+        "priority": 1,
+        "response_markers": [
+            "ではなく", "二項対立", "二択", "対立",
+            "多面的", "単純化できない", "区別", "異なる",
+        ],
+    },
+}
+
+
+def detect_operator(proposition: str) -> Optional[OperatorInfo]:
+    """命題文字列から演算子を検出し、最優先の1件を返す
+
+    複数族がマッチした場合は priority (小さいほど優先) で解決する。
+    同一 priority 内では命題中で先に出現する方を採用する。
+    """
+    matches: List[OperatorInfo] = []
+    for family, config in OPERATOR_CATALOG.items():
+        for pattern in config["patterns"]:
+            m = re.search(pattern, proposition)
+            if m:
+                matches.append(OperatorInfo(
+                    family=family,
+                    token=m.group(),
+                    position=m.start(),
+                ))
+                break  # 1族につき最初のマッチのみ
+    if not matches:
+        return None
+    # priority昇順 → position昇順 でソートし、最優先を返す
+    matches.sort(key=lambda info: (OPERATOR_CATALOG[info.family]["priority"], info.position))
+    return matches[0]
 
 # --- YAML辞書のロード ---
 _REGISTRY_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "registry"
@@ -804,6 +911,16 @@ def check_propositions(
         if direct_recall >= 0.15 and full_recall >= 0.35 and overlap_count >= min_required:
             hit_ids.append(i)
         else:
+            # --- 演算子フレーム回収 ---
+            # 通常マッチ失敗時、命題に演算子が含まれていれば
+            # 回答が演算子効果を反映しているか確認し、緩和閾値で再判定する。
+            op = detect_operator(prop)
+            if op is not None:
+                markers = OPERATOR_CATALOG[op.family]["response_markers"]
+                marker_found = any(m in response_text for m in markers)
+                if marker_found and direct_recall >= 0.10 and overlap_count >= 2:
+                    hit_ids.append(i)
+                    continue
             miss_ids.append(i)
 
     return len(hit_ids), hit_ids, miss_ids
