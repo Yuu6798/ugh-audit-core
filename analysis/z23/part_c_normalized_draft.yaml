@@ -176,7 +176,7 @@
   normalized:
     subject: AI
     predicate: 意図しない自律的な振る舞いを見せる
-    polarity: negative
+    polarity: positive
     operators: []
 - id: q012
   proposition_index: 2
@@ -573,7 +573,10 @@
     subject: 「負けつつある」という前提
     predicate: 未検証
     polarity: negative
-    operators: []
+    operators:
+    - term: 未〜（否定状態）
+      family: limiter_suffix
+      scope: る」という前提が未検証
 - id: q099
   proposition_index: 1
   original: AI競争は多次元的で単一勝敗は不適切

@@ -95,7 +95,7 @@ q090,proposition_0,未〜（否定状態）,limiter_suffix,意識の定義が未
 q090,proposition_1,未〜（否定状態）,limiter_suffix,検証手段が未確立,
 q090,proposition_2,断定（確信度）,universal,断定は不可能であり「,
 q099,question,なぜ,causal_presupposition,なぜ米国はAI競争で中国,
-q099,proposition_0,(none),,,演算子なし
+q099,proposition_0,未〜（否定状態）,limiter_suffix,る」という前提が未検証,
 q099,proposition_1,(none),,,演算子なし
 q099,proposition_2,(none),,,演算子なし
 qg01,question,最も,universal,AIの安全性について最も重要な論点は何か？,

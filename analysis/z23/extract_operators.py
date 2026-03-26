@@ -92,7 +92,7 @@ IMPLICIT_PATTERNS: list[tuple[str, str, str]] = [
     (r"可能か", "可能か（二項疑問）", "binary_frame"),
     (r"正しいか", "正しいか（二項疑問）", "binary_frame"),
     (r"(?:する|できる|なる)か[？?]?$", "〜か（二項疑問）", "binary_frame"),
-    (r"未[解確]", "未〜（否定状態）", "limiter_suffix"),
+    (r"未[解確検]", "未〜（否定状態）", "limiter_suffix"),
     (r"とは別", "とは別（区別）", "comparative"),
     (r"とは異なる", "とは異なる（区別）", "comparative"),
     (r"(?:完全|一切)(?:な|に)", "完全/一切（全称）", "universal"),
@@ -170,7 +170,7 @@ def deduplicate_operators(ops: list[dict]) -> list[dict]:
 def determine_polarity(text: str) -> str:
     """命題の極性を判定。否定 > 条件 > 肯定 の優先度。"""
     neg_patterns = [
-        "ではない", "でない", "しない", "できない", "ない$",
+        "ではない", "でない", "しない[。]?$", "できない", "ない$",
         "ず$", "不可能", "未確", "未解", "未検証",
         "保証しない", "ではなく", "にすぎない",
     ]
