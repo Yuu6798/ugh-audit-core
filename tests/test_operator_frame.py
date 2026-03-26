@@ -187,3 +187,13 @@ class TestNoRegression:
         response = "AIの倫理的課題について検討する必要がある"
         hits, hit_ids, miss_ids = check_propositions(response, props)
         assert 0 in miss_ids
+
+    def test_weak_overlap_not_recovered(self):
+        """大命題で2語のみ一致 + マーカー存在でも偽回収しない
+
+        レビュー指摘: 9バイグラム中2語一致 (fr=0.22) はfull_recall不足で却下。
+        """
+        props = ["モデル評価指標の単一最適化に依存すべきではない"]
+        response = "モデル評価は必要だ"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"弱overlap命題が偽回収された: hit_ids={hit_ids}"

@@ -914,11 +914,15 @@ def check_propositions(
             # --- 演算子フレーム回収 ---
             # 通常マッチ失敗時、命題に演算子が含まれていれば
             # 回答が演算子効果を反映しているか確認し、緩和閾値で再判定する。
+            # full_recall >= 0.25 で大命題での偶然2語一致を排除する。
             op = detect_operator(prop)
             if op is not None:
                 markers = OPERATOR_CATALOG[op.family]["response_markers"]
                 marker_found = any(m in response_text for m in markers)
-                if marker_found and direct_recall >= 0.10 and overlap_count >= 2:
+                if (marker_found
+                        and direct_recall >= 0.10
+                        and full_recall >= 0.25
+                        and overlap_count >= 2):
                     hit_ids.append(i)
                     continue
             miss_ids.append(i)
