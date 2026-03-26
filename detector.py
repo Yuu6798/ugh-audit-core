@@ -983,18 +983,13 @@ def check_propositions(
             op = detect_operator(prop)
             if op is not None:
                 markers = OPERATOR_CATALOG[op.family]["response_markers"]
-                # マーカーチェックを概念近傍にスコーピング（節分割）
+                # マーカーチェック: 概念を含む文内にマーカーがあるか
+                # (文レベルスコーピング — 節分割は否定チェックのみに適用)
                 marker_found = False
                 for sent in _split_sentences(response_text):
-                    clauses = re.split(
-                        r'(?:が、|しかし、|ただし、|けれど、|一方、)', sent,
-                    )
-                    for clause in clauses:
-                        if not clause.strip():
-                            continue
-                        if any(bg in clause for bg in overlap_set):
-                            if any(m in clause for m in markers):
-                                marker_found = True
+                    if any(bg in sent for bg in overlap_set):
+                        if any(m in sent for m in markers):
+                            marker_found = True
                             break
                 if (marker_found
                         and direct_recall >= 0.10
@@ -1022,8 +1017,7 @@ def check_propositions(
                     # 否定されている場合は矛盾として却下
                     _POS_DEONTIC = ("すべき", "べき")
                     is_positive_deontic = (
-                        op.family == "deontic"
-                        and any(pd in prop for pd in _POS_DEONTIC)
+                        any(pd in prop for pd in _POS_DEONTIC)
                         and not has_neg_deontic
                     )
                     if is_positive_deontic and _response_has_negation(
