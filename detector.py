@@ -40,7 +40,7 @@ OPERATOR_CATALOG: Dict[str, dict] = {
             r"できない",
             r"不十分",
             r"不可能",
-            r"未[\u4e00-\u9fff]{1,4}",
+            r"未(?!来|満)[\u4e00-\u9fff]{1,4}",
             r"保証しない",
             r"[\u4e00-\u9fff]ない$",
         ],

@@ -217,3 +217,22 @@ class TestNoRegression:
         assert result.family == "binary_frame"
         assert result.token == "二項対立"
         assert result.position == 2
+
+    def test_mi_prefix_excludes_mirai(self):
+        """「未来」は否定演算子として検出しない"""
+        result = detect_operator("未来の技術は予測困難")
+        # negationとして検出されないこと
+        assert result is None or result.family != "negation"
+
+    def test_mi_prefix_excludes_miman(self):
+        """「未満」は否定演算子として検出しない"""
+        result = detect_operator("閾値未満のスコアは無視する")
+        assert result is None or result.family != "negation"
+
+    def test_mi_prefix_detects_true_negation(self):
+        """「未解明」「未確定」等は否定演算子として検出する"""
+        for prop in ["メカニズムは未解明", "定義が未確定", "前提が未検証"]:
+            result = detect_operator(prop)
+            assert result is not None and result.family == "negation", (
+                f"'{prop}' should be detected as negation"
+            )
