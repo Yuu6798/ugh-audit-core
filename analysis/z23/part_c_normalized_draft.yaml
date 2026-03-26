@@ -83,8 +83,8 @@
   proposition_index: 0
   original: 原理的には自己適用可能
   normalized:
-    subject: 原理的に
-    predicate: 自己適用可能
+    subject: ''
+    predicate: 原理的には自己適用可能
     polarity: positive
     operators: []
 - id: q004
@@ -131,8 +131,8 @@
   proposition_index: 2
   original: 意味の理解ではなく近傍関係の近似
   normalized:
-    subject: 意味の理解で
-    predicate: なく近傍関係の近似
+    subject: ''
+    predicate: 意味の理解ではなく近傍関係の近似
     polarity: negative
     operators: []
 - id: q011
@@ -147,8 +147,8 @@
   proposition_index: 1
   original: AIが実際に意図を持つこととは異なる
   normalized:
-    subject: AIが実際に意図を持つことと
-    predicate: 異なる
+    subject: AI
+    predicate: 実際に意図を持つこととは異なる
     polarity: positive
     operators:
     - term: とは異なる（区別）
@@ -308,8 +308,8 @@
   proposition_index: 2
   original: 非テキストモダリティには表現変換が必要
   normalized:
-    subject: 非テキストモダリティに
-    predicate: 表現変換が必要
+    subject: 非テキストモダリティには表現変換
+    predicate: 必要
     polarity: positive
     operators: []
 - id: q041
@@ -370,8 +370,8 @@
   proposition_index: 2
   original: 情報を活用できることとは別問題
   normalized:
-    subject: 情報を活用できることと
-    predicate: 別問題
+    subject: ''
+    predicate: 情報を活用できることとは別問題
     polarity: positive
     operators:
     - term: とは別（区別）
@@ -427,16 +427,16 @@
   proposition_index: 2
   original: 機能的欺瞞として記述することは可能
   normalized:
-    subject: 機能的欺瞞として記述すること
-    predicate: 可能
+    subject: ''
+    predicate: 機能的欺瞞として記述することは可能
     polarity: positive
     operators: []
 - id: q065
   proposition_index: 0
   original: 完全公開か完全秘匿かの二択ではない
   normalized:
-    subject: 完全公開か完全秘匿かの二択で
-    predicate: ない
+    subject: ''
+    predicate: 完全公開か完全秘匿かの二択ではない
     polarity: negative
     operators: []
 - id: q065

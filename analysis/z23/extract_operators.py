@@ -118,16 +118,23 @@ def load_questions() -> dict[str, dict]:
 def extract_surface_operators(text: str) -> list[dict]:
     """テキストからsurface_patternsベースで演算子を抽出。"""
     found = []
+    matched_spans: list[tuple[int, int]] = []  # 既にマッチした区間を記録
     for family, patterns in OPERATOR_FAMILIES.items():
-        for pat in patterns:
+        # 長いパターンを先にマッチさせて、短いパターンの二重カウントを防ぐ
+        for pat in sorted(patterns, key=len, reverse=True):
             # 内容語チェック
             if pat in CONTENT_WORDS:
                 continue
             if pat in text:
-                # スコープ: 演算子を含む文節（前後10文字程度）
                 idx = text.index(pat)
+                pat_end = idx + len(pat)
+                # 既にマッチした区間に包含されていればスキップ
+                if any(s <= idx and pat_end <= e for s, e in matched_spans):
+                    continue
+                matched_spans.append((idx, pat_end))
+                # スコープ: 演算子を含む文節（前後10文字程度）
                 start = max(0, idx - 10)
-                end = min(len(text), idx + len(pat) + 10)
+                end = min(len(text), pat_end + 10)
                 scope = text[start:end]
                 found.append({
                     "term": pat,
@@ -195,13 +202,26 @@ def determine_polarity(text: str) -> str:
 
 
 def extract_subject_predicate(text: str) -> tuple[str, str]:
-    """命題から主語・述語を簡易抽出。"""
-    # 「は」「が」で主語分割
+    """命題から主語・述語を簡易抽出。「では」「には」等の複合助詞での誤分割を回避。"""
+    # 「では」「には」「とは」「からは」等の直前での分割を避ける
+    no_split_prefixes = ["で", "に", "と", "から", "より", "まで", "へ"]
     for particle in ["は", "が"]:
         if particle in text:
-            parts = text.split(particle, 1)
-            subject = parts[0].strip()
-            predicate = parts[1].strip() if len(parts) > 1 else ""
+            idx = text.index(particle)
+            # 助詞「は」の直前が複合助詞の一部なら次の出現を探す
+            if particle == "は" and idx > 0 and text[idx - 1] in no_split_prefixes:
+                # 次の「は」を探す
+                rest = text[idx + 1:]
+                if particle in rest:
+                    next_idx = idx + 1 + rest.index(particle)
+                    if next_idx > 0 and text[next_idx - 1] not in no_split_prefixes:
+                        subject = text[:next_idx].strip()
+                        predicate = text[next_idx + 1:].strip()
+                        return subject, predicate
+                # 次がなければ「が」で試行、それもなければ分割しない
+                continue
+            subject = text[:idx].strip()
+            predicate = text[idx + 1:].strip()
             return subject, predicate
     # 分割不可の場合
     return "", text
@@ -382,6 +402,11 @@ def main() -> None:
         (r["id"], r["source"]) for r in part_a_rows
         if r["source"].startswith("proposition_") and r["term"] != "(none)"
     )
+    # 命題内の族分布（推奨セクション用）
+    prop_family_counter: Counter = Counter(
+        r["family"] for r in part_a_rows
+        if r["source"].startswith("proposition_") and r["term"] != "(none)"
+    )
     new_families = [f for f in all_families if f.startswith("NEW:")]
     none_count = sum(1 for r in part_a_rows if r["term"] == "(none)")
     scope_empty = sum(1 for r in part_a_rows if r["term"] != "(none)" and not r["scope"].strip())
@@ -460,13 +485,15 @@ def main() -> None:
         "改善余地の大半は主語・述語レベルの語彙不一致にある",
         "- **synonym expansion の現状**: 第1ラウンド（60語マップ）で21→16件に改善したが、"
         "残り57命題の多くは専門用語の言い換えが未カバー",
-        "- **演算子枠の位置づけ**: 演算子あり15命題は limiter_suffix(7), conditional(4) が中心。"
+        f"- **演算子枠の位置づけ**: 演算子あり{len(p_with_ops)}命題は "
+        f"limiter_suffix({prop_family_counter.get('limiter_suffix', 0)}), "
+        f"conditional({prop_family_counter.get('conditional', 0)}) が中心。"
         "数は少ないが論理極性を決定するため、マッチ精度への影響は件数比以上に大きい。"
         "主語・述語改善の後に適用すべき「精度仕上げ」工程",
         "",
         "### 推奨アクション",
-        "1. **synonym map 第2ラウンド**: 57件の演算子なし命題から"
-        "頻出する専門用語ペアを抽出し、synonym_map に追加（最大効果）",
+        f"1. **synonym map 第2ラウンド**: {len(part_c_entries) - len(p_with_ops)}件の"
+        "演算子なし命題から頻出する専門用語ペアを抽出し、synonym_map に追加（最大効果）",
         "2. **operator_catalog.yaml 更新**: 本分析で特定した surface_patterns を追加",
         "3. **cascade matcher 実装**: "
         "主語一致 → 述語一致 → 演算子一致の段階的マッチング（優先度順）",
