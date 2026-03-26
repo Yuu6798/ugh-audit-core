@@ -377,6 +377,11 @@ def main() -> None:
         r["id"] for r in part_a_rows
         if r["source"] == "question" and r["term"] != "(none)"
     )
+    # 命題レベルの演算子有無カウント
+    p_with_ops = set(
+        (r["id"], r["source"]) for r in part_a_rows
+        if r["source"].startswith("proposition_") and r["term"] != "(none)"
+    )
     new_families = [f for f in all_families if f.startswith("NEW:")]
     none_count = sum(1 for r in part_a_rows if r["term"] == "(none)")
     scope_empty = sum(1 for r in part_a_rows if r["term"] != "(none)" and not r["scope"].strip())
@@ -447,20 +452,32 @@ def main() -> None:
         "- 演算子カタログ拡張は detector.py の f3_operator 判定のみに影響",
         "",
         "## 4. 次工程推奨\n",
-        "### 優先度: 演算子枠 > 主語・述語枠",
-        "- **根拠**: Z_23の主な不一致原因は、回答が命題の論理構造（否定・限定・条件）を"
-        "捕捉していないケースが多い。主語・述語の語彙一致は synonym expansion で"
-        "一定程度カバー済み（21→16件に改善）",
+        "### 優先度: 主語・述語枠 > 演算子枠",
+        f"- **根拠（データ）**: Z_23 の{len(part_c_entries)}命題中、"
+        f"演算子あり{len(p_with_ops)}件（{len(p_with_ops)/len(part_c_entries):.1%}）、"
+        f"演算子なし{len(part_c_entries) - len(p_with_ops)}件"
+        f"（{(len(part_c_entries) - len(p_with_ops))/len(part_c_entries):.1%}）。"
+        "改善余地の大半は主語・述語レベルの語彙不一致にある",
+        "- **synonym expansion の現状**: 第1ラウンド（60語マップ）で21→16件に改善したが、"
+        "残り57命題の多くは専門用語の言い換えが未カバー",
+        "- **演算子枠の位置づけ**: 演算子あり15命題は limiter_suffix(7), conditional(4) が中心。"
+        "数は少ないが論理極性を決定するため、マッチ精度への影響は件数比以上に大きい。"
+        "主語・述語改善の後に適用すべき「精度仕上げ」工程",
         "",
         "### 推奨アクション",
-        "1. **operator_catalog.yaml 更新**: 本分析で特定した surface_patterns を追加",
-        "2. **cascade matcher 実装**: 演算子一致 → 主語一致 → 述語一致の段階的マッチング",
-        "3. **z-gate 導入**: 演算子不一致時の自動修復パス（operator_required_action 参照）",
-        "4. **X_7 / Y_6 分析**: 構造不一致・前提不一致の残り13件を別途処理",
+        "1. **synonym map 第2ラウンド**: 57件の演算子なし命題から"
+        "頻出する専門用語ペアを抽出し、synonym_map に追加（最大効果）",
+        "2. **operator_catalog.yaml 更新**: 本分析で特定した surface_patterns を追加",
+        "3. **cascade matcher 実装**: "
+        "主語一致 → 述語一致 → 演算子一致の段階的マッチング（優先度順）",
+        "4. **z-gate 導入**: 演算子不一致時の自動修復パス（operator_required_action 参照）",
+        "5. **X_7 / Y_6 分析**: 構造不一致・前提不一致の残り13件を別途処理",
         "",
         "### 期待効果",
-        f"- 演算子正規化により Z_23 の{len(unique_ids)}問中、推定15〜18問の命題ヒット率改善",
-        "- 命題ヒット率: 48.1% → 推定 58〜62%（cascade matcher 込みで 65% 到達見込み）",
+        f"- 主語・述語改善（{len(part_c_entries) - len(p_with_ops)}命題対象）: "
+        "推定20〜30命題の新規ヒット",
+        f"- 演算子改善（{len(p_with_ops)}命題対象）: 推定8〜12命題の新規ヒット",
+        "- 合算: 命題ヒット率 48.1% → 推定 60〜65%（cascade matcher 込み）",
     ])
 
     part_d_path = OUT_DIR / "part_d_summary.md"
