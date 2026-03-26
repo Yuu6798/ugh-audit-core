@@ -2,6 +2,7 @@ from .calculator import build_state, compute_c, compute_delta_e, compute_grv, co
 from .decision import build_budget, build_policy
 from .metapatch import MetaPatchCompiler, MetaPatchPlan
 from .models import Budget, EngineConfig, EngineResult, Evidence, Policy, State
+from .runtime import UGHAuditEngine, to_legacy_payload
 
 __all__ = [
     "Evidence",
@@ -19,4 +20,6 @@ __all__ = [
     "build_state",
     "build_policy",
     "build_budget",
+    "UGHAuditEngine",
+    "to_legacy_payload",
 ]
