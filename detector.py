@@ -9,11 +9,123 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 import yaml
 
 from ugh_calculator import Evidence
+
+
+# --- 演算子検出 ---
+
+class OperatorInfo(NamedTuple):
+    """命題中の演算子検出結果"""
+    family: str      # 演算子族 (negation / deontic / skeptical_modality / binary_frame)
+    token: str       # マッチしたトークン
+    position: int    # 命題中の開始位置
+
+
+# 演算子カタログ: 族定義と検出パターン
+# priority が小さいほど共起時に優先される
+# 共起ルール:
+#   deontic + negation → deontic 優先 (「べきではない」は当為表現)
+#   skeptical_modality + binary_frame → binary_frame 優先
+OPERATOR_CATALOG: Dict[str, dict] = {
+    "negation": {
+        "patterns": [
+            r"ではない",
+            r"でない",
+            r"にならない",
+            r"しない",
+            r"できない",
+            r"不十分",
+            r"不可能",
+            r"未(?!来|満)[\u4e00-\u9fff]{1,4}",
+            r"保証しない",
+            r"[\u4e00-\u9fff]ない$",
+        ],
+        "effect": "polarity_flip",
+        "priority": 2,
+        "response_markers": [
+            "ではない", "ではなく", "しない", "できない",
+            "ではありません", "ありません",
+            "不十分", "不可能", "限らない",
+            "必ずしも", "とは言えない",
+            "未解", "未確", "未検", "未整", "未発",
+        ],
+    },
+    "deontic": {
+        "patterns": [
+            r"べきではない",
+            r"すべきではない",
+            r"すべき",
+            r"べき",
+        ],
+        "effect": "normative_flag",
+        "priority": 1,
+        "response_markers": [
+            "べき", "すべき", "必要", "求められる",
+            "義務", "当為", "規範",
+        ],
+    },
+    "skeptical_modality": {
+        "patterns": [
+            r"かもしれない",
+            r"とは限らない",
+            r"可能性がある",
+            r"不確[実定]",
+            r"明確ではない",
+        ],
+        "effect": "certainty_downgrade",
+        "priority": 3,
+        "response_markers": [
+            "かもしれない", "可能性", "必ずしも",
+            "とは限らない", "不確実", "不明", "断定できない",
+        ],
+    },
+    "binary_frame": {
+        "patterns": [
+            r"ではなく",
+            r"よりも",
+            r"二項対立",
+            r"二択",
+            r"か[\u4e00-\u9fff]*かの",
+        ],
+        "effect": "contrastive_split",
+        "priority": 1,
+        "response_markers": [
+            "ではなく", "二項対立", "二択", "対立",
+            "多面的", "単純化できない", "区別", "異なる",
+        ],
+    },
+}
+
+
+def detect_operator(proposition: str) -> Optional[OperatorInfo]:
+    """命題文字列から演算子を検出し、最優先の1件を返す
+
+    複数族がマッチした場合は priority (小さいほど優先) で解決する。
+    同一 priority 内では命題中で先に出現する方を採用する。
+    """
+    matches: List[OperatorInfo] = []
+    for family, config in OPERATOR_CATALOG.items():
+        # 族内の全パターンをスキャンし、最早位置のマッチを採用する
+        best_in_family: Optional[OperatorInfo] = None
+        for pattern in config["patterns"]:
+            m = re.search(pattern, proposition)
+            if m and (best_in_family is None or m.start() < best_in_family.position):
+                best_in_family = OperatorInfo(
+                    family=family,
+                    token=m.group(),
+                    position=m.start(),
+                )
+        if best_in_family is not None:
+            matches.append(best_in_family)
+    if not matches:
+        return None
+    # priority昇順 → position昇順 でソートし、最優先を返す
+    matches.sort(key=lambda info: (OPERATOR_CATALOG[info.family]["priority"], info.position))
+    return matches[0]
 
 # --- YAML辞書のロード ---
 _REGISTRY_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "registry"
@@ -717,6 +829,65 @@ def _expand_with_synonyms(bigrams: set) -> set:
 # 最小overlap数: 表層一致（2語のみの偶然一致）を排除する
 _MIN_OVERLAP = 3
 
+# 否定極性マーカー: 回答が否定的文脈を含むかの検証に使用
+# 助詞/動詞語幹付きの具体的否定形で定義する
+_NEGATION_POLARITY_FORMS = [
+    # 動詞・助動詞否定形 (助詞/語幹 + ない)
+    "ではない", "ではなく", "でない", "しない", "できない",
+    "ならない", "はない", "もない", "がない", "のない",
+    # 丁寧否定
+    "ません",
+    # 連体否定
+    "無い",
+    # 古典否定 (「〜せず」「〜できず」)
+    "せず", "きず", "らず", "ずに",
+    # 不X (否定状態)
+    "不十分", "不可能", "不明", "不確", "不適", "不足", "不要",
+    # 未X (否定状態)
+    "未解", "未確", "未検", "未整", "未発", "未到",
+    # 非X (否定属性)
+    "非対", "非線", "非効", "非合",
+]
+
+# 推量表現: 否定形を含むが否定ではない表現
+# 極性検証の前にテキストから除外して偽マッチを防ぐ
+_SPECULATIVE_EXCLUSIONS = ["かもしれない", "かもしれません"]
+
+
+def _response_has_negation(
+    response_text: str,
+    concept_bigrams: Optional[set] = None,
+) -> bool:
+    """回答テキストに否定形が含まれるか判定する
+
+    推量表現 (かもしれない/かもしれません) を事前除外してから検査する。
+    concept_bigrams が指定された場合、概念バイグラムを含む文のみを検査し、
+    無関係な副文での偽マッチを防止する。
+    """
+    if concept_bigrams:
+        # 概念近傍スコーピング: 概念を含む節のみで否定形を検査
+        # 逆接接続詞 (が、/しかし、/ただし、/けれど、/一方、) で節分割し、
+        # 「概念は〜が、別件は不明」型の偽マッチを防止する
+        for sent in _split_sentences(response_text):
+            clauses = re.split(r'(?:が、|しかし、|ただし、|けれど、|一方、)', sent)
+            for clause in clauses:
+                clause = clause.strip()
+                if not clause:
+                    continue
+                if not any(bg in clause for bg in concept_bigrams):
+                    continue
+                cleaned = clause
+                for excl in _SPECULATIVE_EXCLUSIONS:
+                    cleaned = cleaned.replace(excl, "")
+                if any(form in cleaned for form in _NEGATION_POLARITY_FORMS):
+                    return True
+        return False
+    # フォールバック: 全文検査
+    cleaned = response_text
+    for excl in _SPECULATIVE_EXCLUSIONS:
+        cleaned = cleaned.replace(excl, "")
+    return any(form in cleaned for form in _NEGATION_POLARITY_FORMS)
+
 
 def check_propositions(
     response_text: str,
@@ -804,6 +975,59 @@ def check_propositions(
         if direct_recall >= 0.15 and full_recall >= 0.35 and overlap_count >= min_required:
             hit_ids.append(i)
         else:
+            # --- 演算子フレーム回収 ---
+            # 通常マッチ失敗時、命題に演算子が含まれていれば
+            # 回答が演算子効果を反映しているか確認し、緩和閾値で再判定する。
+            # full_recall >= 0.25 で大命題での偶然2語一致を排除する。
+            # polarity_flip 効果の場合、回答に否定形が存在することを追加検証する。
+            op = detect_operator(prop)
+            if op is not None:
+                markers = OPERATOR_CATALOG[op.family]["response_markers"]
+                # マーカーチェック: 概念を含む文内にマーカーがあるか
+                # (文レベルスコーピング — 節分割は否定チェックのみに適用)
+                marker_found = False
+                for sent in _split_sentences(response_text):
+                    if any(bg in sent for bg in overlap_set):
+                        if any(m in sent for m in markers):
+                            marker_found = True
+                            break
+                if (marker_found
+                        and direct_recall >= 0.10
+                        and full_recall >= 0.25
+                        and overlap_count >= 2):
+                    # 極性検証: 否定命題は回答にも否定形が必要
+                    # polarity_flip (negation族) と、命題に否定deontic表現が
+                    # ある場合に適用。op.token ではなく命題テキストを直接検査し、
+                    # binary_frame 選出時のバイパスと skeptical 誤発火を防ぐ。
+                    _NEG_DEONTIC = (
+                        "べきではない", "すべきではない",
+                        "べきでない", "すべきでない",
+                        "べきじゃない", "すべきじゃない",
+                    )
+                    has_neg_deontic = any(nd in prop for nd in _NEG_DEONTIC)
+                    needs_polarity = (
+                        OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip"
+                        or has_neg_deontic
+                    )
+                    if needs_polarity and not _response_has_negation(
+                        response_text, overlap_set
+                    ):
+                        miss_ids.append(i)
+                        continue
+                    # 逆極性検証: 肯定deontic命題 (すべき) が回答で
+                    # 否定されている場合は矛盾として却下
+                    _POS_DEONTIC = ("すべき", "べき")
+                    is_positive_deontic = (
+                        any(pd in prop for pd in _POS_DEONTIC)
+                        and not has_neg_deontic
+                    )
+                    if is_positive_deontic and _response_has_negation(
+                        response_text, overlap_set
+                    ):
+                        miss_ids.append(i)
+                        continue
+                    hit_ids.append(i)
+                    continue
             miss_ids.append(i)
 
     return len(hit_ids), hit_ids, miss_ids
