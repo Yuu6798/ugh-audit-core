@@ -1002,6 +1002,7 @@ def check_propositions(
                     _NEG_DEONTIC = (
                         "べきではない", "すべきではない",
                         "べきでない", "すべきでない",
+                        "べきじゃない", "すべきじゃない",
                     )
                     has_neg_deontic = any(nd in prop for nd in _NEG_DEONTIC)
                     needs_polarity = (
