@@ -829,7 +829,6 @@ def _expand_with_synonyms(bigrams: set) -> set:
 _MIN_OVERLAP = 3
 
 # 否定極性マーカー: 回答が否定的文脈を含むかの検証に使用
-# bare「ない」は「かもしれない」等の非否定語にマッチするため
 # 助詞/動詞語幹付きの具体的否定形で定義する
 _NEGATION_POLARITY_FORMS = [
     # 動詞・助動詞否定形 (助詞/語幹 + ない)
@@ -849,10 +848,20 @@ _NEGATION_POLARITY_FORMS = [
     "非対", "非線", "非効", "非合",
 ]
 
+# 推量表現: 否定形を含むが否定ではない表現
+# 極性検証の前にテキストから除外して偽マッチを防ぐ
+_SPECULATIVE_EXCLUSIONS = ["かもしれない", "かもしれません"]
+
 
 def _response_has_negation(response_text: str) -> bool:
-    """回答テキストに否定形が含まれるか判定する"""
-    return any(form in response_text for form in _NEGATION_POLARITY_FORMS)
+    """回答テキストに否定形が含まれるか判定する
+
+    推量表現 (かもしれない/かもしれません) を事前除外してから検査する。
+    """
+    cleaned = response_text
+    for excl in _SPECULATIVE_EXCLUSIONS:
+        cleaned = cleaned.replace(excl, "")
+    return any(form in cleaned for form in _NEGATION_POLARITY_FORMS)
 
 
 def check_propositions(

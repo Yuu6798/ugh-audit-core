@@ -251,3 +251,10 @@ class TestNoRegression:
         response = "未来の技術革新が研究を加速する可能性がある"
         hits, hit_ids, miss_ids = check_propositions(response, props)
         assert 0 in miss_ids, f"未来でfalse hit: hit_ids={hit_ids}"
+
+    def test_speculative_masen_not_negation(self):
+        """「かもしれません」は否定形として扱わない"""
+        props = ["単一指標に依存すべきではない"]
+        response = "指標に依存するのが必要かもしれません"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"推量ませんが偽回収した: hit_ids={hit_ids}"
