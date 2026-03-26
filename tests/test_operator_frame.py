@@ -236,3 +236,18 @@ class TestNoRegression:
             assert result is not None and result.family == "negation", (
                 f"'{prop}' should be detected as negation"
             )
+
+    def test_negative_deontic_requires_polarity(self):
+        """「べきではない」命題は回答に否定形がなければ回収しない"""
+        props = ["単一指標に依存すべきではない"]
+        response = "指標に依存するのが必要であり重要だ"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"否定deonticが偽回収された: hit_ids={hit_ids}"
+
+    def test_mi_marker_no_false_match_on_mirai(self):
+        """response_markersの「未」が「未来」でfalse hitしない"""
+        props = ["ICLのメカニズムは未解明"]
+        # 回答に「未来」はあるが否定状態の「未解」はない
+        response = "未来の技術革新が研究を加速する可能性がある"
+        hits, hit_ids, miss_ids = check_propositions(response, props)
+        assert 0 in miss_ids, f"未来でfalse hit: hit_ids={hit_ids}"

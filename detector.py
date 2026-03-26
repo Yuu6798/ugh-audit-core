@@ -49,7 +49,8 @@ OPERATOR_CATALOG: Dict[str, dict] = {
         "response_markers": [
             "ではない", "ではなく", "しない", "できない",
             "不十分", "不可能", "限らない",
-            "必ずしも", "とは言えない", "未",
+            "必ずしも", "とは言えない",
+            "未解", "未確", "未検", "未整", "未発",
         ],
     },
     "deontic": {
@@ -937,11 +938,16 @@ def check_propositions(
                         and direct_recall >= 0.10
                         and full_recall >= 0.25
                         and overlap_count >= 2):
-                    # 極性検証: negation命題は回答にも否定形が必要
-                    if OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip":
-                        if not _response_has_negation(response_text):
-                            miss_ids.append(i)
-                            continue
+                    # 極性検証: 否定を含む演算子は回答にも否定形が必要
+                    # polarity_flip (negation族) に加え、
+                    # 「べきではない」等の否定含みdeonticも対象
+                    needs_polarity = (
+                        OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip"
+                        or "ない" in op.token
+                    )
+                    if needs_polarity and not _response_has_negation(response_text):
+                        miss_ids.append(i)
+                        continue
                     hit_ids.append(i)
                     continue
             miss_ids.append(i)
