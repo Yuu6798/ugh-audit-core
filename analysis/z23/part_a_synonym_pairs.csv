@@ -103,6 +103,8 @@ q074,0,メカニズム,可能性,n/a,false,skip_same_word
 q074,1,裕福な側,裕福な個人や企業,n/a,false,skip_same_word
 q074,1,恩恵,恩恵,n/a,false,skip_same_word
 q074,1,偏り,受けにくい,偏り → 受けにくい,false,add
+q099,0,前提,（前提 already in dict）,前提 → 仮定,true,skip_duplicate
+q099,0,未検証,（回答に未検証の対応なし）,n/a,false,skip_same_word
 q099,1,多次元的,複雑な要因,多次元 → 複雑,false,add
 q099,1,単一勝敗,どちらが優位に立つか,勝敗 → 優位,false,add
 q099,2,地政学的,国際的な影響力,地政学 → 国際的,false,add
