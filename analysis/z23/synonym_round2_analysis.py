@@ -169,7 +169,17 @@ def main():
     responses = load_responses(jsonl_path)
 
     # Filter operator-free propositions
-    op_free = [p for p in props if not p.get('has_operators', True)]
+    # yaml.safe_load では operators が normalized.operators に入る。
+    # manual fallback では has_operators フラグを使う。
+    def _is_op_free(p: dict) -> bool:
+        # yaml.safe_load 形式
+        ops = p.get('normalized', {}).get('operators', None)
+        if ops is not None:
+            return len(ops) == 0
+        # manual fallback 形式
+        return not p.get('has_operators', True)
+
+    op_free = [p for p in props if _is_op_free(p)]
     print(f"Operator-free propositions: {len(op_free)}")
     print(f"Responses loaded: {len(responses)}")
 
