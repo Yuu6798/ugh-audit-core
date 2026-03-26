@@ -20,6 +20,10 @@
 - **理由**: 既存10族のいずれにも該当しない当為（〜べき）表現を捕捉する必要がある
 - **代表語**: べき（当為）
 - **既存族との差異**: universal（事実の全称）やconditional（条件）とは異なり、規範的判断（当為・義務）を規定する。論理構造を「事実→当為」に変換する機能語
+- **境界ケースの線引き**:
+  - **skeptical_modality との重複**: 「本当にXすべきか」→ skeptical_modality（「本当に」）+ deontic（「べき」）の**複合タグ**として処理。判定優先度は skeptical_modality > deontic（懐疑が当為の射程を変更するため、懐疑側を primary_family とする）
+  - **binary_frame との重複**: 「すべきか否か」→ binary_frame（「か否か」）+ deontic（「べき」）の**複合タグ**。判定優先度は binary_frame > deontic（二項対立構造が文の論理骨格を規定するため、binary_frame を primary_family とする）
+  - **判定ルール**: 「べき」単独出現 → deontic。他族の演算子と共起する場合 → 両方を operators[] に記録し、scope で射程を区別。detector.py 組み込み時は primary_family で分岐する
 
 ## 3. リスク
 
