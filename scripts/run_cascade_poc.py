@@ -218,6 +218,9 @@ def grid_search(results: list[dict]) -> None:
             total_positive = 0
 
             for r in results:
+                # Tier 1 hit 行は grid search から除外（Tier 2 未評価のため）
+                if r.get("verdict") == "hit_tier1":
+                    continue
                 t2 = r.get("tier2", r)
                 n_segments = len(t2.get("all_scores", []))
                 gap_valid = n_segments > 1
