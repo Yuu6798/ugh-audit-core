@@ -210,7 +210,9 @@ def tier2_candidate(
     top2_score = float(scores[sorted_indices[1]]) if len(sorted_indices) > 1 else 0.0
     gap = top1_score - top2_score
 
-    pass_tier2 = (top1_score >= theta) and (gap >= delta)
+    # セグメント1件のみの場合、gap は弁別不能（実質 undefined）→ pass しない
+    gap_valid = len(sorted_indices) > 1
+    pass_tier2 = (top1_score >= theta) and gap_valid and (gap >= delta)
 
     return {
         "top1_sentence": top1_sentence,
