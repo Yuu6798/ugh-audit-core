@@ -21,6 +21,28 @@ from cascade_matcher import (
 )
 
 
+def load_tier1_hits(
+    path: str = "data/eval/audit_102_main_baseline_round4.csv",
+) -> dict[str, set[int]]:
+    """ベースラインから Tier 1 hit 済みの proposition index を読み込む。
+
+    Returns:
+        {question_id: {hit_prop_idx, ...}}
+    """
+    hit_map: dict[str, set[int]] = {}
+    with open(path, encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            qid = row["id"]
+            hit_ids_str = row.get("hit_ids", "[]")
+            # Parse "[0, 2]" style
+            hit_ids_str = hit_ids_str.strip("[] ")
+            if hit_ids_str:
+                hit_map[qid] = {int(x.strip()) for x in hit_ids_str.split(",")}
+            else:
+                hit_map[qid] = set()
+    return hit_map
+
+
 def load_dev_cascade(path: str = "data/eval/dev_cascade_20.csv") -> list[dict]:
     """dev_cascade_20.csv を読み込む。"""
     with open(path, encoding="utf-8") as f:
@@ -79,17 +101,25 @@ def run_full_pipeline(
     model,
     f4_map: dict[str, float],
     synonym_dict: dict[str, list[str]],
+    tier1_hit_map: dict[str, set[int]] | None = None,
 ) -> list[dict]:
     """全件に Tier 2 → Tier 3 フルパイプラインを実行。"""
+    hit_map = tier1_hit_map or {}
     results = []
     for row in rows:
         qid = row["question_id"]
+        prop_idx = int(row["prop_idx"])
         atomic_units = json.loads(row["atomic_units"])
-        f4 = f4_map.get(qid, 0.0)
 
-        # concept_absent / ovl_insufficient は Tier 1 で miss
-        # hard_negative は Tier 1 で miss（miss 命題を選定しているため）
-        tier1_hit = False  # dev_cascade_20 は全件 Tier 1 miss
+        # f4: missing は 1.0 (fail-closed) として扱う
+        if qid not in f4_map:
+            print(f"  WARNING: {qid} not in f4_map, treating as f4=1.0 (fail-closed)")
+            f4 = 1.0
+        else:
+            f4 = f4_map[qid]
+
+        # Tier 1 hit をベースラインから導出
+        tier1_hit = prop_idx in hit_map.get(qid, set())
 
         full_result = run_cascade_full(
             proposition=row["core_proposition"],
@@ -322,13 +352,17 @@ def main():
     f4_map = load_f4_flags()
     print(f"Loaded f4 flags for {len(f4_map)} questions.")
 
+    print("Loading Tier 1 hit map...")
+    tier1_hit_map = load_tier1_hits()
+    print(f"Loaded Tier 1 hits for {len(tier1_hit_map)} questions.")
+
     print("Loading synonym dict...")
     synonym_dict = load_synonym_dict()
     print(f"Loaded {len(synonym_dict)} synonym entries.\n")
 
     # --- Tier 2 + Tier 3 フルパイプライン ---
     print("=== Full Pipeline (Tier 2 + Tier 3) ===\n")
-    results = run_full_pipeline(rows, model, f4_map, synonym_dict)
+    results = run_full_pipeline(rows, model, f4_map, synonym_dict, tier1_hit_map)
 
     print_tier2_results(results)
     print_full_results(results)
