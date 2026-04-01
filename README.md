@@ -45,6 +45,11 @@ AIの回答が「意味的に誠実だったか」を定量的に評価・記録
 │  State + Evidence → Policy       │
 │  accept / rewrite / regenerate   │
 │  + repair_order (修復opcode列)   │
+├──────────────────────────────────┤
+│  cascade_matcher.py (回収補助)   │
+│  Tier 2: SBert embedding候補生成 │
+│  Tier 3: 多条件ANDフィルタ       │
+│  → Z_RESCUED / miss              │
 └──────────────────────────────────┘
 ```
 
@@ -157,6 +162,7 @@ audit.py              # パイプライン統合 (detect → calculate → decid
 detector.py           # 検出層 — テキスト → Evidence
 ugh_calculator.py     # 電卓層 — Evidence → State
 decider.py            # 判定層 — State + Evidence → Policy
+cascade_matcher.py    # 回収補助 — SBert Tier 2 + 多条件 Tier 3
 registry/             # YAML辞書（予約語・演算子・前提フレーム）
 opcodes/              # 修復opcode定義
 
