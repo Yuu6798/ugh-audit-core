@@ -54,7 +54,7 @@ dev = [
 where = ["."]
 
 [tool.setuptools]
-py-modules = ["audit", "detector", "decider", "ugh_calculator"]
+py-modules = ["audit", "detector", "decider", "ugh_calculator", "cascade_matcher"]
 
 [tool.setuptools.package-data]
 registry = ["*.yaml"]
