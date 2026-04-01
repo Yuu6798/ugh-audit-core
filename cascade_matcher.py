@@ -390,8 +390,12 @@ def tier3_filter(
         }
     """
     c1 = not tier1_hit  # Tier 1 で miss であること（二重カウント防止）
-    # c2+c3: Tier 2 の pass_tier2 を使用（gap_valid 等の追加ロジックを包含）
-    c2_c3_pass = tier2_result.get("pass_tier2", False)
+    # c2/c3: 個別条件を独立に評価（診断用）+ pass_tier2 でゲート
+    pass_t2 = tier2_result.get("pass_tier2", False)
+    score_ok = tier2_result.get("top1_score", 0.0) >= theta
+    gap_ok = tier2_result.get("gap", 0.0) >= delta
+    c2 = pass_t2 and score_ok
+    c3 = pass_t2 and gap_ok
     c4 = f4_flag == 0.0
     atomic_result = check_atomic_alignment(
         atomic_units, tier2_result.get("top1_sentence", ""), synonym_dict
@@ -400,8 +404,8 @@ def tier3_filter(
 
     conditions = {
         "c1_tfidf_miss": c1,
-        "c2_embedding": c2_c3_pass,
-        "c3_gap": c2_c3_pass,
+        "c2_embedding": c2,
+        "c3_gap": c3,
         "c4_f4_clear": c4,
         "c5_atomic": c5,
     }
@@ -415,8 +419,8 @@ def tier3_filter(
         t2_gap = tier2_result.get("gap", 0)
         fail_names = {
             "c1_tfidf_miss": "Tier 1 already hit (duplicate)",
-            "c2_embedding": f"Tier 2 not passed (score={t2_score:.4f}, gap={t2_gap:.4f})",
-            "c3_gap": f"Tier 2 not passed (score={t2_score:.4f}, gap={t2_gap:.4f})",
+            "c2_embedding": f"top1_score ({t2_score:.4f}) < θ ({theta})" if not score_ok else "Tier 2 not passed (gap_valid=False or gap insufficient)",
+            "c3_gap": f"gap ({t2_gap:.4f}) < δ ({delta})" if not gap_ok else "Tier 2 not passed (gap_valid=False)",
             "c4_f4_clear": f"f4_flag={f4_flag} (premise concern)",
             "c5_atomic": "no atomic unit aligned with top1_sentence",
         }
