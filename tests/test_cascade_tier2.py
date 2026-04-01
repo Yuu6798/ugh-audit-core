@@ -1,7 +1,6 @@
 """tests/test_cascade_tier2.py — cascade Tier 2 テスト"""
 from __future__ import annotations
 
-import json
 
 import pytest
 

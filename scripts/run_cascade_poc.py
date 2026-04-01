@@ -17,10 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cascade_matcher import (
     load_model,
     tier2_candidate,
-    tier3_filter,
     run_cascade_full,
-    THETA_SBERT,
-    DELTA_GAP,
 )
 
 
@@ -176,7 +173,7 @@ def grid_search(results: list[dict]) -> None:
     thetas = np.arange(0.45, 0.66, 0.05)
     deltas = np.arange(0.03, 0.11, 0.01)
 
-    print(f"\n=== Grid Search: θ_sbert × δ_gap (Tier 2 only) ===")
+    print("\n=== Grid Search: θ_sbert × δ_gap (Tier 2 only) ===")
     print(f"{'θ':>6s} {'δ':>6s} {'rescue':>7s} {'false_r':>8s} {'prec':>6s} "
           f"{'recall':>7s} {'F1':>6s}")
     print("-" * 55)

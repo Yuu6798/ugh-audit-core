@@ -1,7 +1,6 @@
 """tests/test_cascade_tier3.py — cascade Tier 3 多条件フィルタテスト"""
 from __future__ import annotations
 
-import pytest
 
 from cascade_matcher import check_atomic_alignment, tier3_filter
 
