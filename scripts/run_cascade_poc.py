@@ -219,7 +219,13 @@ def grid_search(results: list[dict]) -> None:
 
             for r in results:
                 t2 = r.get("tier2", r)
-                pass_t2 = (t2.get("top1_score", 0) >= theta) and (t2.get("gap", 0) >= delta)
+                n_segments = len(t2.get("all_scores", []))
+                gap_valid = n_segments > 1
+                pass_t2 = (
+                    (t2.get("top1_score", 0) >= theta)
+                    and gap_valid
+                    and (t2.get("gap", 0) >= delta)
+                )
                 if r["expected_result"] in ("should_rescue", "may_rescue"):
                     total_positive += 1
                     if pass_t2:

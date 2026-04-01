@@ -89,13 +89,14 @@ class TestAtomicAlignmentSynonym:
 # ============================================================
 
 def _make_tier2_result(top1_score=0.65, gap=0.10, top1_sentence="テスト文"):
+    from cascade_matcher import THETA_SBERT, DELTA_GAP
     return {
         "top1_sentence": top1_sentence,
         "top1_score": top1_score,
         "top2_score": top1_score - gap,
         "gap": gap,
         "all_scores": [top1_score, top1_score - gap],
-        "pass_tier2": True,
+        "pass_tier2": (top1_score >= THETA_SBERT) and (gap >= DELTA_GAP),
     }
 
 
