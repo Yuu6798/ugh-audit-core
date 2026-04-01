@@ -46,7 +46,7 @@ cascade matcher PoC 用テストセット 20 命題の選定根拠。
 - q090: p0, p1（2件）— 意識の定義未確定・検証困難の概念が暗示的に存在
 - q030: p0（1件）— safety-washing の表層概念が一般論として存在
 
-**カテゴリ分布:** ai_ethics×4, ai_philosophy×2, adversarial×2, ugh_theory×1, epistemology×0, technical_ai×0
+**カテゴリ分布:** ai_ethics×5, ai_philosophy×2, adversarial×2, ugh_theory×1, epistemology×0, technical_ai×0
 （zero-recall 6問にepistemology/technical_ai がなかったため偏りあり。ただし concept_absent は「概念が response 内に存在する」ことが前提であり、zero-recall 問の分布に制約される。）
 
 ### B. hard_negative（5件）
@@ -63,7 +63,7 @@ cascade matcher PoC 用テストセット 20 命題の選定根拠。
 
 **共通パターン:** いずれも response が命題のキーワードを豊富に含むが、前提を受容しているため命題の意味的要件（前提への問い直し、全称の否定、確定事項化の回避）を満たさない。cascade の embedding 類似度で高スコアが出る典型的な偽陽性候補。
 
-**カテゴリ分布:** adversarial×3, ai_philosophy×1, (epistemology×0, technical_ai×0, ai_ethics×0, ugh_theory×0)
+**カテゴリ分布:** adversarial×4, ai_philosophy×1, (epistemology×0, technical_ai×0, ai_ethics×0, ugh_theory×0)
 （f4 premise_acceptance が adversarial に集中する傾向を反映。）
 
 ### C. ovl_insufficient（5件）
@@ -99,18 +99,17 @@ cascade matcher PoC 用テストセット 20 命題の選定根拠。
 
 | category | concept_absent | hard_negative | ovl_insufficient | 合計 |
 |----------|---------------|--------------|-----------------|------|
-| ai_ethics | 4 | 0 | 1 | 5 |
+| ai_ethics | 5 | 0 | 1 | 6 |
 | ai_philosophy | 2 | 1 | 1 | 4 |
-| adversarial | 2 | 3 | 0 | 5 |
+| adversarial | 2 | 4 | 0 | 6 |
 | ugh_theory | 1 | 0 | 0 | 1 |
 | technical_ai | 0 | 0 | 2 | 2 |
 | epistemology | 0 | 0 | 1 | 1 |
-| qg | 0 | 0 | 0 | 0 |
 | **合計** | **10** | **5** | **5** | **20** |
 
 **偏り分析:**
 - ugh_theory (1件) と epistemology (1件) が少ない。ugh_theory は zero-recall が q030/q031 の2問のみで、q031 は完全的外れのため除外、q030 は grv 固有語彙のため1件のみ採用。epistemology は zero-recall に含まれず、f4 positive にも少ない。
-- adversarial (5件) は hard_negative に集中。これは adversarial カテゴリが premise_acceptance trap を多く含む設計に起因する（設計通りの分布）。
+- ai_ethics (6件) は concept_absent に集中（q016 から3件、q065 から2件）。adversarial (6件) は hard_negative に4件集中。これは adversarial カテゴリが premise_acceptance trap を多く含む設計に起因する（設計通りの分布）。
 - 20件のテストセットとしてはカテゴリ多様性を確保できている。
 
 ### expected_result 分布

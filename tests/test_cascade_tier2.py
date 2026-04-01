@@ -5,11 +5,11 @@ import json
 
 import pytest
 
-from cascade_matcher import split_response
+from cascade_matcher import split_response, load_model, tier2_candidate
 
-# sentence-transformers は optional
+# sentence-transformers の実際の有無をチェック（関数は常にインポート可能だが実行時に失敗する）
 try:
-    from cascade_matcher import load_model, tier2_candidate
+    import sentence_transformers  # noqa: F401
     _HAS_SBERT = True
 except ImportError:
     _HAS_SBERT = False

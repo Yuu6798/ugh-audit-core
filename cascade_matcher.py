@@ -214,10 +214,10 @@ def tier2_candidate(
 
     return {
         "top1_sentence": top1_sentence,
-        "top1_score": round(top1_score, 4),
-        "top2_score": round(top2_score, 4),
-        "gap": round(gap, 4),
-        "all_scores": [round(float(s), 4) for s in scores],
+        "top1_score": top1_score,
+        "top2_score": top2_score,
+        "gap": gap,
+        "all_scores": [float(s) for s in scores],
         "pass_tier2": pass_tier2,
     }
 
@@ -328,10 +328,12 @@ def _term_in_text(
                 expanded = term.replace(key, syn)
                 if expanded in text:
                     return True
-        # 逆方向: synonym 側がtermに含まれる場合
+        # 逆方向: term 内に synonym 値が含まれる場合、key で置換して text を検索
         for syn in synonyms:
-            if syn in term and key in text:
-                return True
+            if syn in term:
+                expanded = term.replace(syn, key)
+                if expanded in text:
+                    return True
 
     # 3. 部分文字列一致（3文字以上）
     if len(term) >= _MIN_SUBSTRING_LEN:
