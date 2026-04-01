@@ -1,6 +1,7 @@
-"""cascade_matcher.py — cascade Tier 2 候補生成
+"""cascade_matcher.py — cascade Tier 2 候補生成 + Tier 3 多条件フィルタ
 
-SBert embedding による命題×response の文レベルマッチング。
+SBert embedding による命題×response の文レベルマッチング（Tier 2）と、
+多条件 AND フィルタによる精密判定（Tier 3）。
 detector.py の既存ロジックは一切変更しない。
 判定層（ugh_calculator 等）から呼ばれる補助モジュール。
 """
@@ -226,3 +227,255 @@ def _cosine_similarity_batch(query: np.ndarray, targets: np.ndarray) -> np.ndarr
     query_norm = query / (np.linalg.norm(query) + 1e-10)
     targets_norm = targets / (np.linalg.norm(targets, axis=1, keepdims=True) + 1e-10)
     return targets_norm @ query_norm
+
+
+# ============================================================
+# Tier 3: 多条件フィルタ
+# ============================================================
+
+# atomic 整合で部分文字列一致とみなす最小長
+_MIN_SUBSTRING_LEN = 3
+
+
+def check_atomic_alignment(
+    atomic_units: List[str],
+    candidate_sentence: str,
+    synonym_dict: Optional[Dict[str, List[str]]] = None,
+) -> Dict:
+    """atomic 単位の整合チェック。
+
+    各 atomic を "|" で split し、左辺（主語/対象）と右辺（述語/属性）の
+    両方が candidate_sentence に含まれるかを判定。
+
+    含有判定（OR で評価）:
+    - 完全一致
+    - synonym_dict での展開後の一致
+    - 3文字以上の部分文字列一致
+
+    Args:
+        atomic_units: ["left|right", ...] 形式の atomic リスト。
+        candidate_sentence: Tier 2 の top1_sentence。
+        synonym_dict: {term: [syn1, syn2, ...]} 形式。None なら synonym 展開なし。
+
+    Returns:
+        {
+            "aligned_count": int,
+            "total_count": int,
+            "aligned_units": [{"atomic": str, "left_match": bool, "right_match": bool}],
+            "pass": bool,  # aligned_count >= 1
+        }
+    """
+    if not atomic_units or not candidate_sentence:
+        return {
+            "aligned_count": 0,
+            "total_count": len(atomic_units) if atomic_units else 0,
+            "aligned_units": [],
+            "pass": False,
+        }
+
+    syn = synonym_dict or {}
+    aligned_units = []
+    aligned_count = 0
+
+    for atomic in atomic_units:
+        parts = atomic.split("|", 1)
+        if len(parts) != 2:
+            aligned_units.append({"atomic": atomic, "left_match": False, "right_match": False})
+            continue
+
+        left, right = parts[0].strip(), parts[1].strip()
+        left_match = _term_in_text(left, candidate_sentence, syn)
+        right_match = _term_in_text(right, candidate_sentence, syn)
+
+        if left_match and right_match:
+            aligned_count += 1
+
+        aligned_units.append({
+            "atomic": atomic,
+            "left_match": left_match,
+            "right_match": right_match,
+        })
+
+    return {
+        "aligned_count": aligned_count,
+        "total_count": len(atomic_units),
+        "aligned_units": aligned_units,
+        "pass": aligned_count >= 1,
+    }
+
+
+def _term_in_text(
+    term: str,
+    text: str,
+    synonym_dict: Dict[str, List[str]],
+) -> bool:
+    """term が text 内に含まれるかを判定。
+
+    1. 完全一致（term が text 内に出現）
+    2. synonym_dict 展開後の一致
+    3. 3文字以上の部分文字列一致（term の連続部分文字列）
+    """
+    # 1. 完全一致
+    if term in text:
+        return True
+
+    # 2. synonym 展開
+    # synonym_dict のキーは bigram 等の短い単位。term 内の各キーで展開を試みる。
+    for key, synonyms in synonym_dict.items():
+        if key in term:
+            for syn in synonyms:
+                # 元の term の key 部分を syn に置換して text 内検索
+                expanded = term.replace(key, syn)
+                if expanded in text:
+                    return True
+        # 逆方向: synonym 側がtermに含まれる場合
+        for syn in synonyms:
+            if syn in term and key in text:
+                return True
+
+    # 3. 部分文字列一致（3文字以上）
+    if len(term) >= _MIN_SUBSTRING_LEN:
+        for i in range(len(term)):
+            for j in range(i + _MIN_SUBSTRING_LEN, len(term) + 1):
+                sub = term[i:j]
+                if len(sub) >= _MIN_SUBSTRING_LEN and sub in text:
+                    return True
+
+    return False
+
+
+def tier3_filter(
+    tier2_result: Dict,
+    tier1_hit: bool,
+    f4_flag: float,
+    atomic_units: List[str],
+    synonym_dict: Optional[Dict[str, List[str]]] = None,
+    theta: float = THETA_SBERT,
+    delta: float = DELTA_GAP,
+) -> Dict:
+    """Tier 3 多条件フィルタ。全条件 AND で判定。
+
+    条件:
+    c1: tfidf miss 確認（tier1_hit == False）
+    c2: embedding 閾値（top1_score >= θ_sbert）
+    c3: gap 閾値（gap >= δ_gap）
+    c4: f4 非発火（f4_flag == 0.0）
+    c5: atomic 整合（1単位以上が top1_sentence に含まれる）
+
+    Args:
+        tier2_result: tier2_candidate() の返却値。
+        tier1_hit: Tier 1 (tfidf) での hit フラグ。True = 既に hit 済み。
+        f4_flag: structural_gate_summary の f4_flag (0.0 / 0.5 / 1.0)。
+        atomic_units: ["left|right", ...] 形式の atomic リスト。
+        synonym_dict: synonym 辞書。
+        theta: cosine similarity 閾値。
+        delta: gap 閾値。
+
+    Returns:
+        {
+            "verdict": "Z_RESCUED" | "miss",
+            "conditions": {
+                "c1_tfidf_miss": bool,
+                "c2_embedding": bool,
+                "c3_gap": bool,
+                "c4_f4_clear": bool,
+                "c5_atomic": bool,
+            },
+            "fail_reason": str | None,
+            "details": dict,
+        }
+    """
+    c1 = not tier1_hit  # Tier 1 で miss であること（二重カウント防止）
+    c2 = tier2_result.get("top1_score", 0.0) >= theta
+    c3 = tier2_result.get("gap", 0.0) >= delta
+    c4 = f4_flag == 0.0
+    atomic_result = check_atomic_alignment(
+        atomic_units, tier2_result.get("top1_sentence", ""), synonym_dict
+    )
+    c5 = atomic_result["pass"]
+
+    conditions = {
+        "c1_tfidf_miss": c1,
+        "c2_embedding": c2,
+        "c3_gap": c3,
+        "c4_f4_clear": c4,
+        "c5_atomic": c5,
+    }
+
+    all_pass = all(conditions.values())
+
+    # fail_reason: 最初に fail した条件
+    fail_reason = None
+    if not all_pass:
+        fail_names = {
+            "c1_tfidf_miss": "Tier 1 already hit (duplicate)",
+            "c2_embedding": f"top1_score ({tier2_result.get('top1_score', 0):.4f}) < θ ({theta})",
+            "c3_gap": f"gap ({tier2_result.get('gap', 0):.4f}) < δ ({delta})",
+            "c4_f4_clear": f"f4_flag={f4_flag} (premise concern)",
+            "c5_atomic": "no atomic unit aligned with top1_sentence",
+        }
+        for key, msg in fail_names.items():
+            if not conditions[key]:
+                fail_reason = msg
+                break
+
+    return {
+        "verdict": "Z_RESCUED" if all_pass else "miss",
+        "conditions": conditions,
+        "fail_reason": fail_reason,
+        "details": {
+            "tier2": tier2_result,
+            "atomic_alignment": atomic_result,
+        },
+    }
+
+
+def run_cascade_full(
+    proposition: str,
+    response: str,
+    model: SentenceTransformer,
+    tier1_hit: bool,
+    f4_flag: float,
+    atomic_units: List[str],
+    synonym_dict: Optional[Dict[str, List[str]]] = None,
+    theta: float = THETA_SBERT,
+    delta: float = DELTA_GAP,
+) -> Dict:
+    """Tier 1 miss 判定 → Tier 2 → Tier 3 のフルパイプライン。
+
+    Args:
+        proposition: 命題テキスト。
+        response: AI回答全文。
+        model: SentenceTransformer インスタンス。
+        tier1_hit: Tier 1 (tfidf) での hit フラグ。
+        f4_flag: f4_flag 値。
+        atomic_units: atomic リスト。
+        synonym_dict: synonym 辞書。
+        theta: cosine similarity 閾値。
+        delta: gap 閾値。
+
+    Returns:
+        tier3_filter の返却値（verdict, conditions, fail_reason, details）。
+    """
+    # Tier 1 で既に hit → cascade 不要
+    if tier1_hit:
+        return {
+            "verdict": "hit_tier1",
+            "conditions": {"c1_tfidf_miss": False},
+            "fail_reason": "Tier 1 already hit (duplicate)",
+            "details": {},
+        }
+
+    # Tier 2: 候補生成
+    t2 = tier2_candidate(proposition, response, model, theta=theta, delta=delta)
+
+    # Tier 3: 多条件フィルタ
+    return tier3_filter(
+        tier2_result=t2,
+        tier1_hit=tier1_hit,
+        f4_flag=f4_flag,
+        atomic_units=atomic_units,
+        synonym_dict=synonym_dict,
+        theta=theta,
+        delta=delta,
+    )

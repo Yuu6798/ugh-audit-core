@@ -128,6 +128,85 @@ Tier 3 では `top1_sentence` に対して:
 
 ---
 
+## Tier 3: 多条件フィルタ
+
+### 概要
+
+Tier 2 を通過した候補に対し、以下の全条件を AND で判定。
+1つでも fail → miss 確定。全 pass → Z_RESCUED。
+
+### フィルタ条件一覧
+
+| # | 条件 | 判定方法 | fail 時の意味 |
+|---|------|---------|-------------|
+| c1 | tfidf miss 確認 | tier1_hit == False | 二重カウント防止 |
+| c2 | embedding 閾値 | top1_score >= θ_sbert | 類似度不足 |
+| c3 | gap 閾値 | gap >= δ_gap | 候補が団子＝弁別不能 |
+| c4 | f4 非発火 | f4_flag == 0.0 | 前提受容の疑い |
+| c5 | atomic 整合 | atomic 1単位以上が top1_sentence に含まれる | 表層類似だが命題と不整合 |
+
+### f4 参照の実装
+
+`structural_gate_summary.csv` を `Dict[str, float]` にロードし、
+`question_id + temperature=0.0` で lookup する。
+
+```python
+f4_map = load_f4_flags("data/gate_results/structural_gate_summary.csv")
+f4 = f4_map.get(question_id, 0.0)
+```
+
+f4_flag の値:
+- 0.0 → pass（前提受容なし）
+- 0.5 → warn（部分的前提受容）→ **Tier 3 で reject**
+- 1.0 → fail（明確な前提受容）→ **Tier 3 で reject**
+
+### atomic 整合チェック
+
+各 atomic を `|` で split し、左辺（主語/対象）と右辺（述語/属性）の
+**両方**が `top1_sentence` に含まれるかを判定。
+
+含有判定（OR で評価）:
+1. 完全一致
+2. `synonym_dict` での展開後の一致（detector.py の `_SYNONYM_MAP` を再利用）
+3. 3文字以上の部分文字列一致
+
+synonym_dict は `from detector import _SYNONYM_MAP` でインポートする。
+detector.py 内の dict リテラルとして管理されているため、外部ファイル化は不要。
+
+### 閾値チューニング手順
+
+θ_sbert × δ_gap の grid search は `scripts/run_cascade_poc.py` で実行:
+- θ: 0.45–0.65（0.05 刻み）
+- δ: 0.03–0.10（0.01 刻み）
+- 評価指標: precision, recall, F1（should_rescue + may_rescue vs must_reject）
+
+### LLM Shadow Scoring 設計
+
+Phase 1 では Tier 3 判定と並行して LLM にも判定させる:
+1. Tier 3 が Z_RESCUED と判定した命題を LLM に提示
+2. LLM も独立に hit/miss を判定
+3. 結果は記録するが **merged_hit には混ぜない**
+4. 目的: Tier 3 が落とした命題で LLM が rescue する率を計測
+
+### 撤退条件の自動チェック
+
+| 条件 | 閾値 | アクション |
+|------|------|----------|
+| hard_negative 誤救済 | >= 2 | cascade 不採用 |
+| concept_absent 回収 | == 0 | SBert 弁別力不足 |
+
+### PoC 受理基準
+
+| 指標 | 閾値 | 判定 |
+|------|------|------|
+| concept_absent 回収数 | >= 3 | PASS/FAIL |
+| hard_negative 誤救済数 | == 0 | PASS/FAIL |
+| ovl_insufficient 回収数 | >= 2 | PASS/FAIL |
+| Tier 1 回帰 | == 0 | PASS/FAIL |
+| 総合 | 全 PASS | GO/NO-GO |
+
+---
+
 ## PoC 実行結果（dev_cascade_20, 2026-04-01）
 
 ### スコア分布
