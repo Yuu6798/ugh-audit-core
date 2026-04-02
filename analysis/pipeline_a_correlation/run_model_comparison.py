@@ -151,10 +151,11 @@ def main() -> None:
     loo_results["Model 2 (L_R→ΔE_A据置)"] = (m2_mean, m2_std)
     print(f"  Model 2: ρ_loo_mean={m2_mean:.4f}, std={m2_std:.4f}")
 
-    # Model 3: nested CV — fold ごとにパラメータ再フィットして Jackknife
-    print("  Model 3: nested LOO-CV (per-fold refit)...")
-    m3_rho_vals = []
+    # Model 3: nested LOO-CV — fold ごとにパラメータ再フィット → held-out 予測
+    print("  Model 3: nested LOO-CV (per-fold refit, held-out prediction)...")
     n = len(records)
+    hs_all = np.array([r["human_score"] for r in records])
+    m3_predictions = []
     grid = [round(x * 0.1, 1) for x in range(11)]
     for i in range(n):
         train = [records[j] for j in range(n) if j != i]
@@ -168,14 +169,12 @@ def main() -> None:
             if rho_i > best_rho_i:
                 best_rho_i = rho_i
                 best_params_i = (alpha, beta, gamma)
-        # fold 内の 19件での ρ を記録（Jackknife 形式で他モデルと統一）
-        scores_fold = np.array([score_model3(r, *best_params_i) for r in train])
-        rho_fold, _ = spearmanr(scores_fold, hs_train)
-        m3_rho_vals.append(rho_fold)
-    m3_mean = float(np.mean(m3_rho_vals))
-    m3_std = float(np.std(m3_rho_vals, ddof=1))
-    loo_results["Model 3 (L_R→ΔE_A再フィット)"] = (m3_mean, m3_std)
-    print(f"  Model 3: ρ_loo_mean={m3_mean:.4f}, std={m3_std:.4f}")
+        # held-out 1件の予測スコアを記録
+        m3_predictions.append(score_model3(records[i], *best_params_i))
+    m3_loo_rho, _ = spearmanr(m3_predictions, hs_all)
+    m3_loo_rho = float(m3_loo_rho)
+    loo_results["Model 3 (L_R→ΔE_A再フィット)"] = (m3_loo_rho, None)
+    print(f"  Model 3: ρ_loo={m3_loo_rho:.4f} (held-out prediction)")
 
     # Model 4
     m4_mean, m4_std, _ = loo_cv_fixed(records, score_model4)
@@ -278,6 +277,12 @@ def main() -> None:
             f"| {cr['model']} | {cr['rho_full']:.4f} | {cr['rho_loo']:.4f} | "
             f"{cr['drop']:.4f} | {cr['params']} |"
         )
+
+    lines += [
+        "",
+        "注: Model 1/2/4/5 の ρ_loo はパラメータ固定の Jackknife (fold 内 19件の ρ 平均)。"
+        "Model 3 の ρ_loo は nested LOO-CV (fold ごとに再フィット → held-out 1件の予測を集約した ρ)。",
+    ]
 
     # Model 3 パラメータ分析
     lines += [
