@@ -205,7 +205,7 @@ def main() -> None:
         "Model 2 (L_R→ΔE_A据置)": "α=0.4, β=0.0, γ=0.8, L_R=ΔE_A",
         "Model 3 (L_R→ΔE_A再フィット)": f"α={best['alpha']}, β={best['beta']}, γ={best['gamma']}, L_R=ΔE_A",
         "Model 4 (ΔE_A単独)": "score=5-4×ΔE_A",
-        "Model 5 (ΔE_A+ボトルネック)": "L_op=max(fail_max,ΔE_A)",
+        "Model 5 (ΔE_A+ボトルネック)": "L_op=max(sys_fail_max,ΔE_A)",
     }
     for name in models_fixed:
         rho_f, p_f = rho_full_results[name]
@@ -250,14 +250,14 @@ def main() -> None:
                 "score_m4": s4,
                 "score_m5": s5,
                 "delta_e_A": r["delta_e_A"],
-                "fail_max": r["fail_max"],
+                "sys_fail_max": r["sys_fail_max"],
                 "diff": round(s4 - s5, 4),
-                "bottleneck_active": "Yes" if r["fail_max"] > r["delta_e_A"] else "No",
+                "bottleneck_active": "Yes" if r["sys_fail_max"] > r["delta_e_A"] else "No",
             })
     out_case = OUT_DIR / "model4_vs_model5_case_diff.csv"
     with open(out_case, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["id", "human_score", "score_m4", "score_m5",
-                                          "delta_e_A", "fail_max", "diff", "bottleneck_active"])
+                                          "delta_e_A", "sys_fail_max", "diff", "bottleneck_active"])
         w.writeheader()
         w.writerows(case_diffs)
     print(f"出力: {out_case} ({len(case_diffs)} ケース)")
@@ -336,20 +336,20 @@ def main() -> None:
             "",
             "### ボトルネックが作動したケース",
             "",
-            "| id | human_score | score_m4 | score_m5 | ΔE_A | fail_max | diff | bottleneck |",
-            "|-----|------------|----------|----------|------|---------|------|-----------|",
+            "| id | human_score | score_m4 | score_m5 | ΔE_A | sys_fail_max | diff | bottleneck |",
+            "|-----|------------|----------|----------|------|-------------|------|-----------|",
         ]
         for cd in case_diffs:
             lines.append(
                 f"| {cd['id']} | {int(cd['human_score'])} | {cd['score_m4']:.4f} | "
-                f"{cd['score_m5']:.4f} | {cd['delta_e_A']:.4f} | {cd['fail_max']:.1f} | "
+                f"{cd['score_m5']:.4f} | {cd['delta_e_A']:.4f} | {cd['sys_fail_max']:.1f} | "
                 f"{cd['diff']:.4f} | {cd['bottleneck_active']} |"
             )
 
         # ボトルネックが改善したケース vs 悪化したケース
-        improved = [cd for cd in case_diffs if cd["fail_max"] > cd["delta_e_A"]
+        improved = [cd for cd in case_diffs if cd["sys_fail_max"] > cd["delta_e_A"]
                     and abs(cd["score_m5"] - cd["human_score"]) < abs(cd["score_m4"] - cd["human_score"])]
-        worsened = [cd for cd in case_diffs if cd["fail_max"] > cd["delta_e_A"]
+        worsened = [cd for cd in case_diffs if cd["sys_fail_max"] > cd["delta_e_A"]
                     and abs(cd["score_m5"] - cd["human_score"]) > abs(cd["score_m4"] - cd["human_score"])]
         lines += [
             "",
