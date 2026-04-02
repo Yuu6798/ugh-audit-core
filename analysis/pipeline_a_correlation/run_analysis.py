@@ -148,8 +148,6 @@ def main() -> None:
 
         f1 = float(gt["f1_flag"])
         f2 = float(gt["f2_flag"])
-        f3 = float(gt["f3_flag"])
-        f4 = float(gt["f4_flag"])
         fail_max = float(gt["fail_max"])
 
         # system ベース (merged CSV, t=0.0)
@@ -173,8 +171,8 @@ def main() -> None:
             "human_score": human_score,
             "f1_flag": f1,
             "f2_flag": f2,
-            "f3_flag": f3,
-            "f4_flag": f4,
+            "f3_flag": sys_f3,
+            "f4_flag": sys_f4,
             "S": round(s, 4),
             "C_sys": round(c_sys, 4),
             "C_human": round(c_human, 4),

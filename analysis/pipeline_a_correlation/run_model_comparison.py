@@ -47,7 +47,7 @@ def score_model1(r: dict) -> float:
 def score_model2(r: dict) -> float:
     """Model C' の L_R を ΔE_A に差し替え（パラメータ据置）"""
     l_p = 1.0 - r["C"]
-    l_struct = r["fail_max"]
+    l_struct = r["sys_fail_max"]
     l_r = r["delta_e_A"]
     l_linear = 0.4 * l_p + 0.0 * l_struct + 0.8 * l_r
     l_op = max(l_struct, l_linear)
@@ -57,7 +57,7 @@ def score_model2(r: dict) -> float:
 def score_model3(r: dict, alpha: float, beta: float, gamma: float) -> float:
     """ΔE_A 差し替え + パラメータ可変"""
     l_p = 1.0 - r["C"]
-    l_struct = r["fail_max"]
+    l_struct = r["sys_fail_max"]
     l_r = r["delta_e_A"]
     l_linear = alpha * l_p + beta * l_struct + gamma * l_r
     l_op = max(l_struct, l_linear)
@@ -71,7 +71,7 @@ def score_model4(r: dict) -> float:
 
 def score_model5(r: dict) -> float:
     """ΔE_A + ボトルネックのみ"""
-    l_op = max(r["fail_max"], r["delta_e_A"])
+    l_op = max(r["sys_fail_max"], r["delta_e_A"])
     return max(1.0, min(5.0, 5.0 - 4.0 * l_op))
 
 
