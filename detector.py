@@ -1125,9 +1125,27 @@ def detect(
     # Tier 1 miss のうち、SBert + 多条件フィルタで rescue 可能なものを回収する。
     # cascade_matcher が利用不可の場合は Tier 1 結果のみで動作する。
     # disqualifying_shortcuts 発火時は全 miss が意図的なため cascade をスキップする。
-    disqualified = (hits == 0 and len(miss_ids) == len(core_props)
-                    and core_props and disqualifying
-                    and any(s and s in response_text for s in disqualifying))
+    # check_propositions() と同じ否定文脈チェックを再現し、
+    # 否定・批判文脈で引用されているだけの場合は disqualified にしない。
+    disqualified = False
+    if (hits == 0 and len(miss_ids) == len(core_props)
+            and core_props and disqualifying):
+        _DQ_NEGATION_CUES = ["ではなく", "ではない", "のではなく", "誤り", "不適切",
+                             "批判", "安易", "短絡"]
+        for shortcut in disqualifying:
+            if not shortcut or shortcut not in response_text:
+                continue
+            sentences = _split_sentences(response_text)
+            is_negated = False
+            for sent in sentences:
+                if shortcut in sent:
+                    context = sent.replace(shortcut, "")
+                    if any(cue in context for cue in _DQ_NEGATION_CUES):
+                        is_negated = True
+                        break
+            if not is_negated:
+                disqualified = True
+                break
     atomic_units_map = question_meta.get("atomic_units_map", {})
     has_any_atomic = any(
         atomic_units_map.get(idx, atomic_units_map.get(str(idx), []))
