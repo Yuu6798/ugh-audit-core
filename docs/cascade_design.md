@@ -141,7 +141,7 @@ Tier 2 を通過した候補に対し、以下の全条件を AND で判定。
 | c1 | tfidf miss 確認 | tier1_hit == False | 二重カウント防止 |
 | c2 | embedding 閾値 | top1_score >= θ_sbert | 類似度不足 |
 | c3 | gap 閾値 | gap >= δ_gap | 候補が団子＝弁別不能 |
-| c4 | f4 非発火 | f4_flag == 0.0 | 前提受容の疑い |
+| c4 | f4 非発火 | f4_flag < 1.0 | 前提受容確定（f4=1.0）のみブロック |
 | c5 | atomic 整合 | atomic 1単位以上が **response 全文**に含まれる | 表層類似だが命題と不整合 |
 
 ### f4 参照の実装
@@ -156,7 +156,7 @@ f4 = f4_map.get(question_id, 0.0)
 
 f4_flag の値:
 - 0.0 → pass（前提受容なし）
-- 0.5 → warn（部分的前提受容）→ **Tier 3 で reject**
+- 0.5 → pass（部分的前提受容 → 緩和対象、2026-04-02 変更）
 - 1.0 → fail（明確な前提受容）→ **Tier 3 で reject**
 
 ### atomic 整合チェック
@@ -180,6 +180,15 @@ c5 の対象テキストを `top1_sentence` → **response 全文**に変更。
 
 変更理由: top1_sentence のみでは atomic unit の左辺・右辺が含まれないケースが多く、
 concept_absent の回収が制限されていた。response 全文にすることで ovl_insufficient が +1 改善。
+
+### c4 閾値緩和（2026-04-02）
+
+c4 条件を `f4_flag == 0.0` → `f4_flag < 1.0` に変更。
+f4_flag=0.5（部分的前提受容/warn）を通過させ、f4_flag=1.0（確定 fail）のみブロック。
+
+変更理由: f4_flag=0.5 は前提受容が「部分的」であり、cascade の他条件（c2/c3/c5）で
+十分にフィルタリングできる。q064_p0（score=0.84, gap=0.15）が c4 のみで blocked されていた。
+hard_negative で f4=0.5 の3件（q022_p0, q093_p0, q098_p0）は c2/c3 で blocked 済み。
 
 ### c3 条件付き緩和（2026-04-02）
 

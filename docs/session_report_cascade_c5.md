@@ -4,7 +4,7 @@
 
 ## サマリー
 - 判定: **CONDITIONAL GO**
-- concept_absent: 1/10
+- concept_absent: 2/10
 - hard_negative: 0/5
 - ovl_insufficient: 3/5
 
@@ -31,6 +31,14 @@
 - 追加: q052_p1, q052_p2（f4_flag=0.0、ai_philosophy/concept_absent）
 - 効果: ±0（q052_p1 は c5 で blocked、q052_p2 は c2 で blocked）
 
+### Step 3b: c4 閾値緩和（選択肢 b）
+- Step 3 の選択肢(a)を巻き戻し、選択肢(b)に切り替え
+- dev_cascade_20.csv を元に復帰（q064_p0, q064_p2 を復元）
+- c4 条件を `f4_flag == 0.0` → `f4_flag < 1.0` に変更
+- 効果: concept_absent +1（q064_p0 が Z_RESCUED）
+- hard_negative 3件に f4_flag=0.5 あり（q022_p0, q093_p0, q098_p0）→ c2/c3 でブロック済み、誤救済なし
+- 新規テスト 3件追加（TestTier3F4Boundary: f4=0.0/0.5/1.0 の境界テスト）
+
 ### Step 4: c3 条件付き緩和
 - 条件: top1_score > 0.70 → δ_gap = 0.02（デフォルト 0.04）
 - 効果: ±0（q090_p0 の gap=0.0158 < 0.02 のため該当ケースなし）
@@ -38,13 +46,13 @@
 
 ## ボトルネック分析
 
-concept_absent 残り 9 件の阻害要因内訳:
+concept_absent 残り 8 件の阻害要因内訳:
 
 | 阻害パターン | 件数 | 該当 id |
 |-------------|------|---------|
-| c2: score < θ (0.50) | 4 | q016_p1, q065_p1, q065_p2, q052_p2 |
-| c2: gap < effective_δ (pass_t2_eff=False) | 3 | q090_p0, q090_p1, q016_p2 |
-| c5: atomic 不整合 | 2 | q030_p0, q052_p1 |
+| c2: score < θ (0.50) | 3 | q016_p1, q065_p1, q065_p2 |
+| c2: gap < effective_δ (pass_t2_eff=False) | 4 | q064_p2, q090_p0, q090_p1, q016_p2 |
+| c5: atomic 不整合 | 1 | q030_p0 |
 
 主要ボトルネック:
 1. **score < θ (4件)**: SBert の弁別力不足。命題と response の意味的距離が embedding 空間で十分に近くない。θ=0.50 は hard_negative 排除のために必要な下限。
@@ -63,7 +71,7 @@ concept_absent 残り 9 件の阻害要因内訳:
 - c2: top1_score >= θ_sbert かつ pass_t2_eff（effective_delta 使用）
 - c3: gap >= effective_delta かつ pass_t2_eff
   - effective_delta = 0.02 if top1_score > 0.70 else 0.04
-- c4: f4_flag == 0.0
+- c4: f4_flag < 1.0（f4=0.0/0.5 → PASS, f4=1.0 → FAIL）
 - c5: response 全文で atomic 整合チェック（aligned_count >= 1）
 
 ### 緩和パラメータ
@@ -79,5 +87,6 @@ concept_absent 残り 9 件の阻害要因内訳:
 5. **dev_cascade_20 の拡充**: 20件では統計的検出力が不足。50-100件規模への拡張で閾値校正の信頼性を向上。
 
 ## テスト状況
-- 既存テスト: 253 passed / 3 skipped
-- 新規追加テスト: なし
+- 既存テスト: 253 passed / 3 skipped（test_f4_half の期待値を c4 緩和に合わせて更新）
+- 新規追加テスト: 3件（TestTier3F4Boundary: test_f4_zero_passes, test_f4_half_passes, test_f4_full_blocks）
+- 最終: 256 passed / 3 skipped

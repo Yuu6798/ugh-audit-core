@@ -411,7 +411,7 @@ def tier3_filter(
     gap_ok = gap >= effective_delta
     c2 = pass_t2_eff and score_ok
     c3 = pass_t2_eff and gap_ok
-    c4 = f4_flag == 0.0
+    c4 = f4_flag < 1.0  # f4=0.0/0.5 → PASS, f4=1.0 → FAIL
     # c5: response 全文で atomic 整合チェック（未指定時は top1_sentence にフォールバック）
     c5_text = response if response else tier2_result.get("top1_sentence", "")
     atomic_result = check_atomic_alignment(
