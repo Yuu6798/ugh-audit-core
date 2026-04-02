@@ -84,21 +84,25 @@ def test_hit_rate_unchanged():
 
 def test_ha20_regression():
     """HA20 の 20 件の quality_score が検証時の値と ±0.05 以内で一致"""
-    import pandas as pd
+    import csv
 
     csv_path = Path(__file__).resolve().parent.parent / "analysis/semantic_loss/case_analysis_model_c.csv"
     if not csv_path.exists():
         pytest.skip("case_analysis_model_c.csv not found")
 
-    case_df = pd.read_csv(csv_path)
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
 
-    for _, row in case_df.iterrows():
+    assert len(rows) == 20, f"Expected 20 rows, got {len(rows)}"
+
+    for row in rows:
         result = compute_quality_score(
-            propositions_hit_rate=row["system_hit_rate"],
-            fail_max=row["fail_max"],
-            delta_e_full=row["delta_e_full"],
+            propositions_hit_rate=float(row["system_hit_rate"]),
+            fail_max=float(row["fail_max"]),
+            delta_e_full=float(row["delta_e_full"]),
         )
-        expected = row["model_c_prime_pred"]
+        expected = float(row["model_c_prime_pred"])
         actual = result["quality_score"]
         assert abs(actual - expected) <= 0.05, \
             f"{row['id']}: got {actual:.3f}, expected {expected:.3f} (diff={actual-expected:.3f})"
