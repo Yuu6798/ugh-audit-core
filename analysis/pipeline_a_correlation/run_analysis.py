@@ -6,8 +6,6 @@ human_score との Spearman ρ を既存指標と比較する。
 from __future__ import annotations
 
 import csv
-import os
-import sys
 from pathlib import Path
 
 import matplotlib

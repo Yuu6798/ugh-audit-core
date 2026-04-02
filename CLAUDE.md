@@ -3,11 +3,13 @@
 ## Project Overview
 
 UGH Audit Core — AI回答の意味論的監査基盤。
-UGHer（無意識的重力仮説）の3指標 **PoR / ΔE / grv** でAI回答の意味的誠実性を定量評価する。
+UGHer（無意識的重力仮説）の指標 **PoR / ΔE / grv** でAI回答の意味的誠実性を定量評価する。
 
-- **PoR** (Point of Resonance): 質問↔回答の意味的共鳴度 (0–1)
-- **ΔE** (Delta E): 期待回答↔実回答の意味ズレ量 (0–1)
-- **grv** (Gravity): 回答内の語彙重力分布 (dict)
+- **PoR** (Point of Resonance): 問いの核心に対する回答の位置座標 **(S, C)**
+  - **S 軸**（構造完全性）: 回答が壊れていないか (0–1)
+  - **C 軸**（命題カバレッジ）: 核心を拾っているか (0–1)
+- **ΔE** (Delta E): PoR 座標上における理想回答からの距離 (0–1)
+- **grv** (Gravity): 回答内の語彙重力分布 (dict) — 操作化は未着手
 
 ## Tech Stack
 
@@ -94,6 +96,41 @@ op = detect_operator("低ΔEは良い回答を保証しない")
    - negative deontic (べきではない等): 同上
    - positive deontic (すべき): 回答が否定していたら却下
    - skeptical_modality: 極性チェック不要
+
+### UGH 計算式（ugh_calculator.py — 電卓層）
+
+Audit Engine の電卓層で PoR 座標と ΔE を算出する。推論ゼロ、決定的。
+
+```
+PoR = (S, C)
+
+S = 1 - Σ(w_k × f_k) / Σ(w_k)
+    w = {f1: 5, f2: 25, f3: 5, f4: 5}    Σ(w_k) = 40
+
+C = hits / n_propositions
+
+ΔE = (w_s × (1-S)² + w_c × (1-C)²) / (w_s + w_c)
+    w_s = 2, w_c = 1
+```
+
+**各式の意味:**
+- **S**: f1〜f4 の加重平均による構造完全性。f2（用語捏造）に最大重み 25 を配置
+- **C**: 命題照合（tfidf + cascade）による核心カバレッジ
+- **ΔE**: S と C の加重二乗和。両軸からの距離を1つのスカラーに統合
+
+**HA20 検証結果 (n=20, human_score vs 各指標):**
+
+| 指標 | Spearman ρ | p値 | LOO-CV |
+|------|-----------|-----|--------|
+| **ΔE** | **-0.9278** | **<0.001** | **|ρ|_mean=0.9272, std=0.0073** |
+| C (命題カバレッジ) | 0.9090 | <0.001 | — |
+| S (構造完全性) | 0.4011 | 0.080 | — |
+
+- ΔE は C 単独 (ρ=0.909) を上回る。S の統合が品質予測を改善
+- LOO-CV で |ρ|_loo_min=0.9189、influential cases=0。特定ケース依存なし
+- 5モデル比較で ΔE 単独 (score=5-4×ΔE) が最良。ボトルネック(fail_max)追加は劣化
+
+分析データ: `analysis/pipeline_a_correlation/`
 
 ### Quality Score（Model C' ボトルネック型）
 
@@ -250,6 +287,9 @@ python examples/basic_audit.py
 | quality: QUALITY_ALPHA | 0.4 | `detector.py` |
 | quality: QUALITY_BETA | 0.0 | `detector.py` |
 | quality: QUALITY_GAMMA | 0.8 | `detector.py` |
+| ΔE: WEIGHT_S | 2 | `ugh_calculator.py` |
+| ΔE: WEIGHT_C | 1 | `ugh_calculator.py` |
+| S: WEIGHTS_F | f1=5, f2=25, f3=5, f4=5 | `ugh_calculator.py` |
 
 ## Baseline & HA20
 
@@ -273,12 +313,19 @@ python examples/basic_audit.py
 |------|-----|------|
 | 方向性一致率 | 19/20 (0.95) | human_score ≥ 4 → accept 期待、≤ 2 → not accept 期待 |
 | Spearman ρ (system, Model A) | 0.4030 (p=0.078) | human_score vs hit_rate のみ |
-| Spearman ρ (system, Model C') | 0.8292 (全データ) / 0.8018 (LOO-CV) | human_score vs quality_score |
+| Spearman ρ (system, Model C') | 0.8292 (全データ) / 0.8018 (LOO-CV) | human_score vs quality_score (t=0.0, system_hit_rate) |
+| **Spearman ρ (ΔE, 電卓層)** | **-0.9278 (全データ) / -0.9272 (LOO-CV)** | **human_score vs ΔE (t=0.7, human propositions_hit)** |
 | Spearman ρ (reference) | 0.9090 (p<0.001) | human_score vs 人間アノテーター propositions_hit（内部一貫性指標） |
 
-注記: ρ=0.9090 は人間アノテーター内部の一貫性を示す参照値。システム評価には方向性一致率 (19/20) と Spearman ρ (system) を使用する。Model C' のパラメータは n=20 暫定値。
+注記:
+- ρ=0.9090 は人間アノテーター内部の一貫性を示す参照値
+- Model C' (ρ=0.8292) は t=0.0 + system_hit_rate で校正。ΔE (ρ=-0.9278) は t=0.7 + human propositions_hit で計算。データソースが異なるため直接比較には注意が必要
+- ΔE の LOO-CV: std=0.0073, |ρ|_loo_min=0.9189, influential cases=0（安定判定）
+- Model C' のパラメータは n=20 暫定値。n=48 で再校正予定
 
-分析データ: `analysis/semantic_loss/ha20_merged_for_model_c.csv`
+分析データ:
+- Model C': `analysis/semantic_loss/ha20_merged_for_model_c.csv`
+- ΔE 検証: `analysis/pipeline_a_correlation/`
 
 ## Public API
 
