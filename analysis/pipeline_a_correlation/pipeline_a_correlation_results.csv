@@ -1,0 +1,13 @@
+metric,rho,p_value,n,note
+delta_e_A,-0.9278,0.0,20,パイプラインA ΔE（負相関期待）
+1 - delta_e_A,0.9278,0.0,20,パイプラインA ΔE 反転
+S,0.4011,0.07962,20,パイプラインA 構造品質
+C,0.909,0.0,20,パイプラインA 命題カバレッジ (= hit_rate)
+delta_e_full,-0.4283,0.059573,20,旧 cosine ΔE（負相関期待）
+1 - delta_e_full,0.4283,0.059573,20,旧 cosine ΔE 反転
+por,0.0004,0.998695,20,旧 cosine PoR
+fail_max,-0.3883,0.090642,20,パイプラインB 構造指標（負相関期待）
+1 - fail_max,0.3883,0.090642,20,fail_max 反転 (≒ S_B)
+Model C' quality_score,0.8292,,20,既知参考値 (全データ)
+Model C' LOO-CV,0.8018,,20,既知参考値 (LOO-CV)
+hit_rate (reference),0.909,,20,人間アノテーター内部一貫性
