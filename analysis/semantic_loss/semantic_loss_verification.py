@@ -12,7 +12,6 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 from scipy.stats import spearmanr
-from scipy.optimize import minimize
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -320,12 +319,11 @@ def main():
 
     # f4 発火ケースの詳細
     f4_cases = ["q024", "q095", "q100", "q025"]
-    print(f"\n### f4 発火ケース詳細")
+    print("\n### f4 発火ケース詳細")
     print(f"{'qid':<6} {'human':>6} {'f3':>5} {'f4':>5} {'L_Q':>5} {'L_st':>5} {'sys_hr':>6} {'decision'}")
     print("-" * 55)
     for d in sys_data:
         if d["id"] in f4_cases:
-            sg_row = sg.get(d["id"], {})
             sys_row = sys_bl.get(d["id"], {})
             print(f"{d['id']:<6} {d['human_score']:>6.1f} {d['f3_flag']:>5.1f} {d['f4_flag']:>5.1f} "
                   f"{d['L_Q']:>5.2f} {d['L_struct']:>5.2f} {d['sys_hit_rate']:>6.3f} "
