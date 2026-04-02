@@ -8,11 +8,16 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import spearmanr
+
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    _HAS_MPL = True
+except ImportError:
+    _HAS_MPL = False
 
 OUT_DIR = Path(__file__).resolve().parent
 DATA_CSV = OUT_DIR / "ha20_pipeline_a_delta_e.csv"
@@ -140,45 +145,40 @@ def main() -> None:
     print(f"出力: {out_summary}")
 
     # --- 出力3: 影響力棒グラフ ---
-    fig, ax = plt.subplots(figsize=(14, 6))
+    if not _HAS_MPL:
+        print("matplotlib 未インストール: 影響力棒グラフスキップ")
+    else:
+        fig, ax = plt.subplots(figsize=(14, 6))
 
-    sorted_indices = np.argsort(abs_rho_arr)
-    sorted_ids = [ids[i] for i in sorted_indices]
-    sorted_abs_rho = abs_rho_arr[sorted_indices]
-    sorted_hs = [hs[i] for i in sorted_indices]
+        sorted_indices = np.argsort(abs_rho_arr)
+        sorted_ids = [ids[i] for i in sorted_indices]
+        sorted_abs_rho = abs_rho_arr[sorted_indices]
+        sorted_hs = [hs[i] for i in sorted_indices]
 
-    colors = []
-    for v in sorted_abs_rho:
-        if v < threshold_2sigma:
-            colors.append("tomato")
-        else:
-            colors.append("steelblue")
+        colors = ["tomato" if v < threshold_2sigma else "steelblue" for v in sorted_abs_rho]
 
-    ax.bar(range(n), sorted_abs_rho, color=colors, edgecolor="white", linewidth=0.5)
+        ax.bar(range(n), sorted_abs_rho, color=colors, edgecolor="white", linewidth=0.5)
+        ax.axhline(y=abs_rho_full, color="red", linestyle="--", linewidth=1.5,
+                   label=f"|ρ_full| = {abs_rho_full:.4f}")
+        ax.axhspan(threshold_2sigma, abs_mean + 2 * abs_std, alpha=0.12, color="green",
+                   label=f"|ρ| mean±2σ = [{threshold_2sigma:.4f}, {abs_mean + 2*abs_std:.4f}]")
+        ax.axhline(y=abs_mean, color="green", linestyle=":", linewidth=1, alpha=0.7)
 
-    # ρ_full 水平線
-    ax.axhline(y=abs_rho_full, color="red", linestyle="--", linewidth=1.5, label=f"|ρ_full| = {abs_rho_full:.4f}")
+        xlabels = [f"{sid}\n(hs={int(shs)})" for sid, shs in zip(sorted_ids, sorted_hs)]
+        ax.set_xticks(range(n))
+        ax.set_xticklabels(xlabels, rotation=45, ha="right", fontsize=8)
+        ax.set_ylabel("|ρ_i| (Spearman, excluding case i)", fontsize=11)
+        ax.set_title("LOO-CV Influence Analysis: ΔE_A vs human_score\n"
+                     "(sorted by |ρ_i|, red = outside mean-2σ)", fontsize=12)
+        ax.legend(loc="lower right", fontsize=9)
+        ax.set_ylim(min(0.75, sorted_abs_rho[0] - 0.02), 1.0)
+        ax.grid(axis="y", alpha=0.3)
 
-    # mean ± 2σ 帯
-    ax.axhspan(threshold_2sigma, abs_mean + 2 * abs_std, alpha=0.12, color="green",
-               label=f"|ρ| mean±2σ = [{threshold_2sigma:.4f}, {abs_mean + 2*abs_std:.4f}]")
-    ax.axhline(y=abs_mean, color="green", linestyle=":", linewidth=1, alpha=0.7)
-
-    # ラベル
-    xlabels = [f"{sid}\n(hs={int(shs)})" for sid, shs in zip(sorted_ids, sorted_hs)]
-    ax.set_xticks(range(n))
-    ax.set_xticklabels(xlabels, rotation=45, ha="right", fontsize=8)
-    ax.set_ylabel("|ρ_i| (Spearman, excluding case i)", fontsize=11)
-    ax.set_title("LOO-CV Influence Analysis: ΔE_A vs human_score\n(sorted by |ρ_i|, red = outside mean-2σ)", fontsize=12)
-    ax.legend(loc="lower right", fontsize=9)
-    ax.set_ylim(min(0.75, sorted_abs_rho[0] - 0.02), 1.0)
-    ax.grid(axis="y", alpha=0.3)
-
-    plt.tight_layout()
-    out_png = OUT_DIR / "delta_e_A_loo_influence.png"
-    fig.savefig(out_png, dpi=150)
-    plt.close()
-    print(f"出力: {out_png}")
+        plt.tight_layout()
+        out_png = OUT_DIR / "delta_e_A_loo_influence.png"
+        fig.savefig(out_png, dpi=150)
+        plt.close()
+        print(f"出力: {out_png}")
 
     # --- 出力4: 診断レポート ---
     lines = [
