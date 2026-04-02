@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -14,6 +15,39 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 import yaml
 
 from ugh_calculator import Evidence
+
+# --- cascade フォールバック import ---
+try:
+    from cascade_matcher import (
+        load_model as _cascade_load_model,
+        tier2_candidate,
+        tier3_filter,
+    )
+    _HAS_CASCADE = True
+except ImportError:
+    _HAS_CASCADE = False
+
+_logger = logging.getLogger(__name__)
+
+# SBert モデルキャッシュ（初回ロード時に設定）
+_cascade_model = None
+_cascade_load_attempted = False
+
+
+def _get_cascade_model():
+    """SBert モデルをキャッシュ付きでロードする。失敗時は None を返し、再試行しない。"""
+    global _cascade_model, _cascade_load_attempted
+    if _cascade_model is not None:
+        return _cascade_model
+    if _cascade_load_attempted or not _HAS_CASCADE:
+        return None
+    _cascade_load_attempted = True
+    try:
+        _cascade_model = _cascade_load_model()
+        return _cascade_model
+    except Exception as e:
+        _logger.warning("cascade SBert モデルロード失敗（Tier 1 のみで動作）: %s", e)
+        return None
 
 
 # --- 演算子検出 ---
@@ -1080,6 +1114,77 @@ def detect(
         response_text, core_props, disqualifying, acceptable_variants
     )
 
+    # hit_source 構築: tfidf hit 分を記録
+    hit_sources: Dict[int, str] = {}
+    for idx in hit_ids:
+        hit_sources[idx] = "tfidf"
+    for idx in miss_ids:
+        hit_sources[idx] = "miss"
+
+    # --- cascade 回収 ---
+    # Tier 1 miss のうち、SBert + 多条件フィルタで rescue 可能なものを回収する。
+    # cascade_matcher が利用不可の場合は Tier 1 結果のみで動作する。
+    # disqualifying_shortcuts 発火時は全 miss が意図的なため cascade をスキップする。
+    # check_propositions() と同じ否定文脈チェックを再現し、
+    # 否定・批判文脈で引用されているだけの場合は disqualified にしない。
+    disqualified = False
+    if (hits == 0 and len(miss_ids) == len(core_props)
+            and core_props and disqualifying):
+        _DQ_NEGATION_CUES = ["ではなく", "ではない", "のではなく", "誤り", "不適切",
+                             "批判", "安易", "短絡"]
+        for shortcut in disqualifying:
+            if not shortcut or shortcut not in response_text:
+                continue
+            sentences = _split_sentences(response_text)
+            is_negated = False
+            for sent in sentences:
+                if shortcut in sent:
+                    context = sent.replace(shortcut, "")
+                    if any(cue in context for cue in _DQ_NEGATION_CUES):
+                        is_negated = True
+                        break
+            if not is_negated:
+                disqualified = True
+                break
+    atomic_units_map = question_meta.get("atomic_units_map", {})
+    has_any_atomic = any(
+        atomic_units_map.get(idx, atomic_units_map.get(str(idx), []))
+        for idx in miss_ids
+    ) if miss_ids else False
+    cascade_model = (
+        _get_cascade_model()
+        if _HAS_CASCADE and miss_ids and has_any_atomic and not disqualified
+        else None
+    )
+    if cascade_model is not None:
+        rescued_ids: List[int] = []
+        remaining_miss: List[int] = []
+        for idx in miss_ids:
+            prop_text = core_props[idx]
+            atomic_units = atomic_units_map.get(idx, atomic_units_map.get(str(idx), []))
+            if not atomic_units:
+                # atomic_units なし → c5 が必ず fail するため Tier 2 をスキップ
+                remaining_miss.append(idx)
+                continue
+            t2 = tier2_candidate(prop_text, response_text, cascade_model)
+            t3 = tier3_filter(
+                tier2_result=t2,
+                tier1_hit=False,
+                f4_flag=f4,
+                atomic_units=atomic_units,
+                synonym_dict=_SYNONYM_MAP,
+                response=response_text,
+            )
+            if t3["verdict"] == "Z_RESCUED":
+                rescued_ids.append(idx)
+                hit_sources[idx] = "cascade_rescued"
+            else:
+                remaining_miss.append(idx)
+        if rescued_ids:
+            hit_ids = sorted(hit_ids + rescued_ids)
+            miss_ids = remaining_miss
+            hits = len(hit_ids)
+
     return Evidence(
         question_id=question_id,
         f1_anchor=f1,
@@ -1094,4 +1199,5 @@ def detect(
         propositions_total=len(core_props),
         hit_ids=hit_ids,
         miss_ids=miss_ids,
+        hit_sources=hit_sources,
     )

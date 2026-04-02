@@ -11,7 +11,7 @@ Evidence → State の決定的変換を行う。
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List
 
 
 # --- 重み定数 ---
@@ -43,6 +43,7 @@ class Evidence:
     propositions_total: int = 0  # 全命題数
     hit_ids: List[int] = field(default_factory=list)   # ヒット命題インデックス
     miss_ids: List[int] = field(default_factory=list)  # ミス命題インデックス
+    hit_sources: Dict[int, str] = field(default_factory=dict)  # 命題idx → "tfidf"/"cascade_rescued"/"miss"
 
 
 @dataclass(frozen=True)
