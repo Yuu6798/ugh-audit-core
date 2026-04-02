@@ -29,6 +29,14 @@ except ImportError:
 
 _logger = logging.getLogger(__name__)
 
+# --- Model C' (bottleneck) parameters ---
+# 暫定値: n=20 LOO-CV で検証済み (ρ=0.8018)
+# n=48 アノテーション完了後に再校正する
+QUALITY_ALPHA = 0.4
+QUALITY_BETA = 0.0
+QUALITY_GAMMA = 0.8
+QUALITY_MODEL_NAME = "bottleneck_v1"
+
 # SBert モデルキャッシュ（初回ロード時に設定）
 _cascade_model = None
 _cascade_load_attempted = False
@@ -1074,6 +1082,40 @@ def check_propositions(
             miss_ids.append(i)
 
     return len(hit_ids), hit_ids, miss_ids
+
+
+def compute_quality_score(
+    propositions_hit_rate: float,
+    fail_max: Optional[float],
+    delta_e_full: float,
+    alpha: float = QUALITY_ALPHA,
+    beta: float = QUALITY_BETA,
+    gamma: float = QUALITY_GAMMA,
+) -> dict:
+    """Model C'（ボトルネック型）による品質スコアを算出する。
+
+    propositions_hit_rate, fail_max, delta_e_full から統合品質スコアを計算。
+    既存の propositions_hit_rate は変更しない（追加指標として提供）。
+
+    暫定パラメータ: n=20 LOO-CV 検証済み (ρ=0.8018)。n=48 で再校正予定。
+    """
+    L_P = 1.0 - propositions_hit_rate
+    L_struct = fail_max if fail_max is not None else 0.0
+    L_R = delta_e_full
+    L_linear = alpha * L_P + beta * L_struct + gamma * L_R
+    L_op = max(L_struct, L_linear)
+    score = max(1.0, min(5.0, 5.0 - 4.0 * L_op))
+    return {
+        "quality_score": round(score, 4),
+        "quality_model": QUALITY_MODEL_NAME,
+        "quality_params": {"alpha": alpha, "beta": beta, "gamma": gamma},
+        "quality_loss_breakdown": {
+            "L_P": round(L_P, 4),
+            "L_struct": round(L_struct, 4),
+            "L_R": round(L_R, 4),
+            "L_op": round(L_op, 4),
+        },
+    }
 
 
 def detect(
