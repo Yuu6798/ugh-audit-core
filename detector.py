@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -14,6 +15,37 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 import yaml
 
 from ugh_calculator import Evidence
+
+# --- cascade フォールバック import ---
+try:
+    from cascade_matcher import (
+        load_model as _cascade_load_model,
+        tier2_candidate,
+        tier3_filter,
+    )
+    _HAS_CASCADE = True
+except ImportError:
+    _HAS_CASCADE = False
+
+_logger = logging.getLogger(__name__)
+
+# SBert モデルキャッシュ（初回ロード時に設定）
+_cascade_model = None
+
+
+def _get_cascade_model():
+    """SBert モデルをキャッシュ付きでロードする。失敗時は None を返す。"""
+    global _cascade_model
+    if _cascade_model is not None:
+        return _cascade_model
+    if not _HAS_CASCADE:
+        return None
+    try:
+        _cascade_model = _cascade_load_model()
+        return _cascade_model
+    except Exception as e:
+        _logger.warning("cascade SBert モデルロード失敗（Tier 1 のみで動作）: %s", e)
+        return None
 
 
 # --- 演算子検出 ---
@@ -1080,6 +1112,43 @@ def detect(
         response_text, core_props, disqualifying, acceptable_variants
     )
 
+    # hit_source 構築: tfidf hit 分を記録
+    hit_sources: Dict[int, str] = {}
+    for idx in hit_ids:
+        hit_sources[idx] = "tfidf"
+    for idx in miss_ids:
+        hit_sources[idx] = "miss"
+
+    # --- cascade 回収 ---
+    # Tier 1 miss のうち、SBert + 多条件フィルタで rescue 可能なものを回収する。
+    # cascade_matcher が利用不可の場合は Tier 1 結果のみで動作する。
+    cascade_model = _get_cascade_model() if _HAS_CASCADE and miss_ids else None
+    if cascade_model is not None:
+        atomic_units_map = question_meta.get("atomic_units_map", {})
+        rescued_ids: List[int] = []
+        remaining_miss: List[int] = []
+        for idx in miss_ids:
+            prop_text = core_props[idx]
+            atomic_units = atomic_units_map.get(idx, atomic_units_map.get(str(idx), []))
+            t2 = tier2_candidate(prop_text, response_text, cascade_model)
+            t3 = tier3_filter(
+                tier2_result=t2,
+                tier1_hit=False,
+                f4_flag=f4,
+                atomic_units=atomic_units,
+                synonym_dict=_SYNONYM_MAP,
+                response=response_text,
+            )
+            if t3["verdict"] == "Z_RESCUED":
+                rescued_ids.append(idx)
+                hit_sources[idx] = "cascade_rescued"
+            else:
+                remaining_miss.append(idx)
+        if rescued_ids:
+            hit_ids = sorted(hit_ids + rescued_ids)
+            miss_ids = remaining_miss
+            hits = len(hit_ids)
+
     return Evidence(
         question_id=question_id,
         f1_anchor=f1,
@@ -1094,4 +1163,5 @@ def detect(
         propositions_total=len(core_props),
         hit_ids=hit_ids,
         miss_ids=miss_ids,
+        hit_sources=hit_sources,
     )
