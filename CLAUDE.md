@@ -195,6 +195,9 @@ pip install -e ".[server]"
 
 # ugh3バックエンド
 pip install -e ".[ugh3]"
+
+# 分析スクリプト (scipy + matplotlib)
+pip install -e ".[analysis]"
 ```
 
 ## Commands

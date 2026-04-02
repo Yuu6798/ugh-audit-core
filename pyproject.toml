@@ -49,6 +49,10 @@ dev = [
     "uvicorn[standard]>=0.24",
     "mcp>=1.0",
 ]
+analysis = [
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
