@@ -22,6 +22,8 @@ except ImportError:
 # --- パラメータ ---
 THETA_SBERT: float = 0.50   # cosine similarity 閾値（dev_cascade_20 で校正済み）
 DELTA_GAP: float = 0.04     # top1 - top2 ギャップ閾値（dev_cascade_20 で校正済み）
+HIGH_SCORE_THRESHOLD: float = 0.70  # c3 緩和発動の top1_score 閾値
+RELAXED_DELTA_GAP: float = 0.02    # 高スコア時の緩和 δ_gap
 MODEL_NAME: str = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # 括弧保護用プレースホルダ
@@ -360,6 +362,8 @@ def tier3_filter(
     response: Optional[str] = None,
     theta: float = THETA_SBERT,
     delta: float = DELTA_GAP,
+    high_score_threshold: float = HIGH_SCORE_THRESHOLD,
+    relaxed_delta: float = RELAXED_DELTA_GAP,
 ) -> Dict:
     """Tier 3 多条件フィルタ。全条件 AND で判定。
 
@@ -396,11 +400,17 @@ def tier3_filter(
     """
     c1 = not tier1_hit  # Tier 1 で miss であること（二重カウント防止）
     # c2/c3: 個別条件を独立に評価（診断用）+ pass_tier2 でゲート
-    pass_t2 = tier2_result.get("pass_tier2", False)
-    score_ok = tier2_result.get("top1_score", 0.0) >= theta
-    gap_ok = tier2_result.get("gap", 0.0) >= delta
-    c2 = pass_t2 and score_ok
-    c3 = pass_t2 and gap_ok
+    # 高スコア時は δ_gap を緩和（gap が小さくても score の信頼度で補う）
+    top1_score = tier2_result.get("top1_score", 0.0)
+    gap = tier2_result.get("gap", 0.0)
+    effective_delta = relaxed_delta if top1_score > high_score_threshold else delta
+    n_segments = len(tier2_result.get("all_scores", []))
+    gap_valid = n_segments > 1
+    pass_t2_eff = (top1_score >= theta) and gap_valid and (gap >= effective_delta)
+    score_ok = top1_score >= theta
+    gap_ok = gap >= effective_delta
+    c2 = pass_t2_eff and score_ok
+    c3 = pass_t2_eff and gap_ok
     c4 = f4_flag == 0.0
     # c5: response 全文で atomic 整合チェック（未指定時は top1_sentence にフォールバック）
     c5_text = response if response else tier2_result.get("top1_sentence", "")
@@ -422,12 +432,10 @@ def tier3_filter(
     # fail_reason: 最初に fail した条件
     fail_reason = None
     if not all_pass:
-        t2_score = tier2_result.get("top1_score", 0)
-        t2_gap = tier2_result.get("gap", 0)
         fail_names = {
             "c1_tfidf_miss": "Tier 1 already hit (duplicate)",
-            "c2_embedding": f"top1_score ({t2_score:.4f}) < θ ({theta})" if not score_ok else "Tier 2 not passed (gap_valid=False or gap insufficient)",
-            "c3_gap": f"gap ({t2_gap:.4f}) < δ ({delta})" if not gap_ok else "Tier 2 not passed (gap_valid=False)",
+            "c2_embedding": f"top1_score ({top1_score:.4f}) < θ ({theta})" if not score_ok else f"gap ({gap:.4f}) < effective_δ ({effective_delta}) or gap_valid=False",
+            "c3_gap": f"gap ({gap:.4f}) < effective_δ ({effective_delta})" if not gap_ok else "gap_valid=False",
             "c4_f4_clear": f"f4_flag={f4_flag} (premise concern)",
             "c5_atomic": "no atomic unit aligned with top1_sentence",
         }
