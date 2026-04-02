@@ -1124,9 +1124,21 @@ def detect(
     # --- cascade 回収 ---
     # Tier 1 miss のうち、SBert + 多条件フィルタで rescue 可能なものを回収する。
     # cascade_matcher が利用不可の場合は Tier 1 結果のみで動作する。
-    cascade_model = _get_cascade_model() if _HAS_CASCADE and miss_ids else None
+    # disqualifying_shortcuts 発火時は全 miss が意図的なため cascade をスキップする。
+    disqualified = (hits == 0 and len(miss_ids) == len(core_props)
+                    and core_props and disqualifying
+                    and any(s and s in response_text for s in disqualifying))
+    atomic_units_map = question_meta.get("atomic_units_map", {})
+    has_any_atomic = any(
+        atomic_units_map.get(idx, atomic_units_map.get(str(idx), []))
+        for idx in miss_ids
+    ) if miss_ids else False
+    cascade_model = (
+        _get_cascade_model()
+        if _HAS_CASCADE and miss_ids and has_any_atomic and not disqualified
+        else None
+    )
     if cascade_model is not None:
-        atomic_units_map = question_meta.get("atomic_units_map", {})
         rescued_ids: List[int] = []
         remaining_miss: List[int] = []
         for idx in miss_ids:
