@@ -261,7 +261,7 @@ def check_atomic_alignment(
 
     Args:
         atomic_units: ["left|right", ...] 形式の atomic リスト。
-        candidate_sentence: Tier 2 の top1_sentence。
+        candidate_sentence: 判定対象テキスト（response 全文 or top1_sentence）。
         synonym_dict: {term: [syn1, syn2, ...]} 形式。None なら synonym 展開なし。
 
     Returns:
@@ -437,7 +437,7 @@ def tier3_filter(
             "c2_embedding": f"top1_score ({top1_score:.4f}) < θ ({theta})" if not score_ok else f"gap ({gap:.4f}) < effective_δ ({effective_delta}) or gap_valid=False",
             "c3_gap": f"gap ({gap:.4f}) < effective_δ ({effective_delta})" if not gap_ok else "gap_valid=False",
             "c4_f4_clear": f"f4_flag={f4_flag} (premise concern)",
-            "c5_atomic": "no atomic unit aligned with top1_sentence",
+            "c5_atomic": "no atomic unit aligned with response",
         }
         for key, msg in fail_names.items():
             if not conditions[key]:

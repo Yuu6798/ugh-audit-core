@@ -94,6 +94,7 @@ class Tier2Result:
     proposition: str          # 元の命題テキスト
     top1_sentence: str        # 最も類似度が高い文/節
     top1_score: float         # cosine similarity
+    top2_sentence: str        # 2番目に類似度が高い文/節
     top2_score: float         # 2番目の類似度
     gap: float                # top1 - top2
     all_scores: list[float]   # 全文/節のスコア（デバッグ用）
@@ -162,7 +163,7 @@ f4_flag の値:
 ### atomic 整合チェック
 
 各 atomic を `|` で split し、左辺（主語/対象）と右辺（述語/属性）の
-**両方**が `top1_sentence` に含まれるかを判定。
+**両方**が response 全文（`tier3_filter` に渡された `response` 引数、未指定時は `top1_sentence` にフォールバック）に含まれるかを判定。
 
 含有判定（OR で評価）:
 1. 完全一致
