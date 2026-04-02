@@ -15,9 +15,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from ugh_calculator import calculate
-from detector import detect
-from decider import decide
+from ugh_calculator import calculate  # noqa: E402
+from detector import detect  # noqa: E402
+from decider import decide  # noqa: E402
 
 
 def load_jsonl(path: str) -> dict[str, dict]:
@@ -169,7 +169,7 @@ def main():
     total_props = sum(r["total"] for r in rows)
     total_hits = sum(r["hits"] for r in rows)
 
-    print(f"\n--- hit_source 内訳 ---")
+    print("\n--- hit_source 内訳 ---")
     print(f"  tfidf:            {source_counts['tfidf']}")
     print(f"  cascade_rescued:  {source_counts['cascade_rescued']}")
     print(f"  miss:             {source_counts['miss']}")
@@ -178,7 +178,7 @@ def main():
 
     # cascade_rescued 詳細
     if all_rescued:
-        print(f"\n--- cascade_rescued 命題一覧 ---")
+        print("\n--- cascade_rescued 命題一覧 ---")
         for qid, pidx in sorted(all_rescued):
             q_meta = questions.get(qid, {})
             props = q_meta.get("core_propositions", [])
@@ -187,7 +187,7 @@ def main():
 
     # Decision 分布
     decisions = Counter(r["decision"] for r in rows)
-    print(f"\n--- Decision 分布 ---")
+    print("\n--- Decision 分布 ---")
     for d in ["accept", "rewrite", "regenerate"]:
         print(f"  {d}: {decisions.get(d, 0)}")
 
