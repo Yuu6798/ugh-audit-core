@@ -1,6 +1,6 @@
 model,rho_full,p_full,rho_loo,drop,params
-"Model 1 (C'式, human C)",0.6116,0.00416,0.6108,0.0008,"α=0.4, β=0.0, γ=0.8, L_R=cosine (※C=human propositions_hit, 本番C'とはデータソースが異なる)"
+"Model 1 (C'式, human C)",0.8709,1e-06,0.87,0.0009,"α=0.4, β=0.0, γ=0.8, L_R=cosine (※C=human propositions_hit, 本番C'とはデータソースが異なる)"
 Model 2 (L_R→ΔE_A据置),0.7689,7.4e-05,0.7682,0.0007,"α=0.4, β=0.0, γ=0.8, L_R=ΔE_A"
 Model 3 (L_R→ΔE_A再フィット),0.7872,3.8e-05,0.6446,0.1426,"α=0.8, β=0.0, γ=0.0, L_R=ΔE_A"
-Model 4 (ΔE_A単独),0.5179,0.019329,0.5176,0.0003,score=5-4×ΔE_A
+Model 4 (ΔE_A単独),0.7737,6.3e-05,0.7731,0.0006,score=5-4×ΔE_A
 Model 5 (ΔE_A+ボトルネック),0.7689,7.4e-05,0.7682,0.0007,"L_op=max(sys_fail_max,ΔE_A)"

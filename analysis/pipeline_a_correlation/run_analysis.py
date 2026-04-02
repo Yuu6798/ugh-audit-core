@@ -113,9 +113,9 @@ def main() -> None:
     with open(GATE_CSV, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            if row["temperature"] == "0.7" and row["id"] in ha20_ids:
+            if row["temperature"] == "0.0" and row["id"] in ha20_ids:
                 gate_rows[row["id"]] = row
-    print(f"Gate (temp=0.7, HA20一致): {len(gate_rows)}")
+    print(f"Gate (temp=0.0, HA20一致): {len(gate_rows)}")
 
     # system_hit_rate を merged CSV から読み込む
     merged_rows = {}
@@ -146,19 +146,18 @@ def main() -> None:
         delta_e_full = float(ha["delta_e_full"])
         prop_hit_str = ha["propositions_hit"]
 
+        # gate (t=0.0) から全4フラグを取得 — 同一スライスで統一
         f1 = float(gt["f1_flag"])
         f2 = float(gt["f2_flag"])
+        f3 = float(gt["f3_flag"])
+        f4 = float(gt["f4_flag"])
         fail_max = float(gt["fail_max"])
 
-        # system ベース (merged CSV, t=0.0)
+        # system_hit_rate は merged CSV から取得 (同じ t=0.0 スライス)
         sys_hit_rate = float(mg["system_hit_rate"])
         sys_fail_max = float(mg["fail_max"])
-        sys_f3 = float(mg["f3_flag"])
-        sys_f4 = float(mg["f4_flag"])
-        # merged CSV には f1/f2 がないため、system S は f3/f4 のみで近似
-        # → fail_max をそのまま使い S_sys = 1 - fail_max/1.0 とはせず、
-        #   gate (t=0.7) の f1/f2 + merged の f3/f4 で再構成
-        s = compute_s(f1, f2, sys_f3, sys_f4)
+
+        s = compute_s(f1, f2, f3, f4)
         c_sys = clamp(sys_hit_rate)
         delta_e_a = compute_delta_e_a(s, c_sys)
 
@@ -171,8 +170,8 @@ def main() -> None:
             "human_score": human_score,
             "f1_flag": f1,
             "f2_flag": f2,
-            "f3_flag": sys_f3,
-            "f4_flag": sys_f4,
+            "f3_flag": f3,
+            "f4_flag": f4,
             "S": round(s, 4),
             "C_sys": round(c_sys, 4),
             "C_human": round(c_human, 4),

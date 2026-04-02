@@ -29,14 +29,15 @@ def load_data() -> list[dict]:
                 "sys_fail_max": float(row.get("sys_fail_max", row.get("fail_max"))),
                 "S": float(row["S"]),
                 "C": float(row.get("C_sys", row.get("C", "0"))),
+                "C_human": float(row.get("C_human", row.get("C", "0"))),
             })
     assert len(records) == 20
     return records
 
 
 def score_model1(r: dict) -> float:
-    """現行 Model C': α=0.4, β=0.0, γ=0.8, L_R=delta_e_full"""
-    l_p = 1.0 - r["C"]
+    """現行 Model C' 式 (human C): α=0.4, β=0.0, γ=0.8, L_R=delta_e_full"""
+    l_p = 1.0 - r["C_human"]
     l_struct = r["fail_max"]
     l_r = r["delta_e_full"]
     l_linear = 0.4 * l_p + 0.0 * l_struct + 0.8 * l_r

@@ -118,19 +118,19 @@ C = hits / n_propositions
 - **C**: 命題照合（tfidf + cascade）による核心カバレッジ
 - **ΔE**: S と C の加重二乗和。両軸からの距離を1つのスカラーに統合
 
-**HA20 検証結果 (n=20, human_score vs 各指標):**
+**HA20 検証結果 (n=20, human_score vs 各指標, t=0.0 統一スライス):**
 
 | 指標 | Spearman ρ | p値 | 備考 |
 |------|-----------|-----|------|
-| **ΔE (system C)** | **-0.5179** | **0.019** | **メイン指標（デプロイ可能）** |
-| ΔE (human C) | -0.9234 | <0.001 | 参照上限（ターゲット情報含む） |
+| **ΔE (system C)** | **-0.7737** | **<0.001** | **メイン指標（デプロイ可能）** |
+| ΔE (human C) | -0.9266 | <0.001 | 参照上限（ターゲット情報含む） |
 | C_sys (system) | 0.4030 | 0.078 | system 命題照合 |
 | C_human (human) | 0.9090 | <0.001 | 人間アノテーター（参照上限） |
-| S (構造完全性) | 0.3890 | 0.090 | — |
+| S (構造完全性) | 0.5770 | 0.008 | t=0.0 スライスで有意 |
 
-- ΔE (system C) は C_sys 単独 (ρ=0.403) を上回る。S の統合が品質予測を改善
-- ΔE (human C) ρ=-0.923 は参照上限。system C の精度が ΔE のボトルネック
-- system 命題照合の精度向上が ΔE 改善の鍵
+- ΔE (system C) は C_sys 単独 (ρ=0.403) を大幅に上回る。S の統合が品質予測を改善
+- S 単独でも ρ=0.577 (p=0.008) で有意。t=0.0 の f2(用語捏造) が主要寄与因子
+- ΔE (human C) ρ=-0.927 は参照上限。system C の精度が ΔE のボトルネック
 
 分析データ: `analysis/pipeline_a_correlation/`
 
@@ -316,13 +316,13 @@ python examples/basic_audit.py
 | 方向性一致率 | 19/20 (0.95) | human_score ≥ 4 → accept 期待、≤ 2 → not accept 期待 |
 | Spearman ρ (system, Model A) | 0.4030 (p=0.078) | human_score vs hit_rate のみ |
 | Spearman ρ (system, Model C') | 0.8292 (全データ) / 0.8018 (LOO-CV) | human_score vs quality_score (t=0.0, system_hit_rate) |
-| Spearman ρ (ΔE, system C) | -0.5179 (p=0.019) | human_score vs ΔE (system_hit_rate) — デプロイ可能指標 |
-| Spearman ρ (ΔE, human C) | -0.9234 (p<0.001) | human_score vs ΔE (human propositions_hit) — 参照上限 |
+| Spearman ρ (ΔE, system C) | -0.7737 (p<0.001) | human_score vs ΔE (t=0.0統一, system_hit_rate) — デプロイ可能指標 |
+| Spearman ρ (ΔE, human C) | -0.9266 (p<0.001) | human_score vs ΔE (human propositions_hit) — 参照上限 |
 | Spearman ρ (reference) | 0.9090 (p<0.001) | human_score vs 人間アノテーター propositions_hit（内部一貫性指標） |
 
 注記:
 - ρ=0.9090 は人間アノテーター内部の一貫性を示す参照値
-- ΔE (human C) ρ=-0.9234 は参照上限。C に human propositions_hit を使うとターゲット情報が漏洩するため、デプロイ可能指標は ΔE (system C) ρ=-0.5179
+- ΔE (human C) ρ=-0.927 は参照上限。C に human propositions_hit を使うとターゲット情報が漏洩するため、デプロイ可能指標は ΔE (system C) ρ=-0.774
 - Model C' (ρ=0.8292) は t=0.0 + system_hit_rate + cosine ΔE で校正
 - system 命題照合の精度改善が ΔE 改善のボトルネック
 - Model C' のパラメータは n=20 暫定値。n=48 で再校正予定
