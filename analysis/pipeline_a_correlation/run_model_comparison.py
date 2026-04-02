@@ -362,8 +362,10 @@ def main() -> None:
     ]
     if rho3 > rho4 + 0.01:
         lines.append(f"Model 3 (ρ={rho3:.4f}) が Model 4 (ρ={rho4:.4f}) を上回る。判定層のパラメータフィットに意義あり。")
+    elif rho3 < rho4 - 0.01:
+        lines.append(f"Model 3 (ρ={rho3:.4f}) が Model 4 (ρ={rho4:.4f}) を下回る。パラメータフィットが ΔE_A の予測力を劣化させている。")
     else:
-        lines.append(f"Model 3 (ρ={rho3:.4f}) と Model 4 (ρ={rho4:.4f}) の差は小さい。ΔE_A 単独で十分な予測力がある。")
+        lines.append(f"Model 3 (ρ={rho3:.4f}) と Model 4 (ρ={rho4:.4f}) の差は小さい (±0.01以内)。ΔE_A 単独で十分な予測力がある。")
 
     # LOO-CV ベースの判断
     loo4 = loo_results["Model 4 (ΔE_A単独)"][0]

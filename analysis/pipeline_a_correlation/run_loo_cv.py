@@ -48,13 +48,13 @@ def main() -> None:
         mask = np.ones(n, dtype=bool)
         mask[i] = False
         rho_i, p_i = spearmanr(de_a[mask], hs[mask])
-        rho_drop = rho_full - rho_i  # 負の相関なので drop は ρ_full - ρ_i
+        abs_rho_drop = abs(rho_full) - abs(rho_i)  # |ρ| ベース: 正=劣化, 負=改善
         loo_results.append({
             "excluded_id": ids[i],
             "excluded_human_score": hs[i],
             "rho_i": round(rho_i, 4),
             "p_i": round(p_i, 6),
-            "rho_drop": round(rho_drop, 4),
+            "abs_rho_drop": round(abs_rho_drop, 4),
         })
         rho_values.append(rho_i)
 
@@ -106,7 +106,7 @@ def main() -> None:
     # --- 出力1: LOO-CV 結果 CSV ---
     out_loo = OUT_DIR / "delta_e_A_loo_cv_results.csv"
     with open(out_loo, "w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["excluded_id", "excluded_human_score", "rho_i", "p_i", "rho_drop"])
+        w = csv.DictWriter(f, fieldnames=["excluded_id", "excluded_human_score", "rho_i", "p_i", "abs_rho_drop"])
         w.writeheader()
         w.writerows(loo_results)
     print(f"\n出力: {out_loo}")
@@ -197,8 +197,8 @@ def main() -> None:
         "",
         "### Fold 別 ρ",
         "",
-        "| 除外 id | human_score | ρ_i | |ρ_i| | p_i | ρ_drop |",
-        "|---------|------------|-----|-------|-----|--------|",
+        "| 除外 id | human_score | ρ_i | |ρ_i| | p_i | |ρ| drop |",
+        "|---------|------------|-----|-------|-----|---------|",
     ]
     for i in range(n):
         lr = loo_results[i]
@@ -206,7 +206,7 @@ def main() -> None:
         lines.append(
             f"| {lr['excluded_id']} | {int(lr['excluded_human_score'])} | "
             f"{lr['rho_i']:.4f} | {abs(lr['rho_i']):.4f} | {lr['p_i']:.6f} | "
-            f"{lr['rho_drop']:.4f} |{flag}"
+            f"{lr['abs_rho_drop']:.4f} |{flag}"
         )
 
     lines += [
@@ -249,7 +249,7 @@ def main() -> None:
             lines.append(
                 f"- **{wid}** (human_score={int(lr['excluded_human_score'])}): "
                 f"除外時 ρ_i={lr['rho_i']:.4f} (|ρ|={abs(lr['rho_i']):.4f}), "
-                f"drop={lr['rho_drop']:.4f}"
+                f"|ρ| drop={lr['abs_rho_drop']:.4f}"
             )
 
     if influential:
