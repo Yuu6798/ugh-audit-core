@@ -22,6 +22,8 @@ except ImportError:
 # --- パラメータ ---
 THETA_SBERT: float = 0.50   # cosine similarity 閾値（dev_cascade_20 で校正済み）
 DELTA_GAP: float = 0.04     # top1 - top2 ギャップ閾値（dev_cascade_20 で校正済み）
+HIGH_SCORE_THRESHOLD: float = 0.70  # c3 緩和発動の top1_score 閾値
+RELAXED_DELTA_GAP: float = 0.02    # 高スコア時の緩和 δ_gap
 MODEL_NAME: str = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # 括弧保護用プレースホルダ
@@ -185,6 +187,7 @@ def tier2_candidate(
         return {
             "top1_sentence": "",
             "top1_score": 0.0,
+            "top2_sentence": "",
             "top2_score": 0.0,
             "gap": 0.0,
             "all_scores": [],
@@ -207,7 +210,9 @@ def tier2_candidate(
     top1_score = float(scores[top1_idx])
     top1_sentence = segments[top1_idx]
 
-    top2_score = float(scores[sorted_indices[1]]) if len(sorted_indices) > 1 else 0.0
+    top2_idx = sorted_indices[1] if len(sorted_indices) > 1 else None
+    top2_score = float(scores[top2_idx]) if top2_idx is not None else 0.0
+    top2_sentence = segments[top2_idx] if top2_idx is not None else ""
     gap = top1_score - top2_score
 
     # セグメント1件のみの場合、gap は弁別不能（実質 undefined）→ pass しない
@@ -217,6 +222,7 @@ def tier2_candidate(
     return {
         "top1_sentence": top1_sentence,
         "top1_score": top1_score,
+        "top2_sentence": top2_sentence,
         "top2_score": top2_score,
         "gap": gap,
         "all_scores": [float(s) for s in scores],
@@ -256,7 +262,7 @@ def check_atomic_alignment(
 
     Args:
         atomic_units: ["left|right", ...] 形式の atomic リスト。
-        candidate_sentence: Tier 2 の top1_sentence。
+        candidate_sentence: 判定対象テキスト（response 全文 or top1_sentence）。
         synonym_dict: {term: [syn1, syn2, ...]} 形式。None なら synonym 展開なし。
 
     Returns:
@@ -354,8 +360,11 @@ def tier3_filter(
     f4_flag: float,
     atomic_units: List[str],
     synonym_dict: Optional[Dict[str, List[str]]] = None,
+    response: Optional[str] = None,
     theta: float = THETA_SBERT,
     delta: float = DELTA_GAP,
+    high_score_threshold: float = HIGH_SCORE_THRESHOLD,
+    relaxed_delta: float = RELAXED_DELTA_GAP,
 ) -> Dict:
     """Tier 3 多条件フィルタ。全条件 AND で判定。
 
@@ -364,7 +373,7 @@ def tier3_filter(
     c2: embedding 閾値（top1_score >= θ_sbert）
     c3: gap 閾値（gap >= δ_gap）
     c4: f4 非発火（f4_flag == 0.0）
-    c5: atomic 整合（1単位以上が top1_sentence に含まれる）
+    c5: atomic 整合（1単位以上が response 全文に含まれる）
 
     Args:
         tier2_result: tier2_candidate() の返却値。
@@ -372,6 +381,7 @@ def tier3_filter(
         f4_flag: structural_gate_summary の f4_flag (0.0 / 0.5 / 1.0)。
         atomic_units: ["left|right", ...] 形式の atomic リスト。
         synonym_dict: synonym 辞書。
+        response: AI回答全文。None の場合は top1_sentence にフォールバック。
         theta: cosine similarity 閾値。
         delta: gap 閾値。
 
@@ -391,14 +401,22 @@ def tier3_filter(
     """
     c1 = not tier1_hit  # Tier 1 で miss であること（二重カウント防止）
     # c2/c3: 個別条件を独立に評価（診断用）+ pass_tier2 でゲート
-    pass_t2 = tier2_result.get("pass_tier2", False)
-    score_ok = tier2_result.get("top1_score", 0.0) >= theta
-    gap_ok = tier2_result.get("gap", 0.0) >= delta
-    c2 = pass_t2 and score_ok
-    c3 = pass_t2 and gap_ok
-    c4 = f4_flag == 0.0
+    # 高スコア時は δ_gap を緩和（gap が小さくても score の信頼度で補う）
+    top1_score = tier2_result.get("top1_score", 0.0)
+    gap = tier2_result.get("gap", 0.0)
+    effective_delta = relaxed_delta if top1_score > high_score_threshold else delta
+    n_segments = len(tier2_result.get("all_scores", []))
+    gap_valid = n_segments > 1
+    pass_t2_eff = (top1_score >= theta) and gap_valid and (gap >= effective_delta)
+    score_ok = top1_score >= theta
+    gap_ok = gap >= effective_delta
+    c2 = pass_t2_eff and score_ok
+    c3 = pass_t2_eff and gap_ok
+    c4 = f4_flag < 1.0  # f4=0.0/0.5 → PASS, f4=1.0 → FAIL
+    # c5: response 全文で atomic 整合チェック（未指定時は top1_sentence にフォールバック）
+    c5_text = response if response else tier2_result.get("top1_sentence", "")
     atomic_result = check_atomic_alignment(
-        atomic_units, tier2_result.get("top1_sentence", ""), synonym_dict
+        atomic_units, c5_text, synonym_dict
     )
     c5 = atomic_result["pass"]
 
@@ -415,14 +433,12 @@ def tier3_filter(
     # fail_reason: 最初に fail した条件
     fail_reason = None
     if not all_pass:
-        t2_score = tier2_result.get("top1_score", 0)
-        t2_gap = tier2_result.get("gap", 0)
         fail_names = {
             "c1_tfidf_miss": "Tier 1 already hit (duplicate)",
-            "c2_embedding": f"top1_score ({t2_score:.4f}) < θ ({theta})" if not score_ok else "Tier 2 not passed (gap_valid=False or gap insufficient)",
-            "c3_gap": f"gap ({t2_gap:.4f}) < δ ({delta})" if not gap_ok else "Tier 2 not passed (gap_valid=False)",
+            "c2_embedding": f"top1_score ({top1_score:.4f}) < θ ({theta})" if not score_ok else f"gap ({gap:.4f}) < effective_δ ({effective_delta}) or gap_valid=False",
+            "c3_gap": f"gap ({gap:.4f}) < effective_δ ({effective_delta})" if not gap_ok else "gap_valid=False",
             "c4_f4_clear": f"f4_flag={f4_flag} (premise concern)",
-            "c5_atomic": "no atomic unit aligned with top1_sentence",
+            "c5_atomic": "no atomic unit aligned with response",
         }
         for key, msg in fail_names.items():
             if not conditions[key]:
@@ -486,6 +502,7 @@ def run_cascade_full(
         f4_flag=f4_flag,
         atomic_units=atomic_units,
         synonym_dict=synonym_dict,
+        response=response,
         theta=theta,
         delta=delta,
     )

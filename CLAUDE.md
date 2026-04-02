@@ -42,7 +42,7 @@ examples/             # basic_audit.py — E2Eサンプル
 判定層から呼ばれ、detector.py からは呼ばない。
 
 - **Tier 2**: SBert embedding (paraphrase-multilingual-MiniLM-L12-v2) で response を文分割し、命題との cosine similarity を計算
-- **Tier 3**: 多条件 AND フィルタ (c1: tfidf miss確認, c2: embedding閾値, c3: gap閾値, c4: f4非発火, c5: atomic整合)
+- **Tier 3**: 多条件 AND フィルタ (c1: tfidf miss確認, c2: embedding閾値, c3: gap閾値(高スコア時緩和あり), c4: f4確定発火のみブロック(< 1.0), c5: response全文でatomic整合)
 - 全条件 pass → `Z_RESCUED`、1つでも fail → `miss`
 
 設計詳細: `docs/cascade_design.md`
@@ -195,7 +195,10 @@ python examples/basic_audit.py
 | 演算子回収: full_recall | ≥ 0.25 | `detector.py` |
 | 演算子回収: min_overlap | ≥ 2 | `detector.py` |
 | cascade: θ_sbert | 0.50 | `cascade_matcher.py` |
-| cascade: δ_gap | 0.04 | `cascade_matcher.py` |
+| cascade: δ_gap | 0.04 (score > 0.70 時 0.02) | `cascade_matcher.py` |
+| cascade: HIGH_SCORE_THRESHOLD | 0.70 | `cascade_matcher.py` |
+| cascade: RELAXED_DELTA_GAP | 0.02 | `cascade_matcher.py` |
+| cascade: c4 閾値 | f4_flag < 1.0 | `cascade_matcher.py` |
 
 ## Public API
 

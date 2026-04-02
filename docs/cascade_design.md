@@ -94,18 +94,18 @@ class Tier2Result:
     proposition: str          # 元の命題テキスト
     top1_sentence: str        # 最も類似度が高い文/節
     top1_score: float         # cosine similarity
+    top2_sentence: str        # 2番目に類似度が高い文/節
     top2_score: float         # 2番目の類似度
     gap: float                # top1 - top2
     all_scores: list[float]   # 全文/節のスコア（デバッグ用）
     pass_tier2: bool          # θ_sbert AND δ_gap を満たすか
 ```
 
-Tier 3 では `top1_sentence` に対して:
-- 否定極性の検証（negation polarity check）
-- 前提受容の検出（f4 premise gate）
-- 概念近傍マーカーの再検証
-
-を実施し、最終的な hit/miss を判定する。
+Tier 3 では以下のチェックを実施し、最終的な hit/miss を判定する:
+- c1: Tier 1 miss 確認（二重カウント防止）
+- c2/c3: embedding スコア + gap 閾値（条件付き緩和あり）
+- c4: f4 非発火（前提受容チェック）
+- c5: atomic 整合（response 全文に対して判定）
 
 ## テストケース設計
 
@@ -142,8 +142,8 @@ Tier 2 を通過した候補に対し、以下の全条件を AND で判定。
 | c1 | tfidf miss 確認 | tier1_hit == False | 二重カウント防止 |
 | c2 | embedding 閾値 | top1_score >= θ_sbert | 類似度不足 |
 | c3 | gap 閾値 | gap >= δ_gap | 候補が団子＝弁別不能 |
-| c4 | f4 非発火 | f4_flag == 0.0 | 前提受容の疑い |
-| c5 | atomic 整合 | atomic 1単位以上が top1_sentence に含まれる | 表層類似だが命題と不整合 |
+| c4 | f4 非発火 | f4_flag < 1.0 | 前提受容確定（f4=1.0）のみブロック |
+| c5 | atomic 整合 | atomic 1単位以上が **response 全文**に含まれる | 表層類似だが命題と不整合 |
 
 ### f4 参照の実装
 
@@ -157,13 +157,13 @@ f4 = f4_map.get(question_id, 0.0)
 
 f4_flag の値:
 - 0.0 → pass（前提受容なし）
-- 0.5 → warn（部分的前提受容）→ **Tier 3 で reject**
+- 0.5 → pass（部分的前提受容 → 緩和対象、2026-04-02 変更）
 - 1.0 → fail（明確な前提受容）→ **Tier 3 で reject**
 
 ### atomic 整合チェック
 
 各 atomic を `|` で split し、左辺（主語/対象）と右辺（述語/属性）の
-**両方**が `top1_sentence` に含まれるかを判定。
+**両方**が response 全文（`tier3_filter` に渡された `response` 引数、未指定時は `top1_sentence` にフォールバック）に含まれるかを判定。
 
 含有判定（OR で評価）:
 1. 完全一致
@@ -172,6 +172,43 @@ f4_flag の値:
 
 synonym_dict は `from detector import _SYNONYM_MAP` でインポートする。
 detector.py 内の dict リテラルとして管理されているため、外部ファイル化は不要。
+
+### c5 対象テキストの変更（2026-04-02）
+
+c5 の対象テキストを `top1_sentence` → **response 全文**に変更。
+`tier3_filter()` に `response` 引数を追加し、`run_cascade_full()` から渡す。
+`response=None` の場合は `top1_sentence` にフォールバック（後方互換）。
+
+変更理由: top1_sentence のみでは atomic unit の左辺・右辺が含まれないケースが多く、
+concept_absent の回収が制限されていた。response 全文にすることで ovl_insufficient が +1 改善。
+
+### c4 閾値緩和（2026-04-02）
+
+c4 条件を `f4_flag == 0.0` → `f4_flag < 1.0` に変更。
+f4_flag=0.5（部分的前提受容/warn）を通過させ、f4_flag=1.0（確定 fail）のみブロック。
+
+変更理由: f4_flag=0.5 は前提受容が「部分的」であり、cascade の他条件（c2/c3/c5）で
+十分にフィルタリングできる。q064_p0（score=0.84, gap=0.15）が c4 のみで blocked されていた。
+hard_negative で f4=0.5 の3件（q022_p0, q093_p0, q098_p0）は c2/c3 で blocked 済み。
+
+### c3 条件付き緩和（2026-04-02）
+
+top1_score が十分高い場合、gap 閾値を緩和して c2/c3 の通過率を改善する。
+
+```python
+HIGH_SCORE_THRESHOLD = 0.70
+RELAXED_DELTA_GAP = 0.02
+
+# tier3_filter 内:
+effective_delta = relaxed_delta if top1_score > high_score_threshold else delta
+```
+
+`pass_tier2` に依存せず、`tier3_filter` 内で `n_segments`, `gap`, `score` から
+独立に `pass_t2_eff` を再計算する。
+パラメータはモジュール定数 + `tier3_filter` のデフォルト引数で外部から調整可能。
+
+判定結果: CONDITIONAL GO（concept_absent 1/10, hard_negative 0/5）。
+現 dev_cascade_20 では緩和が発動するケースなし（q090_p0 gap=0.016 < 0.02）。
 
 ### 閾値チューニング手順
 

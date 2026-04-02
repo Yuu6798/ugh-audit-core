@@ -123,6 +123,7 @@ class TestTier3F4Block:
     """f4 発火で miss"""
 
     def test_f4_half(self):
+        """f4_flag=0.5 (warn) → c4 PASS（閾値緩和: < 1.0 で通過）"""
         t2 = _make_tier2_result(
             top1_score=0.70, gap=0.15,
             top1_sentence="戦争閾値が低下するリスクがある"
@@ -133,9 +134,8 @@ class TestTier3F4Block:
             f4_flag=0.5,
             atomic_units=["戦争閾値|低下する"],
         )
-        assert result["verdict"] == "miss"
-        assert result["conditions"]["c4_f4_clear"] is False
-        assert "f4_flag" in result["fail_reason"]
+        assert result["verdict"] == "Z_RESCUED"
+        assert result["conditions"]["c4_f4_clear"] is True
 
     def test_f4_full(self):
         t2 = _make_tier2_result(
@@ -150,6 +150,44 @@ class TestTier3F4Block:
         )
         assert result["verdict"] == "miss"
         assert result["conditions"]["c4_f4_clear"] is False
+
+
+class TestTier3F4Boundary:
+    """f4 閾値境界テスト: f4 < 1.0 → PASS, f4 >= 1.0 → FAIL"""
+
+    def test_f4_zero_passes(self):
+        t2 = _make_tier2_result(
+            top1_score=0.70, gap=0.15,
+            top1_sentence="戦争閾値が低下するリスクがある"
+        )
+        result = tier3_filter(
+            tier2_result=t2, tier1_hit=False, f4_flag=0.0,
+            atomic_units=["戦争閾値|低下する"],
+        )
+        assert result["conditions"]["c4_f4_clear"] is True
+
+    def test_f4_half_passes(self):
+        t2 = _make_tier2_result(
+            top1_score=0.70, gap=0.15,
+            top1_sentence="戦争閾値が低下するリスクがある"
+        )
+        result = tier3_filter(
+            tier2_result=t2, tier1_hit=False, f4_flag=0.5,
+            atomic_units=["戦争閾値|低下する"],
+        )
+        assert result["conditions"]["c4_f4_clear"] is True
+
+    def test_f4_full_blocks(self):
+        t2 = _make_tier2_result(
+            top1_score=0.70, gap=0.15,
+            top1_sentence="戦争閾値が低下するリスクがある"
+        )
+        result = tier3_filter(
+            tier2_result=t2, tier1_hit=False, f4_flag=1.0,
+            atomic_units=["戦争閾値|低下する"],
+        )
+        assert result["conditions"]["c4_f4_clear"] is False
+        assert result["verdict"] == "miss"
 
 
 class TestTier3AtomicFail:
