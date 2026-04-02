@@ -33,7 +33,7 @@ def main() -> None:
                 "human_score": float(row["human_score"]),
                 "delta_e_A": float(row["delta_e_A"]),
                 "S": float(row["S"]),
-                "C": float(row["C"]),
+                "C": float(row.get("C_sys", row.get("C", "0"))),
             })
     n = len(records)
     assert n == 20, f"Expected 20 records, got {n}"

@@ -23,10 +23,12 @@ def load_data() -> list[dict]:
                 "id": row["id"],
                 "human_score": float(row["human_score"]),
                 "delta_e_A": float(row["delta_e_A"]),
+                "delta_e_A_human": float(row.get("delta_e_A_human", row.get("delta_e_A"))),
                 "delta_e_full": float(row["delta_e_full"]),
                 "fail_max": float(row["fail_max"]),
+                "sys_fail_max": float(row.get("sys_fail_max", row.get("fail_max"))),
                 "S": float(row["S"]),
-                "C": float(row["C"]),
+                "C": float(row.get("C_sys", row.get("C", "0"))),
             })
     assert len(records) == 20
     return records

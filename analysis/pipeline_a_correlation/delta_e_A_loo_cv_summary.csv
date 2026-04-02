@@ -1,19 +1,19 @@
 metric,value,note
-rho_full,-0.9278,全20件
-p_full,0.0,
-rho_loo_mean,-0.9272,20 fold 平均
-|rho|_loo_mean,0.9272,絶対値平均
-rho_loo_std,0.0073,
-|rho|_loo_std,0.0073,絶対値の標準偏差
-|rho|_loo_min,0.9189,除外: q032
-|rho|_loo_max,0.9497,除外: q015
-|rho|_max_drop,0.0089,|ρ_full| - |ρ_loo_min|
+rho_full,-0.5179,全20件
+p_full,0.019329,
+rho_loo_mean,-0.5176,20 fold 平均
+|rho|_loo_mean,0.5176,絶対値平均
+rho_loo_std,0.0584,
+|rho|_loo_std,0.0584,絶対値の標準偏差
+|rho|_loo_min,0.4643,除外: q009
+|rho|_loo_max,0.7325,除外: q032
+|rho|_max_drop,0.0536,|ρ_full| - |ρ_loo_min|
 influential_count,0,|ρ_i| < mean-2σ
-stability,安定,ρ_loo_std < 0.03 かつ |ρ|_loo_min > 0.85 → ΔE_A は頑健
+stability,不安定,ρ_loo_std ≥ 0.05 または |ρ|_loo_min ≤ 0.80 → 特定ケース依存の疑い
 ,,
 Model_C_prime_rho_full,0.8292,既知参考値
 Model_C_prime_rho_loo,0.8018,既知参考値
 Model_C_prime_drop,0.0274,
-delta_e_A_rho_full,0.9278,|ρ|
-delta_e_A_rho_loo_mean,0.9272,|ρ| 平均
-delta_e_A_drop,0.0006,|ρ_full| - |ρ_loo_mean|
+delta_e_A_rho_full,0.5179,|ρ|
+delta_e_A_rho_loo_mean,0.5176,|ρ| 平均
+delta_e_A_drop,0.0003,|ρ_full| - |ρ_loo_mean|
