@@ -30,7 +30,7 @@ C = hits / n_propositions       命題カバレッジ [0,1]
 ΔE = (2(1-S)² + (1-C)²) / 3    意味距離 [0,1]
 ```
 
-ΔE vs human_score: Spearman ρ=-0.928 (p<0.001), LOO-CV std=0.007 (HA20, n=20)
+ΔE (system C) vs human_score: Spearman ρ=-0.774 (p<0.001, HA20 n=20, t=0.0)
 
 ---
 
