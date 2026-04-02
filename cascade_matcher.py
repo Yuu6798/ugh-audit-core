@@ -187,6 +187,7 @@ def tier2_candidate(
         return {
             "top1_sentence": "",
             "top1_score": 0.0,
+            "top2_sentence": "",
             "top2_score": 0.0,
             "gap": 0.0,
             "all_scores": [],
