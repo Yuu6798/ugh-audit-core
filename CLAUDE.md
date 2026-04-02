@@ -38,15 +38,24 @@ examples/             # basic_audit.py — E2Eサンプル
 
 ### Cascade Matcher（命題回収補助）
 
-`cascade_matcher.py` は detector.py を変更せずに命題回収を補助するモジュール。
-判定層から呼ばれ、detector.py からは呼ばない。
+`cascade_matcher.py` は命題回収を補助するモジュール。
+`detector.py` の `detect()` から呼び出され、Tier 1 (tfidf) で miss した命題に対して SBert ベースの回収を試みる。
+SBert 未インストール時は自動的に Tier 1 のみで動作する（フォールバック）。
 
 - **Tier 2**: SBert embedding (paraphrase-multilingual-MiniLM-L12-v2) で response を文分割し、命題との cosine similarity を計算
 - **Tier 3**: 多条件 AND フィルタ (c1: tfidf miss確認, c2: embedding閾値, c3: gap閾値(高スコア時緩和あり), c4: f4確定発火のみブロック(< 1.0), c5: response全文でatomic整合)
 - 全条件 pass → `Z_RESCUED`、1つでも fail → `miss`
+- SBert モデルは初回ロード時にモジュールレベルでキャッシュ
 
 設計詳細: `docs/cascade_design.md`
 テストセット: `data/eval/dev_cascade_20.csv` (20命題, 36 atomic units)
+
+#### hit_source フィールド
+
+命題ごとの判定結果に `hit_source` を付与（`Evidence.hit_sources: Dict[int, str]`）:
+- `tfidf`: Tier 1 で hit（既存の tfidf バイグラム照合）
+- `cascade_rescued`: Tier 1 miss → Tier 2/3 通過で rescue
+- `miss`: Tier 1 miss かつ cascade でも rescue されず（または cascade 利用不可）
 
 ### Audit Engine（検出層の詳細）
 
@@ -200,6 +209,32 @@ python examples/basic_audit.py
 | cascade: RELAXED_DELTA_GAP | 0.02 | `cascade_matcher.py` |
 | cascade: c4 閾値 | f4_flag < 1.0 | `cascade_matcher.py` |
 
+## Baseline & HA20
+
+### 命題ヒット率ベースライン
+
+102問 × 310命題の全件リラン結果:
+
+| hit_source | 件数 | 割合 |
+|-----------|------|------|
+| tfidf | 184 | 59.4% |
+| cascade_rescued | 5 | 1.6% |
+| miss | 121 | 39.0% |
+| **合計** | **310** | — |
+| **命題ヒット率** | **189/310** | **61.0%** |
+
+ベースライン CSV: `data/eval/audit_102_main_baseline_cascade.csv`
+
+### HA20 評価指標
+
+| 指標 | 値 | 説明 |
+|------|-----|------|
+| 方向性一致率 | 19/20 (0.95) | human_score ≥ 4 → accept 期待、≤ 2 → not accept 期待 |
+| Spearman ρ (system) | 0.4030 (p=0.078) | human_score vs システム自動検出 hit_rate |
+| Spearman ρ (reference) | 0.9090 (p<0.001) | human_score vs 人間アノテーター propositions_hit（内部一貫性指標） |
+
+注記: ρ=0.9090 は人間アノテーター内部の一貫性を示す参照値。システム評価には方向性一致率 (19/20) と Spearman ρ (system) を使用する。
+
 ## Public API
 
 ```python
@@ -279,7 +314,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 3. `ruff check .` — lint
 4. `pytest -q --tb=short` — test (REST/MCP テスト含む)
 
-CI通過 = lint clean + 全テストpass
+CI通過 = lint clean + 全テストpass (256 collected, 3 skipped: fugashi 未インストール)
 
 ## Important Notes
 
@@ -290,6 +325,6 @@ CI通過 = lint clean + 全テストpass
 - `grv` はDBにJSON文字列として保存 (`json.dumps`)
 - `por_fired` はSQLiteにINTEGER (0/1) で保存
 - 演算子フレーム検出テストは `tests/test_operator_frame.py` (32件)
-- `_SYNONYM_MAP` (122エントリ) と `OPERATOR_CATALOG` (4族) は detector.py 内の dict リテラルで管理
+- `_SYNONYM_MAP` (110エントリ) と `OPERATOR_CATALOG` (4族) は detector.py 内の dict リテラルで管理
 - cascade テスト (`tests/test_cascade_tier2.py`, `tests/test_cascade_tier3.py`) は SBert 未インストール環境で自動 skip
 - 否定極性マーカー (`_NEGATION_POLARITY_FORMS`) は全トークン2文字以上の具体形で定義（bare 1文字トークン禁止）
