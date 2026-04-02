@@ -1,0 +1,19 @@
+metric,value,note
+rho_full,-0.7737,全20件
+p_full,6.3e-05,
+rho_loo_mean,-0.7731,20 fold 平均
+|rho|_loo_mean,0.7731,絶対値平均
+rho_loo_std,0.0274,
+|rho|_loo_std,0.0274,絶対値の標準偏差
+|rho|_loo_min,0.7325,除外: q032
+|rho|_loo_max,0.8543,除外: q100
+|rho|_max_drop,0.0412,|ρ_full| - |ρ_loo_min|
+influential_count,0,|ρ_i| < mean-2σ
+stability,不安定,ρ_loo_std ≥ 0.05 または |ρ|_loo_min ≤ 0.80 → 特定ケース依存の疑い
+,,
+Model_C_prime_rho_full,0.8292,既知参考値
+Model_C_prime_rho_loo,0.8018,既知参考値
+Model_C_prime_drop,0.0274,
+delta_e_A_rho_full,0.7737,|ρ|
+delta_e_A_rho_loo_mean,0.7731,|ρ| 平均
+delta_e_A_drop,0.0006,|ρ_full| - |ρ_loo_mean|
