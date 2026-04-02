@@ -31,15 +31,17 @@ _logger = logging.getLogger(__name__)
 
 # SBert モデルキャッシュ（初回ロード時に設定）
 _cascade_model = None
+_cascade_load_attempted = False
 
 
 def _get_cascade_model():
-    """SBert モデルをキャッシュ付きでロードする。失敗時は None を返す。"""
-    global _cascade_model
+    """SBert モデルをキャッシュ付きでロードする。失敗時は None を返し、再試行しない。"""
+    global _cascade_model, _cascade_load_attempted
     if _cascade_model is not None:
         return _cascade_model
-    if not _HAS_CASCADE:
+    if _cascade_load_attempted or not _HAS_CASCADE:
         return None
+    _cascade_load_attempted = True
     try:
         _cascade_model = _cascade_load_model()
         return _cascade_model
@@ -1130,6 +1132,10 @@ def detect(
         for idx in miss_ids:
             prop_text = core_props[idx]
             atomic_units = atomic_units_map.get(idx, atomic_units_map.get(str(idx), []))
+            if not atomic_units:
+                # atomic_units なし → c5 が必ず fail するため Tier 2 をスキップ
+                remaining_miss.append(idx)
+                continue
             t2 = tier2_candidate(prop_text, response_text, cascade_model)
             t3 = tier3_filter(
                 tier2_result=t2,
