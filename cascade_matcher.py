@@ -207,7 +207,9 @@ def tier2_candidate(
     top1_score = float(scores[top1_idx])
     top1_sentence = segments[top1_idx]
 
-    top2_score = float(scores[sorted_indices[1]]) if len(sorted_indices) > 1 else 0.0
+    top2_idx = sorted_indices[1] if len(sorted_indices) > 1 else None
+    top2_score = float(scores[top2_idx]) if top2_idx is not None else 0.0
+    top2_sentence = segments[top2_idx] if top2_idx is not None else ""
     gap = top1_score - top2_score
 
     # セグメント1件のみの場合、gap は弁別不能（実質 undefined）→ pass しない
@@ -217,6 +219,7 @@ def tier2_candidate(
     return {
         "top1_sentence": top1_sentence,
         "top1_score": top1_score,
+        "top2_sentence": top2_sentence,
         "top2_score": top2_score,
         "gap": gap,
         "all_scores": [float(s) for s in scores],
@@ -354,6 +357,7 @@ def tier3_filter(
     f4_flag: float,
     atomic_units: List[str],
     synonym_dict: Optional[Dict[str, List[str]]] = None,
+    response: Optional[str] = None,
     theta: float = THETA_SBERT,
     delta: float = DELTA_GAP,
 ) -> Dict:
@@ -364,7 +368,7 @@ def tier3_filter(
     c2: embedding 閾値（top1_score >= θ_sbert）
     c3: gap 閾値（gap >= δ_gap）
     c4: f4 非発火（f4_flag == 0.0）
-    c5: atomic 整合（1単位以上が top1_sentence に含まれる）
+    c5: atomic 整合（1単位以上が response 全文に含まれる）
 
     Args:
         tier2_result: tier2_candidate() の返却値。
@@ -372,6 +376,7 @@ def tier3_filter(
         f4_flag: structural_gate_summary の f4_flag (0.0 / 0.5 / 1.0)。
         atomic_units: ["left|right", ...] 形式の atomic リスト。
         synonym_dict: synonym 辞書。
+        response: AI回答全文。None の場合は top1_sentence にフォールバック。
         theta: cosine similarity 閾値。
         delta: gap 閾値。
 
@@ -397,8 +402,10 @@ def tier3_filter(
     c2 = pass_t2 and score_ok
     c3 = pass_t2 and gap_ok
     c4 = f4_flag == 0.0
+    # c5: response 全文で atomic 整合チェック（未指定時は top1_sentence にフォールバック）
+    c5_text = response if response else tier2_result.get("top1_sentence", "")
     atomic_result = check_atomic_alignment(
-        atomic_units, tier2_result.get("top1_sentence", ""), synonym_dict
+        atomic_units, c5_text, synonym_dict
     )
     c5 = atomic_result["pass"]
 
@@ -486,6 +493,7 @@ def run_cascade_full(
         f4_flag=f4_flag,
         atomic_units=atomic_units,
         synonym_dict=synonym_dict,
+        response=response,
         theta=theta,
         delta=delta,
     )
