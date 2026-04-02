@@ -63,9 +63,7 @@ def main() -> None:
     # --- Step 3: 安定性指標 ---
     rho_loo_mean = np.mean(rho_arr)
     rho_loo_std = np.std(rho_arr, ddof=1)
-    rho_loo_min = np.min(rho_arr)
-    rho_loo_max = np.max(rho_arr)
-    max_drop = rho_full - rho_loo_min  # 両方負なので、min が最も ρ が弱い fold
+    rho_loo_min = np.min(rho_arr)  # noqa: F841
     # |ρ| ベースの max_drop: |ρ_full| - |ρ_loo_min| ではなく、
     # 「最も |ρ| が小さくなった fold」を見る
     abs_rho_arr = np.abs(rho_arr)
@@ -156,7 +154,7 @@ def main() -> None:
         else:
             colors.append("steelblue")
 
-    bars = ax.bar(range(n), sorted_abs_rho, color=colors, edgecolor="white", linewidth=0.5)
+    ax.bar(range(n), sorted_abs_rho, color=colors, edgecolor="white", linewidth=0.5)
 
     # ρ_full 水平線
     ax.axhline(y=abs_rho_full, color="red", linestyle="--", linewidth=1.5, label=f"|ρ_full| = {abs_rho_full:.4f}")
@@ -186,7 +184,7 @@ def main() -> None:
     lines = [
         "# ΔE_A（パイプライン A 理論式）LOO-CV 安定性検証",
         "",
-        f"**実行日**: 2026-04-02",
+        "**実行日**: 2026-04-02",
         f"**データ**: HA20 ({n}件, temperature=0.7)",
         "",
         "## 1. 全データ ρ の再確認",

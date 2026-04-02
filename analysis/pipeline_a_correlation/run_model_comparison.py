@@ -8,9 +8,6 @@ import csv
 import itertools
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import spearmanr
 
@@ -103,33 +100,6 @@ def loo_cv_fixed(records: list[dict], score_fn) -> tuple[float, float, list[floa
     return float(np.mean(rho_vals)), float(np.std(rho_vals, ddof=1)), rho_vals
 
 
-def loo_cv_model3(records: list[dict]) -> tuple[float, float]:
-    """Model 3: fold ごとにパラメータ再フィット → 除外ケースを予測"""
-    n = len(records)
-    hs = np.array([r["human_score"] for r in records])
-    predictions = []
-    grid = [round(x * 0.1, 1) for x in range(11)]
-
-    for i in range(n):
-        train = [records[j] for j in range(n) if j != i]
-        hs_train = np.array([r["human_score"] for r in train])
-
-        best_rho = -2.0
-        best_params = (0.4, 0.0, 0.8)
-        for alpha, beta, gamma in itertools.product(grid, grid, grid):
-            scores_train = np.array([score_model3(r, alpha, beta, gamma) for r in train])
-            rho, _ = spearmanr(scores_train, hs_train)
-            if rho > best_rho:
-                best_rho = rho
-                best_params = (alpha, beta, gamma)
-
-        pred = score_model3(records[i], *best_params)
-        predictions.append(pred)
-
-    rho_loo, p_loo = spearmanr(predictions, hs)
-    return float(rho_loo), float(p_loo)
-
-
 def main() -> None:
     records = load_data()
     n = len(records)
@@ -153,7 +123,7 @@ def main() -> None:
 
     # --- Step 2: Spearman ρ ---
     models_fixed = {
-        "Model 1 (現行 C')": [r["score_model1"] for r in records],
+        "Model 1 (C'式, human C)": [r["score_model1"] for r in records],
         "Model 2 (L_R→ΔE_A据置)": [r["score_model2"] for r in records],
         "Model 3 (L_R→ΔE_A再フィット)": [r["score_model3"] for r in records],
         "Model 4 (ΔE_A単独)": [r["score_model4"] for r in records],
@@ -173,7 +143,7 @@ def main() -> None:
 
     # Model 1
     m1_mean, m1_std, _ = loo_cv_fixed(records, score_model1)
-    loo_results["Model 1 (現行 C')"] = (m1_mean, m1_std)
+    loo_results["Model 1 (C'式, human C)"] = (m1_mean, m1_std)
     print(f"  Model 1: ρ_loo_mean={m1_mean:.4f}, std={m1_std:.4f}")
 
     # Model 2
@@ -181,11 +151,13 @@ def main() -> None:
     loo_results["Model 2 (L_R→ΔE_A据置)"] = (m2_mean, m2_std)
     print(f"  Model 2: ρ_loo_mean={m2_mean:.4f}, std={m2_std:.4f}")
 
-    # Model 3: fold ごとに再フィット
-    print("  Model 3: LOO-CV with per-fold refit...")
-    m3_loo_rho, m3_loo_p = loo_cv_model3(records)
-    loo_results["Model 3 (L_R→ΔE_A再フィット)"] = (m3_loo_rho, None)
-    print(f"  Model 3: ρ_loo={m3_loo_rho:.4f} (p={m3_loo_p:.6f})")
+    # Model 3: 全データ最適パラメータを固定して Jackknife（他モデルと同一手法）
+    def score_model3_best(r: dict) -> float:
+        return score_model3(r, best["alpha"], best["beta"], best["gamma"])
+
+    m3_mean, m3_std, _ = loo_cv_fixed(records, score_model3_best)
+    loo_results["Model 3 (L_R→ΔE_A再フィット)"] = (m3_mean, m3_std)
+    print(f"  Model 3: ρ_loo_mean={m3_mean:.4f}, std={m3_std:.4f}")
 
     # Model 4
     m4_mean, m4_std, _ = loo_cv_fixed(records, score_model4)
@@ -210,7 +182,7 @@ def main() -> None:
     # --- 出力2: 比較結果 CSV ---
     comp_rows = []
     model_params = {
-        "Model 1 (現行 C')": "α=0.4, β=0.0, γ=0.8, L_R=cosine",
+        "Model 1 (C'式, human C)": "α=0.4, β=0.0, γ=0.8, L_R=cosine (※C=human propositions_hit, 本番C'とはデータソースが異なる)",
         "Model 2 (L_R→ΔE_A据置)": "α=0.4, β=0.0, γ=0.8, L_R=ΔE_A",
         "Model 3 (L_R→ΔE_A再フィット)": f"α={best['alpha']}, β={best['beta']}, γ={best['gamma']}, L_R=ΔE_A",
         "Model 4 (ΔE_A単独)": "score=5-4×ΔE_A",
@@ -275,7 +247,7 @@ def main() -> None:
     lines = [
         "# Model C' の L_R を ΔE_A に差し替えた場合の ρ 比較",
         "",
-        f"**実行日**: 2026-04-02",
+        "**実行日**: 2026-04-02",
         f"**データ**: HA20 ({n}件, temperature=0.7)",
         "",
         "## 1. 5モデル比較テーブル",
@@ -318,7 +290,7 @@ def main() -> None:
         "",
         "## 3. ボトルネック追加効果分析",
         "",
-        f"### Model 4 (ΔE_A単独) vs Model 5 (ΔE_A+ボトルネック)",
+        "### Model 4 (ΔE_A単独) vs Model 5 (ΔE_A+ボトルネック)",
         "",
         f"- Model 4 ρ_full: {rho_full_results['Model 4 (ΔE_A単独)'][0]:.4f}",
         f"- Model 5 ρ_full: {rho_full_results['Model 5 (ΔE_A+ボトルネック)'][0]:.4f}",
@@ -367,9 +339,9 @@ def main() -> None:
     ]
 
     # ΔE_A 単独 vs 現行 Model C'
-    rho1 = rho_full_results["Model 1 (現行 C')"][0]
+    rho1 = rho_full_results["Model 1 (C'式, human C)"][0]
     lines.append(
-        f"### ΔE_A 単独 (Model 4) vs 現行 Model C' (Model 1)"
+        "### ΔE_A 単独 (Model 4) vs 現行 Model C' (Model 1)"
     )
     lines.append("")
     if rho4 > rho1:
@@ -385,7 +357,7 @@ def main() -> None:
     rho3 = rho_full_results["Model 3 (L_R→ΔE_A再フィット)"][0]
     lines += [
         "",
-        f"### パラメータフィット (Model 3) vs ΔE_A 単独 (Model 4)",
+        "### パラメータフィット (Model 3) vs ΔE_A 単独 (Model 4)",
         "",
     ]
     if rho3 > rho4 + 0.01:

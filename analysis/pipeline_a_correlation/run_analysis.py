@@ -8,12 +8,16 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import spearmanr
+
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    _HAS_MPL = True
+except ImportError:
+    _HAS_MPL = False
 
 # --- パス ---
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -49,6 +53,49 @@ def compute_c(prop_hit_str: str) -> float:
 def compute_delta_e_a(s: float, c: float) -> float:
     numerator = WEIGHT_S * (1.0 - s) ** 2 + WEIGHT_C * (1.0 - c) ** 2
     return clamp(numerator / (WEIGHT_S + WEIGHT_C))
+
+
+def _plot_scatter(records: list, out_dir: Path) -> None:
+    """散布図を生成する（matplotlib 必須）"""
+    de_a = [r["delta_e_A"] for r in records]
+    de_f = [r["delta_e_full"] for r in records]
+    ids = [r["id"] for r in records]
+    hs = [r["human_score"] for r in records]
+
+    rho_a, p_a = spearmanr(hs, de_a)
+    rho_f, p_f = spearmanr(hs, de_f)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    ax = axes[0]
+    ax.scatter(de_a, hs, c="steelblue", s=60, zorder=3)
+    for i, qid in enumerate(ids):
+        ax.annotate(qid, (de_a[i], hs[i]), fontsize=7, textcoords="offset points",
+                    xytext=(4, 4), alpha=0.8)
+    ax.set_xlabel("ΔE_A (Pipeline A)", fontsize=11)
+    ax.set_ylabel("human_score", fontsize=11)
+    ax.set_title(f"Pipeline A: ΔE_A vs human_score\nρ={rho_a:.4f} (p={p_a:.4f})", fontsize=11)
+    ax.set_xlim(-0.02, max(de_a) * 1.15)
+    ax.set_ylim(0.5, 5.5)
+    ax.grid(True, alpha=0.3)
+
+    ax = axes[1]
+    ax.scatter(de_f, hs, c="coral", s=60, zorder=3)
+    for i, qid in enumerate(ids):
+        ax.annotate(qid, (de_f[i], hs[i]), fontsize=7, textcoords="offset points",
+                    xytext=(4, 4), alpha=0.8)
+    ax.set_xlabel("delta_e_full (Pipeline B, cosine)", fontsize=11)
+    ax.set_ylabel("human_score", fontsize=11)
+    ax.set_title(f"Pipeline B: delta_e_full vs human_score\nρ={rho_f:.4f} (p={p_f:.4f})", fontsize=11)
+    ax.set_xlim(-0.02, max(de_f) * 1.15)
+    ax.set_ylim(0.5, 5.5)
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    out_png = out_dir / "scatter_human_score_vs_delta_e_A.png"
+    fig.savefig(out_png, dpi=150)
+    plt.close()
+    print(f"出力: {out_png}")
 
 
 def main() -> None:
@@ -183,53 +230,18 @@ def main() -> None:
     print(f"\n出力: {out_corr}")
 
     # --- 出力3: 散布図 ---
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-    de_a = [r["delta_e_A"] for r in records]
-    de_f = [r["delta_e_full"] for r in records]
-    ids = [r["id"] for r in records]
-    hs = [r["human_score"] for r in records]
-
-    rho_a, p_a = spearmanr(hs, de_a)
-    rho_f, p_f = spearmanr(hs, de_f)
-
-    # Panel 1: ΔE_A
-    ax = axes[0]
-    ax.scatter(de_a, hs, c="steelblue", s=60, zorder=3)
-    for i, qid in enumerate(ids):
-        ax.annotate(qid, (de_a[i], hs[i]), fontsize=7, textcoords="offset points",
-                    xytext=(4, 4), alpha=0.8)
-    ax.set_xlabel("ΔE_A (Pipeline A)", fontsize=11)
-    ax.set_ylabel("human_score", fontsize=11)
-    ax.set_title(f"Pipeline A: ΔE_A vs human_score\nρ={rho_a:.4f} (p={p_a:.4f})", fontsize=11)
-    ax.set_xlim(-0.02, max(de_a) * 1.15)
-    ax.set_ylim(0.5, 5.5)
-    ax.grid(True, alpha=0.3)
-
-    # Panel 2: cosine delta_e_full
-    ax = axes[1]
-    ax.scatter(de_f, hs, c="coral", s=60, zorder=3)
-    for i, qid in enumerate(ids):
-        ax.annotate(qid, (de_f[i], hs[i]), fontsize=7, textcoords="offset points",
-                    xytext=(4, 4), alpha=0.8)
-    ax.set_xlabel("delta_e_full (Pipeline B, cosine)", fontsize=11)
-    ax.set_ylabel("human_score", fontsize=11)
-    ax.set_title(f"Pipeline B: delta_e_full vs human_score\nρ={rho_f:.4f} (p={p_f:.4f})", fontsize=11)
-    ax.set_xlim(-0.02, max(de_f) * 1.15)
-    ax.set_ylim(0.5, 5.5)
-    ax.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    out_png = OUT_DIR / "scatter_human_score_vs_delta_e_A.png"
-    fig.savefig(out_png, dpi=150)
-    plt.close()
-    print(f"出力: {out_png}")
+    if not _HAS_MPL:
+        print("matplotlib 未インストール: 散布図スキップ")
+    else:
+        _plot_scatter(records, OUT_DIR)
 
     # --- 出力4: 診断レポート ---
+
+    # --- 出力4 (continued): 診断レポート ---
     report_lines = [
         "# パイプライン A の ΔE（加重二乗和）vs human_score 相関検証",
         "",
-        f"**実行日**: 2026-04-02",
+        "**実行日**: 2026-04-02",
         f"**データ**: HA20 ({n}件, temperature=0.7)",
         "",
         "## 1. 計算過程の確認",
@@ -247,7 +259,7 @@ def main() -> None:
 
     s_vals = np.array([r["S"] for r in records])
     c_vals = np.array([r["C"] for r in records])
-    de_a_vals = np.array(de_a)
+    de_a_vals = np.array([r["delta_e_A"] for r in records])
     for stat_name, func in [("min", np.min), ("max", np.max), ("mean", np.mean), ("median", np.median), ("std", np.std)]:
         report_lines.append(
             f"| {stat_name} | {func(s_vals):.4f} | {func(c_vals):.4f} | {func(de_a_vals):.4f} |"
@@ -285,13 +297,13 @@ def main() -> None:
     rho_de_f = [cr for cr in corr_results if cr["metric"] == "delta_e_full"][0]["rho"]
     rho_c = [cr for cr in corr_results if cr["metric"] == "C"][0]["rho"]
     rho_s = [cr for cr in corr_results if cr["metric"] == "S"][0]["rho"]
-    rho_fm = [cr for cr in corr_results if cr["metric"] == "fail_max"][0]["rho"]
+    _rho_fm = [cr for cr in corr_results if cr["metric"] == "fail_max"][0]["rho"]  # noqa: F841
 
     report_lines += [
         "",
         "## 3. 所見",
         "",
-        f"### ΔE_A vs cosine ΔE",
+        "### ΔE_A vs cosine ΔE",
         "",
         f"- **ΔE_A** (パイプラインA): ρ = {rho_de_a:.4f}",
         f"- **delta_e_full** (パイプラインB, cosine): ρ = {rho_de_f:.4f}",
@@ -310,12 +322,12 @@ def main() -> None:
         report_lines.append("ΔE_A と cosine ΔE の相関は同等。")
 
     report_lines += [
-        f"",
-        f"### ΔE_A vs C 単独",
-        f"",
+        "",
+        "### ΔE_A vs C 単独",
+        "",
         f"- **C** (命題カバレッジ): ρ = {rho_c:.4f}",
         f"- **1 - ΔE_A**: ρ = {rho_de_a_inv:.4f}",
-        f"",
+        "",
     ]
 
     if abs(rho_de_a_inv) > abs(rho_c):
@@ -331,16 +343,16 @@ def main() -> None:
 
     report_lines += [
         "",
-        f"### S（構造品質）の寄与",
-        f"",
+        "### S（構造品質）の寄与",
+        "",
         f"- **S**: ρ = {rho_s:.4f}",
         f"- **1 - fail_max**: ρ = {[cr for cr in corr_results if cr['metric'] == '1 - fail_max'][0]['rho']:.4f}",
-        f"",
+        "",
         "S（加重平均）と 1-fail_max（最大値反転）の比較は、構造指標の操作化方法の違いを反映する。",
         "",
         "### Model C' との比較",
         "",
-        f"- **Model C' quality_score**: ρ = 0.8292（既知参考値）",
+        "- **Model C' quality_score**: ρ = 0.8292（既知参考値）",
         f"- **1 - ΔE_A**: ρ = {rho_de_a_inv:.4f}",
         "",
     ]
