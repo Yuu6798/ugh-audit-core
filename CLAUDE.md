@@ -120,15 +120,17 @@ C = hits / n_propositions
 
 **HA20 検証結果 (n=20, human_score vs 各指標):**
 
-| 指標 | Spearman ρ | p値 | LOO-CV |
-|------|-----------|-----|--------|
-| **ΔE** | **-0.9278** | **<0.001** | **|ρ|_mean=0.9272, std=0.0073** |
-| C (命題カバレッジ) | 0.9090 | <0.001 | — |
-| S (構造完全性) | 0.4011 | 0.080 | — |
+| 指標 | Spearman ρ | p値 | 備考 |
+|------|-----------|-----|------|
+| **ΔE (system C)** | **-0.5179** | **0.019** | **メイン指標（デプロイ可能）** |
+| ΔE (human C) | -0.9234 | <0.001 | 参照上限（ターゲット情報含む） |
+| C_sys (system) | 0.4030 | 0.078 | system 命題照合 |
+| C_human (human) | 0.9090 | <0.001 | 人間アノテーター（参照上限） |
+| S (構造完全性) | 0.3890 | 0.090 | — |
 
-- ΔE は C 単独 (ρ=0.909) を上回る。S の統合が品質予測を改善
-- LOO-CV で |ρ|_loo_min=0.9189、influential cases=0。特定ケース依存なし
-- 5モデル比較で ΔE 単独 (score=5-4×ΔE) が最良。ボトルネック(fail_max)追加は劣化
+- ΔE (system C) は C_sys 単独 (ρ=0.403) を上回る。S の統合が品質予測を改善
+- ΔE (human C) ρ=-0.923 は参照上限。system C の精度が ΔE のボトルネック
+- system 命題照合の精度向上が ΔE 改善の鍵
 
 分析データ: `analysis/pipeline_a_correlation/`
 
@@ -314,13 +316,15 @@ python examples/basic_audit.py
 | 方向性一致率 | 19/20 (0.95) | human_score ≥ 4 → accept 期待、≤ 2 → not accept 期待 |
 | Spearman ρ (system, Model A) | 0.4030 (p=0.078) | human_score vs hit_rate のみ |
 | Spearman ρ (system, Model C') | 0.8292 (全データ) / 0.8018 (LOO-CV) | human_score vs quality_score (t=0.0, system_hit_rate) |
-| **Spearman ρ (ΔE, 電卓層)** | **-0.9278 (全データ) / -0.9272 (LOO-CV)** | **human_score vs ΔE (t=0.7, human propositions_hit)** |
+| Spearman ρ (ΔE, system C) | -0.5179 (p=0.019) | human_score vs ΔE (system_hit_rate) — デプロイ可能指標 |
+| Spearman ρ (ΔE, human C) | -0.9234 (p<0.001) | human_score vs ΔE (human propositions_hit) — 参照上限 |
 | Spearman ρ (reference) | 0.9090 (p<0.001) | human_score vs 人間アノテーター propositions_hit（内部一貫性指標） |
 
 注記:
 - ρ=0.9090 は人間アノテーター内部の一貫性を示す参照値
-- Model C' (ρ=0.8292) は t=0.0 + system_hit_rate で校正。ΔE (ρ=-0.9278) は t=0.7 + human propositions_hit で計算。データソースが異なるため直接比較には注意が必要
-- ΔE の LOO-CV: std=0.0073, |ρ|_loo_min=0.9189, influential cases=0（安定判定）
+- ΔE (human C) ρ=-0.9234 は参照上限。C に human propositions_hit を使うとターゲット情報が漏洩するため、デプロイ可能指標は ΔE (system C) ρ=-0.5179
+- Model C' (ρ=0.8292) は t=0.0 + system_hit_rate + cosine ΔE で校正
+- system 命題照合の精度改善が ΔE 改善のボトルネック
 - Model C' のパラメータは n=20 暫定値。n=48 で再校正予定
 
 分析データ:

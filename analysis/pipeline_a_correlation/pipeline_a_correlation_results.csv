@@ -1,8 +1,11 @@
 metric,rho,p_value,n,note
-delta_e_A,-0.9278,0.0,20,パイプラインA ΔE（負相関期待）
-1 - delta_e_A,0.9278,0.0,20,パイプラインA ΔE 反転
-S,0.4011,0.07962,20,パイプラインA 構造品質
-C,0.909,0.0,20,パイプラインA 命題カバレッジ (= hit_rate)
+delta_e_A (sys),-0.5179,0.019329,20,ΔE_A system C（メイン指標）
+1 - delta_e_A (sys),0.5179,0.019329,20,ΔE_A system C 反転
+delta_e_A (human),-0.9234,0.0,20,ΔE_A human C（参照上限）
+1 - delta_e_A (human),0.9234,0.0,20,ΔE_A human C 反転
+S,0.389,0.090025,20,パイプラインA 構造品質
+C_sys,0.403,0.078123,20,system 命題カバレッジ
+C_human,0.909,0.0,20,human 命題カバレッジ（参照上限）
 delta_e_full,-0.4283,0.059573,20,旧 cosine ΔE（負相関期待）
 1 - delta_e_full,0.4283,0.059573,20,旧 cosine ΔE 反転
 por,0.0004,0.998695,20,旧 cosine PoR

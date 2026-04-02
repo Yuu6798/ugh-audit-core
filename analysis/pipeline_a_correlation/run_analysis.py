@@ -23,6 +23,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent.parent
 HA20_CSV = ROOT / "data" / "human_annotation_20" / "human_annotation_20_completed.csv"
 GATE_CSV = ROOT / "data" / "gate_results" / "structural_gate_summary.csv"
+MERGED_CSV = ROOT / "analysis" / "semantic_loss" / "ha20_merged_for_model_c.csv"
 OUT_DIR = Path(__file__).resolve().parent
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -116,18 +117,29 @@ def main() -> None:
                 gate_rows[row["id"]] = row
     print(f"Gate (temp=0.7, HA20一致): {len(gate_rows)}")
 
+    # system_hit_rate を merged CSV から読み込む
+    merged_rows = {}
+    with open(MERGED_CSV, encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["id"] in ha20_ids:
+                merged_rows[row["id"]] = row
+    print(f"Merged (system_hit_rate): {len(merged_rows)}")
+
     # 結合確認
-    joined_ids = ha20_ids & set(gate_rows.keys())
-    missing = ha20_ids - set(gate_rows.keys())
+    joined_ids = ha20_ids & set(gate_rows.keys()) & set(merged_rows.keys())
+    missing = ha20_ids - joined_ids
     if missing:
-        print(f"WARNING: gate に存在しない HA20 ID: {missing}")
+        print(f"WARNING: 結合できない HA20 ID: {missing}")
     print(f"結合件数: {len(joined_ids)}")
 
     # --- Step 2-4: S, C, ΔE_A 計算 ---
+    # system_hit_rate (merged CSV, t=0.0) をメイン、human propositions_hit を参照上限として併記
     records = []
     for qid in sorted(joined_ids):
         ha = ha20_rows[qid]
         gt = gate_rows[qid]
+        mg = merged_rows[qid]
 
         human_score = float(ha["human_score"])
         por = float(ha["por"])
@@ -140,9 +152,21 @@ def main() -> None:
         f4 = float(gt["f4_flag"])
         fail_max = float(gt["fail_max"])
 
-        s = compute_s(f1, f2, f3, f4)
-        c = compute_c(prop_hit_str)
-        delta_e_a = compute_delta_e_a(s, c)
+        # system ベース (merged CSV, t=0.0)
+        sys_hit_rate = float(mg["system_hit_rate"])
+        sys_fail_max = float(mg["fail_max"])
+        sys_f3 = float(mg["f3_flag"])
+        sys_f4 = float(mg["f4_flag"])
+        # merged CSV には f1/f2 がないため、system S は f3/f4 のみで近似
+        # → fail_max をそのまま使い S_sys = 1 - fail_max/1.0 とはせず、
+        #   gate (t=0.7) の f1/f2 + merged の f3/f4 で再構成
+        s = compute_s(f1, f2, sys_f3, sys_f4)
+        c_sys = clamp(sys_hit_rate)
+        delta_e_a = compute_delta_e_a(s, c_sys)
+
+        # human ベース（参照上限）
+        c_human = compute_c(prop_hit_str)
+        delta_e_a_human = compute_delta_e_a(s, c_human)
 
         records.append({
             "id": qid,
@@ -152,18 +176,23 @@ def main() -> None:
             "f3_flag": f3,
             "f4_flag": f4,
             "S": round(s, 4),
-            "C": round(c, 4),
+            "C_sys": round(c_sys, 4),
+            "C_human": round(c_human, 4),
             "delta_e_A": round(delta_e_a, 4),
+            "delta_e_A_human": round(delta_e_a_human, 4),
             "delta_e_full": delta_e_full,
             "por": por,
             "fail_max": fail_max,
+            "sys_fail_max": sys_fail_max,
         })
 
     # --- 値域チェック ---
     for r in records:
         assert 0.0 <= r["S"] <= 1.0, f"{r['id']}: S={r['S']} out of range"
-        assert 0.0 <= r["C"] <= 1.0, f"{r['id']}: C={r['C']} out of range"
+        assert 0.0 <= r["C_sys"] <= 1.0, f"{r['id']}: C_sys={r['C_sys']} out of range"
+        assert 0.0 <= r["C_human"] <= 1.0, f"{r['id']}: C_human={r['C_human']} out of range"
         assert 0.0 <= r["delta_e_A"] <= 1.0, f"{r['id']}: delta_e_A={r['delta_e_A']} out of range"
+        assert 0.0 <= r["delta_e_A_human"] <= 1.0, f"{r['id']}: delta_e_A_human out of range"
     print("値域チェック: OK")
 
     # --- 出力1: 結合データ CSV ---
@@ -180,10 +209,13 @@ def main() -> None:
     n = len(human_scores)
 
     metrics = [
-        ("delta_e_A", [r["delta_e_A"] for r in records], "パイプラインA ΔE（負相関期待）"),
-        ("1 - delta_e_A", [1 - r["delta_e_A"] for r in records], "パイプラインA ΔE 反転"),
+        ("delta_e_A (sys)", [r["delta_e_A"] for r in records], "ΔE_A system C（メイン指標）"),
+        ("1 - delta_e_A (sys)", [1 - r["delta_e_A"] for r in records], "ΔE_A system C 反転"),
+        ("delta_e_A (human)", [r["delta_e_A_human"] for r in records], "ΔE_A human C（参照上限）"),
+        ("1 - delta_e_A (human)", [1 - r["delta_e_A_human"] for r in records], "ΔE_A human C 反転"),
         ("S", [r["S"] for r in records], "パイプラインA 構造品質"),
-        ("C", [r["C"] for r in records], "パイプラインA 命題カバレッジ (= hit_rate)"),
+        ("C_sys", [r["C_sys"] for r in records], "system 命題カバレッジ"),
+        ("C_human", [r["C_human"] for r in records], "human 命題カバレッジ（参照上限）"),
         ("delta_e_full", [r["delta_e_full"] for r in records], "旧 cosine ΔE（負相関期待）"),
         ("1 - delta_e_full", [1 - r["delta_e_full"] for r in records], "旧 cosine ΔE 反転"),
         ("por", [r["por"] for r in records], "旧 cosine PoR"),
@@ -253,29 +285,33 @@ def main() -> None:
         "",
         "### S, C, ΔE_A の分布",
         "",
-        "| 統計量 | S | C | ΔE_A |",
-        "|--------|---|---|------|",
+        "| 統計量 | S | C_sys | C_human | ΔE_A (sys) | ΔE_A (human) |",
+        "|--------|---|-------|---------|------------|-------------|",
     ]
 
     s_vals = np.array([r["S"] for r in records])
-    c_vals = np.array([r["C"] for r in records])
+    c_sys_vals = np.array([r["C_sys"] for r in records])
+    c_hum_vals = np.array([r["C_human"] for r in records])
     de_a_vals = np.array([r["delta_e_A"] for r in records])
+    de_a_hum_vals = np.array([r["delta_e_A_human"] for r in records])
     for stat_name, func in [("min", np.min), ("max", np.max), ("mean", np.mean), ("median", np.median), ("std", np.std)]:
         report_lines.append(
-            f"| {stat_name} | {func(s_vals):.4f} | {func(c_vals):.4f} | {func(de_a_vals):.4f} |"
+            f"| {stat_name} | {func(s_vals):.4f} | {func(c_sys_vals):.4f} | "
+            f"{func(c_hum_vals):.4f} | {func(de_a_vals):.4f} | {func(de_a_hum_vals):.4f} |"
         )
 
     report_lines += [
         "",
         "### 個別データ",
         "",
-        "| id | human_score | S | C | ΔE_A | delta_e_full | fail_max |",
-        "|-----|------------|---|---|------|-------------|---------|",
+        "| id | human_score | S | C_sys | C_human | ΔE_A (sys) | ΔE_A (human) | delta_e_full |",
+        "|-----|------------|---|-------|---------|------------|-------------|-------------|",
     ]
     for r in records:
         report_lines.append(
-            f"| {r['id']} | {r['human_score']:.0f} | {r['S']:.4f} | {r['C']:.4f} | "
-            f"{r['delta_e_A']:.4f} | {r['delta_e_full']:.4f} | {r['fail_max']:.1f} |"
+            f"| {r['id']} | {r['human_score']:.0f} | {r['S']:.4f} | {r['C_sys']:.4f} | "
+            f"{r['C_human']:.4f} | {r['delta_e_A']:.4f} | {r['delta_e_A_human']:.4f} | "
+            f"{r['delta_e_full']:.4f} |"
         )
 
     report_lines += [
@@ -292,78 +328,88 @@ def main() -> None:
         )
 
     # 所見
-    rho_de_a = [cr for cr in corr_results if cr["metric"] == "delta_e_A"][0]["rho"]
-    rho_de_a_inv = [cr for cr in corr_results if cr["metric"] == "1 - delta_e_A"][0]["rho"]
+    rho_de_a = [cr for cr in corr_results if cr["metric"] == "delta_e_A (sys)"][0]["rho"]
+    rho_de_a_inv = [cr for cr in corr_results if cr["metric"] == "1 - delta_e_A (sys)"][0]["rho"]
+    rho_de_a_hum = [cr for cr in corr_results if cr["metric"] == "delta_e_A (human)"][0]["rho"]
+    rho_de_a_hum_inv = [cr for cr in corr_results if cr["metric"] == "1 - delta_e_A (human)"][0]["rho"]
     rho_de_f = [cr for cr in corr_results if cr["metric"] == "delta_e_full"][0]["rho"]
-    rho_c = [cr for cr in corr_results if cr["metric"] == "C"][0]["rho"]
+    rho_c_sys = [cr for cr in corr_results if cr["metric"] == "C_sys"][0]["rho"]
+    rho_c_hum = [cr for cr in corr_results if cr["metric"] == "C_human"][0]["rho"]
     rho_s = [cr for cr in corr_results if cr["metric"] == "S"][0]["rho"]
-    _rho_fm = [cr for cr in corr_results if cr["metric"] == "fail_max"][0]["rho"]  # noqa: F841
 
     report_lines += [
         "",
         "## 3. 所見",
         "",
-        "### ΔE_A vs cosine ΔE",
+        "### system C vs human C",
         "",
-        f"- **ΔE_A** (パイプラインA): ρ = {rho_de_a:.4f}",
-        f"- **delta_e_full** (パイプラインB, cosine): ρ = {rho_de_f:.4f}",
+        f"- **ΔE_A (sys)**: ρ = {rho_de_a:.4f} ← メイン指標（デプロイ可能）",
+        f"- **ΔE_A (human)**: ρ = {rho_de_a_hum:.4f} ← 参照上限",
+        f"- **C_sys**: ρ = {rho_c_sys:.4f}",
+        f"- **C_human**: ρ = {rho_c_hum:.4f} ← 参照上限",
+        "",
+    ]
+
+    report_lines += [
+        "### ΔE_A (sys) vs cosine ΔE",
+        "",
+        f"- **ΔE_A (sys)**: ρ = {rho_de_a:.4f}",
+        f"- **delta_e_full** (cosine): ρ = {rho_de_f:.4f}",
         "",
     ]
 
     if abs(rho_de_a) > abs(rho_de_f):
         report_lines.append(
-            f"ΔE_A は cosine ΔE より**強い**相関を示す（|ρ| {abs(rho_de_a):.4f} vs {abs(rho_de_f):.4f}）。"
+            f"ΔE_A (sys) は cosine ΔE より**強い**相関（|ρ| {abs(rho_de_a):.4f} vs {abs(rho_de_f):.4f}）。"
         )
     elif abs(rho_de_a) < abs(rho_de_f):
         report_lines.append(
-            f"ΔE_A は cosine ΔE より**弱い**相関を示す（|ρ| {abs(rho_de_a):.4f} vs {abs(rho_de_f):.4f}）。"
+            f"ΔE_A (sys) は cosine ΔE より**弱い**相関（|ρ| {abs(rho_de_a):.4f} vs {abs(rho_de_f):.4f}）。"
         )
     else:
-        report_lines.append("ΔE_A と cosine ΔE の相関は同等。")
+        report_lines.append("ΔE_A (sys) と cosine ΔE の相関は同等。")
 
     report_lines += [
         "",
-        "### ΔE_A vs C 単独",
+        "### ΔE_A (sys) vs C_sys 単独",
         "",
-        f"- **C** (命題カバレッジ): ρ = {rho_c:.4f}",
-        f"- **1 - ΔE_A**: ρ = {rho_de_a_inv:.4f}",
+        f"- **C_sys**: ρ = {rho_c_sys:.4f}",
+        f"- **1 - ΔE_A (sys)**: ρ = {rho_de_a_inv:.4f}",
         "",
     ]
 
-    if abs(rho_de_a_inv) > abs(rho_c):
+    if abs(rho_de_a_inv) > abs(rho_c_sys):
         report_lines.append(
-            "ΔE_A は C 単独を**上回る**。S の統合が品質予測に寄与している。"
+            "ΔE_A (sys) は C_sys 単独を**上回る**。S の統合が品質予測に寄与している。"
         )
-    elif abs(rho_de_a_inv) < abs(rho_c):
+    elif abs(rho_de_a_inv) < abs(rho_c_sys):
         report_lines.append(
-            "ΔE_A は C 単独を**下回る**。S の統合が C の信号を希釈している可能性がある。"
+            "ΔE_A (sys) は C_sys 単独を**下回る**。S の統合が C の信号を希釈している可能性がある。"
         )
     else:
-        report_lines.append("ΔE_A と C 単独の相関は同等。")
+        report_lines.append("ΔE_A (sys) と C_sys 単独の相関は同等。")
 
+    rho_fm = [cr for cr in corr_results if cr["metric"] == "1 - fail_max"][0]["rho"]
     report_lines += [
         "",
         "### S（構造品質）の寄与",
         "",
         f"- **S**: ρ = {rho_s:.4f}",
-        f"- **1 - fail_max**: ρ = {[cr for cr in corr_results if cr['metric'] == '1 - fail_max'][0]['rho']:.4f}",
-        "",
-        "S（加重平均）と 1-fail_max（最大値反転）の比較は、構造指標の操作化方法の違いを反映する。",
+        f"- **1 - fail_max**: ρ = {rho_fm:.4f}",
         "",
         "### Model C' との比較",
         "",
-        "- **Model C' quality_score**: ρ = 0.8292（既知参考値）",
-        f"- **1 - ΔE_A**: ρ = {rho_de_a_inv:.4f}",
+        "- **Model C' quality_score**: ρ = 0.8292（既知参考値, t=0.0, system_hit_rate）",
+        f"- **1 - ΔE_A (sys)**: ρ = {rho_de_a_inv:.4f}",
+        f"- **1 - ΔE_A (human)**: ρ = {rho_de_a_hum_inv:.4f}（参照上限）",
         "",
     ]
 
     if abs(rho_de_a_inv) > 0.8292:
-        report_lines.append("パイプラインAの理論式ΔEはModel C'を上回る。")
+        report_lines.append(f"ΔE_A (sys) (|ρ|={abs(rho_de_a_inv):.4f}) が Model C' (ρ=0.8292) を上回る。")
     else:
         report_lines.append(
-            f"Model C' (ρ=0.8292) が 1-ΔE_A (ρ={rho_de_a_inv:.4f}) を上回る。"
-            f"Model C' のボトルネック構造と cosine ΔE の組み合わせが、"
-            f"単純な加重二乗和より品質予測に有効。"
+            f"Model C' (ρ=0.8292) が ΔE_A (sys) (|ρ|={abs(rho_de_a_inv):.4f}) を上回る。"
         )
 
     report_lines += [
