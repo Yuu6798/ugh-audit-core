@@ -4,18 +4,18 @@ import csv
 import json
 import math
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 from statistics import mean
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-import audit as audit_module
-import detector
-from ugh_calculator import WEIGHT_C, WEIGHT_S
+import audit as audit_module  # noqa: E402
+import detector  # noqa: E402
+from ugh_calculator import WEIGHT_C, WEIGHT_S  # noqa: E402
 
 ORIGINAL_CHECK_PROPOSITIONS = detector.check_propositions
 

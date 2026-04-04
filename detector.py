@@ -1023,14 +1023,9 @@ def check_propositions(
         return 0, [], []
 
     negation_cues = [
-        "\u3067\u306f\u306a\u3044",
-        "\u3058\u3083\u306a\u3044",
-        "\u306e\u3067\u306f\u306a\u3044",
-        "\u8aa4\u308a",
-        "\u9006",
-        "\u5426\u5b9a",
-        "\u4e0d\u8981",
-        "\u4e0d\u53ef\u80fd",
+        "ではなく", "ではない", "のではなく", "のではない",
+        "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
+        "逆", "否定", "不要", "不可能",
     ]
     if disqualifying:
         for shortcut in disqualifying:
@@ -1086,7 +1081,11 @@ def check_propositions(
         full_recall = overlap_count / len(prop_bigrams)
         op = detect_operator(prop)
         has_neg_deontic = any(token in prop for token in neg_deontic)
-        needs_polarity = has_neg_deontic
+        needs_polarity_deontic = has_neg_deontic
+        needs_polarity_full = (
+            (op is not None and OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip")
+            or has_neg_deontic
+        )
         is_positive_deontic = bool(
             any(token in prop for token in pos_deontic)
             and not has_neg_deontic
@@ -1094,7 +1093,7 @@ def check_propositions(
 
         min_required = min(_MIN_OVERLAP, len(prop_bigrams))
         if direct_recall >= 0.15 and full_recall >= 0.35 and overlap_count >= min_required:
-            if needs_polarity and not _response_has_negation(response_text, overlap_set):
+            if needs_polarity_deontic and not _response_has_negation(response_text, overlap_set):
                 miss_ids.append(i)
                 continue
             if is_positive_deontic and _response_has_negation(response_text, overlap_set):
@@ -1112,7 +1111,7 @@ def check_propositions(
                     marker_found = True
                     break
             if marker_found and direct_recall >= 0.10 and full_recall >= 0.25 and overlap_count >= 2:
-                if needs_polarity and not _response_has_negation(response_text, overlap_set):
+                if needs_polarity_full and not _response_has_negation(response_text, overlap_set):
                     miss_ids.append(i)
                     continue
                 if is_positive_deontic and _response_has_negation(response_text, overlap_set):
