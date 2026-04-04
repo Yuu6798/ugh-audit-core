@@ -90,7 +90,7 @@ def test_ha20_regression():
     if not csv_path.exists():
         pytest.skip("case_analysis_model_c.csv not found")
 
-    with open(csv_path, newline="") as f:
+    with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
