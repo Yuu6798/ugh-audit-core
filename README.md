@@ -13,32 +13,121 @@ AIの回答が「意味的に誠実だったか」を定量的に評価・記録
 
 | 指標 | 測定内容 | 暴くもの |
 |------|---------|---------|
-| **PoR** | 質問 ↔ 回答の意味的共鳴度 | 「答えた」のか「それっぽいことを言った」かの違い |
-| **ΔE** | 期待回答 ↔ 実回答の意味ズレ量 | バイアス・回避・過剰一般化 |
+| **PoR = (S, C)** | 問いの核心に対する回答の位置座標 | 「答えた」のか「それっぽいことを言った」かの違い |
+| **ΔE** | PoR 座標上における理想回答からの距離 | バイアス・回避・過剰一般化 |
 | **grv** | 回答内の語彙重力分布 | どの概念に引っ張られて回答が歪んだか |
+
+### 計算式
+
+```
+PoR = (S, C)
+
+S = 1 - Σ(w_k × f_k) / 40     構造完全性 [0,1]
+    w: f1=5, f2=25, f3=5, f4=5
+
+C = hits / n_propositions       命題カバレッジ [0,1]
+
+ΔE = (2(1-S)² + (1-C)²) / 3    意味距離 [0,1]
+```
+
+ΔE (system C) vs human_score: Spearman ρ=-0.774 (p<0.001, HA20 n=20, t=0.0)
 
 ---
 
 ## アーキテクチャ
 
+### Audit Engine（構造的意味監査パイプライン）
+
+推論ゼロ・決定的パターンマッチのみで動作する3層パイプライン。
+
 ```
-[質問 Q]
+[質問 Q + メタデータ]  →  [AI回答 R]
     │
     ▼
-[AI回答 R]
+┌──────────────────────────────────┐
+│  detector.py  (検出層)           │
+│  テキスト → Evidence             │
+│  f1: 主題逸脱   f2: 用語捏造    │
+│  f3: 演算子無処理 f4: 前提受容   │
+│  + 命題カバレッジ                │
+├──────────────────────────────────┤
+│  ugh_calculator.py (電卓層)      │
+│  Evidence → State                │
+│  S(構造完全性) C(命題被覆率)     │
+│  ΔE(意味距離)  ビン分類          │
+├──────────────────────────────────┤
+│  decider.py (判定層)             │
+│  State + Evidence → Policy       │
+│  accept / rewrite / regenerate   │
+│  + repair_order (修復opcode列)   │
+├──────────────────────────────────┤
+│  cascade_matcher.py (回収補助)   │
+│  Tier 2: SBert embedding候補生成 │
+│  Tier 3: 多条件ANDフィルタ       │
+│  → Z_RESCUED / miss              │
+└──────────────────────────────────┘
+```
+
+#### 検出層の4指標
+
+| 指標 | 検出内容 | データソース |
+|------|---------|-------------|
+| **f1_anchor** | 主題逸脱 — 質問キーワードが回答に不在 | `_extract_keywords` + 予約語aliases |
+| **f2_unknown** | 用語捏造 — 予約語の禁止再解釈 | `registry/reserved_terms.yaml` |
+| **f3_operator** | 演算子無処理 — 全称/排他/因果等の演算子に未対応 | `registry/operator_catalog.yaml` |
+| **f4_premise** | 前提受容 — 埋め込み前提を無批判に受容 | `registry/premise_frames.yaml` |
+
+#### 命題マッチング + 演算子フレーム検出
+
+命題カバレッジ判定は漢字バイグラム + 類義語拡張で実施。
+演算子フレーム検出レイヤーにより、演算子を含む命題の回収精度を向上させる。
+
+| 演算子族 | 典型表現 | 効果 |
+|---------|---------|------|
+| **negation** | ではない / 未〜 / 不可能 | 極性反転 — 回答にも否定形を要求 |
+| **deontic** | べき / すべきではない | 当為フラグ — 事実記述との区別 |
+| **skeptical_modality** | かもしれない / とは限らない | 確信度低下 — 断定との区別 |
+| **binary_frame** | ではなく / 二項対立 | 対立分割 — 両側の存在確認 |
+
+通常マッチ (dr≥0.15, fr≥0.35, ov≥3) 失敗時、演算子が検出された命題は
+緩和閾値 (dr≥0.10, fr≥0.25, ov≥2) + 概念近傍マーカー + 極性検証で再判定される。
+
+#### 判定ロジック
+
+| ΔE bin | C bin | 判定 |
+|--------|-------|------|
+| 1 | — | accept |
+| 2 | ≥ 2 | accept |
+| 2 | 1 | rewrite |
+| 3 | — | rewrite |
+| 4 | — | regenerate |
+
+#### 修復opcode
+
+判定が `rewrite` / `regenerate` の場合、検出された問題に応じた修復命令列（repair_order）を生成。
+opcodeは `opcodes/runtime_repair_opcodes.yaml` に定義（13種、コスト表付き）。
+
+### UGH Audit Layer（PoR/ΔE/grv スコアリング）
+
+2つのパイプラインが並存する:
+
+| パイプライン | エントリ | ΔE の計算 | 用途 |
+|-------------|---------|-----------|------|
+| **Audit Engine** | `audit.py` (detect→calculate→decide) | 理論式: `(2(1-S)²+(1-C)²)/3` | 構造的意味監査 |
+| **Scorer** | `ugh_audit/scorer/ugh_scorer.py` | cosine距離: `1-cos(ref,resp)` | PoR/ΔE/grv 蓄積 |
+
+```
+[質問 Q + AI回答 R + Reference]
     │
     ▼
-┌─────────────────────────┐
-│   UGH Audit Layer       │
-│  scorer/ugh_scorer.py   │
-│  PoR / ΔE / grv 計算   │
-└─────────────────────────┘
+┌──────────────────────────────────┐
+│  scorer/ugh_scorer.py            │
+│  PoR / ΔE / grv 計算            │
+│  3層フォールバック               │
+└──────────────────────────────────┘
     │
     ▼
-[SQLite 蓄積]
-    │
-    ▼
-[Phase Map レポート]
+[SQLite 蓄積] → [Phase Map レポート]
 ```
 
 ---
@@ -69,8 +158,7 @@ pip install -e ".[ugh3]"
 ## クイックスタート
 
 ```python
-from ugh_audit.scorer import UGHScorer
-from ugh_audit.storage import AuditDB
+from ugh_audit import UGHScorer, AuditDB
 
 scorer = UGHScorer()
 db = AuditDB()
@@ -91,14 +179,25 @@ print(result)
 ## ディレクトリ構成
 
 ```
+# Audit Engine（構造的意味監査）
+audit.py              # パイプライン統合 (detect → calculate → decide)
+detector.py           # 検出層 — テキスト → Evidence
+ugh_calculator.py     # 電卓層 — Evidence → State
+decider.py            # 判定層 — State + Evidence → Policy
+cascade_matcher.py    # 回収補助 — SBert Tier 2 + 多条件 Tier 3
+registry/             # YAML辞書（予約語・演算子・前提フレーム）
+opcodes/              # 修復opcode定義
+
+# UGH Audit Layer（PoR/ΔE/grv スコアリング）
 ugh_audit/
-├── scorer/         # UGH指標スコアリング（3層フォールバック）
-├── storage/        # SQLite永続化
-├── reference/      # referenceセット管理（golden store）
-├── collector/      # ログ収集ユーティリティ
-├── report/         # Phase Mapレポート生成
-├── server.py       # REST API + MCP 統合サーバー (FastAPI)
-└── mcp_server.py   # MCP スタンドアロンサーバー
+├── scorer/           # UGH指標スコアリング（3層フォールバック）
+├── storage/          # SQLite永続化
+├── reference/        # referenceセット管理（golden store）
+├── collector/        # ログ収集ユーティリティ
+├── report/           # Phase Mapレポート生成
+├── server.py         # REST API + MCP 統合サーバー (FastAPI)
+└── mcp_server.py     # MCP スタンドアロンサーバー
+
 examples/
 tests/
 ```
@@ -139,6 +238,7 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 | POST | `/api/audit` | AI回答を意味監査（question, response, reference?, session_id?） |
 | GET | `/api/history` | 直近の監査履歴を取得 |
 | POST | `/mcp` | MCP Streamable HTTP エンドポイント |
+| GET | `/health` | ヘルスチェック (`{"status": "ok"}`) |
 
 ### 外部公開
 
@@ -184,9 +284,10 @@ ngrok http 8000
 
 ## フェーズロードマップ
 
-- **Phase 1（現在）**: スコアリング基盤 + ログ蓄積
-- **Phase 2**: referenceセット設計（Human-golden / Cross-model / Self-baseline）
-- **Phase 3**: Phase Map可視化 + パターン分析
+- **Phase 1**: スコアリング基盤 + ログ蓄積
+- **Phase 2（現在）**: Audit Engine — 構造的意味監査パイプライン（detector / calculator / decider）
+- **Phase 3**: referenceセット設計（Human-golden / Cross-model / Self-baseline）
+- **Phase 4**: Phase Map可視化 + パターン分析
 
 ---
 

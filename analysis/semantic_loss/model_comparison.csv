@@ -1,0 +1,7 @@
+model,ref_rho,sys_rho,sys_p_value,params
+A: L_P only,0.9090,0.4030,0.078123,
+B: αL_P+βL_Q+γL_R,0.9090,0.6401,0.002368,"{""alpha"": 0.3, ""beta"": 0.3, ""gamma"": 0.5}"
+B': αL_P+βL_st+γL_R,0.9205,0.8042,0.000019,"{""alpha"": 0.2, ""beta"": 0.3, ""gamma"": 0.3}"
+"C: max(L_Q, lin)",0.9100,0.6464,0.002072,"{""alpha"": 0.1, ""beta"": 0.0, ""gamma"": 0.5}"
+"C': max(L_st, lin)",0.9291,0.8261,0.000007,"{""alpha"": 0.1, ""beta"": 0.0, ""gamma"": 0.1}"
+D: multiplicative,0.9090,0.6401,0.002368,"{""alpha"": 1.0, ""beta"": 1.0, ""gamma"": 1.5}"

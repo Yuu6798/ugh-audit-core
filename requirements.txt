@@ -1,4 +1,8 @@
-numpy>=1.24
-sentence-transformers>=2.2
-fugashi>=1.3
-ipadic>=1.0
+# 依存関係は pyproject.toml で管理しています。
+# インストール方法:
+#   pip install -e ".[dev]"    # 開発用（テスト + lint + サーバー）
+#   pip install -e ".[full]"   # フル機能（sentence-transformers + 日本語）
+#   pip install -e ".[server]" # サーバーデプロイ
+#   pip install -e ".[ugh3]"   # ugh3 バックエンド
+#
+# 詳細は README.md を参照してください。
