@@ -101,7 +101,7 @@ def to_legacy_payload(result: EngineResult) -> dict:
         "por_fired": por_fired,
         "por_tuple": {"s": result.state.s, "c": result.state.c},
         "delta_e": result.state.delta_e,
-        "grv": result.state.grv,
+        "grv": {"_grv_scalar": result.state.grv},
         "meaning_drift": result.policy.verdict_label,
         "verdict": result.policy.verdict_label,
         "decision": legacy_decision,

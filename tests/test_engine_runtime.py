@@ -49,3 +49,5 @@ def test_engine_from_inputs_builds_evidence_and_legacy_payload():
     assert payload["decision"] in ("accept", "rewrite", "regenerate")
     assert isinstance(payload["por_fired"], bool)
     assert payload["meaning_drift"] == result.policy.verdict_label
+    # grv はレガシー互換のため dict で出力
+    assert isinstance(payload["grv"], dict)
