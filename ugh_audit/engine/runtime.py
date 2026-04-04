@@ -75,25 +75,29 @@ class UGHAuditEngine:
 
 _LEGACY_DECISION_MAP = {
     "same_meaning": "accept",
-    "meaning_drift": "regenerate",
 }
 
 _POR_FIRE_THRESHOLD = 0.82
+_REGENERATE_DELTA_E = 0.35  # delta_e_bin 4 の下限 (output_schema.yaml)
 
 
-def _to_legacy_decision(policy_decision: str, c_bin: str) -> str:
+def _to_legacy_decision(policy_decision: str, c_bin: str, delta_e: float) -> str:
     """engine の decision を旧 accept/rewrite/regenerate に変換する。"""
     if policy_decision in _LEGACY_DECISION_MAP:
         return _LEGACY_DECISION_MAP[policy_decision]
     if policy_decision == "minor_drift":
         return "rewrite" if c_bin == "low" else "accept"
+    if policy_decision == "meaning_drift":
+        return "regenerate" if delta_e > _REGENERATE_DELTA_E else "rewrite"
     return "rewrite"  # unknown → 安全側
 
 
 def to_legacy_payload(result: EngineResult) -> dict:
     """旧 API / DB が当面消費できる互換 payload へ射影する。"""
 
-    legacy_decision = _to_legacy_decision(result.policy.decision, result.state.c_bin)
+    legacy_decision = _to_legacy_decision(
+        result.policy.decision, result.state.c_bin, result.state.delta_e,
+    )
     por_fired = result.state.s >= _POR_FIRE_THRESHOLD
 
     return {
