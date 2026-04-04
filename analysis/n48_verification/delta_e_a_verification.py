@@ -332,6 +332,18 @@ def run_subgroup_analysis(rows: list[dict]) -> list[dict]:
         de_ref = np.array([r["delta_e_a_ref"] for r in subset])
         pred = 5 - 4 * de_ref
         rho, p = spearmanr(pred, scores_o)
+        if np.isnan(rho):
+            results.append({
+                "group": label,
+                "n": len(subset),
+                "O_mean": round(float(np.mean(scores_o)), 3),
+                "de_a_ref_mean": round(float(np.mean(de_ref)), 4),
+                "de_a_sys_mean": round(float(np.mean([r["delta_e_a_sys"] for r in subset])), 4),
+                "rho_ref": None,
+                "p_ref": None,
+                "note": "O値が全て同一、ρ算出不可",
+            })
+            return
         results.append({
             "group": label,
             "n": len(subset),
