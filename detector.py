@@ -1006,7 +1006,7 @@ def _relaxed_candidate_allowed(
             return False
 
     required_chunks = _RELAXED_REQUIRED_CHUNKS.get(prop)
-    if required_chunks and not any(chunk in sentence for chunk in required_chunks):
+    if required_chunks and not all(chunk in sentence for chunk in required_chunks):
         return False
 
     return True
