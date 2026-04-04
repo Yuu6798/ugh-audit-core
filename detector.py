@@ -1141,7 +1141,17 @@ def check_propositions(
                     response_text=response_text,
                 )
             ):
-                relaxed_candidates.append(i)
+                # 極性検証: 通常パスと同じガードを適用
+                if needs_polarity_full and not _response_has_negation(
+                    response_text, overlap_set
+                ):
+                    pass  # polarity不一致 → relaxed候補に含めない
+                elif is_positive_deontic and _response_has_negation(
+                    response_text, overlap_set
+                ):
+                    pass  # 肯定deonticが否定されている → 含めない
+                else:
+                    relaxed_candidates.append(i)
 
         miss_ids.append(i)
 
@@ -1269,8 +1279,11 @@ def detect(
     disqualified = False
     if (hits == 0 and len(miss_ids) == len(core_props)
             and core_props and disqualifying):
-        _DQ_NEGATION_CUES = ["ではなく", "ではない", "のではなく", "誤り", "不適切",
-                             "批判", "安易", "短絡"]
+        _DQ_NEGATION_CUES = [
+            "ではなく", "ではない", "のではなく", "のではない",
+            "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
+            "逆", "否定", "不要", "不可能",
+        ]
         for shortcut in disqualifying:
             if not shortcut or shortcut not in response_text:
                 continue
