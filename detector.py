@@ -1158,21 +1158,25 @@ def check_propositions(
     if relaxed_context and relaxed_candidates:
         fail_max = relaxed_context.get("fail_max", 1.0)
         if fail_max < 1.0:
-            relaxed_hits = len(hit_ids) + len(relaxed_candidates)
-            evidence = Evidence(
+            # 現状のΔEを計算し、既に高品質なケースのみ relaxed 昇格を許可
+            current_evidence = Evidence(
                 question_id=relaxed_context.get("question_id", ""),
                 f1_anchor=relaxed_context.get("f1_anchor", 0.0),
                 f2_unknown=relaxed_context.get("f2_unknown", 0.0),
                 f3_operator=relaxed_context.get("f3_operator", 0.0),
                 f4_premise=relaxed_context.get("f4_premise", 0.0),
-                propositions_hit=relaxed_hits,
+                propositions_hit=len(hit_ids),
                 propositions_total=len(core_props),
             )
-            relaxed_delta_e = _compute_delta_e(
-                _compute_s(evidence),
-                relaxed_hits / len(core_props) if core_props else 1.0,
-            )
-            if relaxed_delta_e <= _RELAXED_DELTA_E_MAX:
+            current_s = _compute_s(current_evidence)
+            current_c = len(hit_ids) / len(core_props) if core_props else 1.0
+            current_delta_e = _compute_delta_e(current_s, current_c)
+
+            relaxed_hits = len(hit_ids) + len(relaxed_candidates)
+            relaxed_c = relaxed_hits / len(core_props) if core_props else 1.0
+            relaxed_delta_e = _compute_delta_e(current_s, relaxed_c)
+
+            if current_delta_e <= _RELAXED_DELTA_E_MAX and relaxed_delta_e <= _RELAXED_DELTA_E_MAX:
                 hit_ids = sorted(set(hit_ids) | set(relaxed_candidates))
                 miss_ids = [idx for idx in miss_ids if idx not in relaxed_candidates]
 
