@@ -486,10 +486,12 @@ def safety_check_propositions_factory(accepted: set[Tuple[str, int]]):
     ) -> Tuple[int, List[int], List[int]]:
         qid = getattr(safety_check_propositions, "_qid")
         _, baseline_hit_ids, _ = ORIGINAL_CHECK_PROPOSITIONS(
-            response_text, core_props, disqualifying, acceptable_variants
+            response_text, core_props, disqualifying, acceptable_variants,
+            relaxed_context=relaxed_context,
         )
         _, relaxed_hit_ids, _ = relaxed_check_propositions(
-            response_text, core_props, disqualifying, acceptable_variants
+            response_text, core_props, disqualifying, acceptable_variants,
+            relaxed_context=relaxed_context,
         )
         hit_ids = sorted(
             set(baseline_hit_ids)

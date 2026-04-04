@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
-from audit import audit
-
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from audit import audit  # noqa: E402
+
+
 QUESTION_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
 RESPONSES_PATH = ROOT / "data" / "phase_c_v0" / "phase_c_raw.jsonl"
 
