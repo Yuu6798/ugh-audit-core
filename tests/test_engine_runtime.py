@@ -45,3 +45,7 @@ def test_engine_from_inputs_builds_evidence_and_legacy_payload():
     assert payload["delta_e"] == result.state.delta_e
     assert payload["verdict"] == result.policy.verdict_label
     assert payload["engine_output"]["evidence"]["extra"]["question_id"] == "q095"
+    # レガシー互換フィールド
+    assert payload["decision"] in ("accept", "rewrite", "regenerate")
+    assert isinstance(payload["por_fired"], bool)
+    assert payload["meaning_drift"] == result.policy.verdict_label
