@@ -146,6 +146,7 @@ def build_prop_bigram_df(meta_map: Dict[str, dict]) -> Counter:
     for meta in meta_map.values():
         for prop in meta.get("core_propositions", []):
             df.update(detector._extract_content_bigrams(prop))
+            df.update(detector._extract_content_chunks(prop))
     return df
 
 
@@ -206,13 +207,44 @@ def relaxed_thresholds(prop_bigram_count: int, op_family: Optional[str]) -> Tupl
     return 0.15, 0.35, detector._MIN_OVERLAP
 
 
-def relaxed_hit(metrics: dict, op_family: Optional[str], response_text: str) -> Tuple[bool, str]:
+_NEG_DEONTIC = (
+    "べきではない", "すべきではない", "べきでない", "すべきでない",
+    "べきじゃない", "すべきじゃない",
+)
+_POS_DEONTIC = ("すべき", "べき")
+
+
+def _polarity_blocked(
+    prop: str, op_family: Optional[str], response_text: str, overlap_set: set,
+) -> bool:
+    """極性検証: detector.check_propositions と同じガードを適用"""
+    has_neg_deontic = any(nd in prop for nd in _NEG_DEONTIC)
+    is_positive_deontic = (
+        any(pd in prop for pd in _POS_DEONTIC) and not has_neg_deontic
+    )
+    needs_polarity = (
+        (op_family is not None
+         and detector.OPERATOR_CATALOG[op_family]["effect"] == "polarity_flip")
+        or has_neg_deontic
+    )
+    if needs_polarity and not detector._response_has_negation(response_text, overlap_set):
+        return True
+    if is_positive_deontic and detector._response_has_negation(response_text, overlap_set):
+        return True
+    return False
+
+
+def relaxed_hit(
+    metrics: dict, op_family: Optional[str], response_text: str, prop: str = "",
+) -> Tuple[bool, str]:
     direct_t, full_t, overlap_t = relaxed_thresholds(metrics["prop_bigram_count"], op_family)
     if (
         metrics["direct_recall"] >= direct_t
         and metrics["full_recall"] >= full_t
         and metrics["overlap_count"] >= min(overlap_t, metrics["prop_bigram_count"])
     ):
+        if _polarity_blocked(prop, op_family, response_text, set(metrics["overlap_set"])):
+            return False, "polarity_blocked"
         return True, "relaxed_threshold"
 
     if op_family is None:
@@ -230,6 +262,8 @@ def relaxed_hit(metrics: dict, op_family: Optional[str], response_text: str) -> 
         and metrics["full_recall"] >= 0.25
         and metrics["overlap_count"] >= 2
     ):
+        if _polarity_blocked(prop, op_family, response_text, set(metrics["overlap_set"])):
+            return False, "polarity_blocked"
         return True, f"operator_{op_family}"
     return False, "operator_relaxed_fail"
 
@@ -307,7 +341,7 @@ def _check_propositions_mode(
         if mode == "baseline":
             is_hit = baseline_hit(metrics)
         else:
-            is_hit, _ = relaxed_hit(metrics, op.family if op else None, response_text)
+            is_hit, _ = relaxed_hit(metrics, op.family if op else None, response_text, prop)
         if is_hit:
             hit_ids.append(idx)
         else:
