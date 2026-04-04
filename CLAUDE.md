@@ -32,6 +32,7 @@ ugh_audit/
 ├── storage/          # audit_db.py — SQLite永続化 (audit_runs table)
 ├── reference/        # golden_store.py — リファレンスセット管理 (JSON)
 ├── report/           # phase_map.py — テキスト/CSVレポート生成
+├── engine/           # Phase 2 新エンジン (calculator, decision, runtime, metapatch)
 ├── server.py         # REST API + MCP 統合サーバー (FastAPI)
 └── mcp_server.py     # MCP スタンドアロンサーバー (stateless_http)
 tests/                # pytest (フィクスチャはtmp_path, モック不使用)
@@ -280,6 +281,7 @@ python examples/basic_audit.py
 |---------|------|--------------|
 | Golden Store | リファレンスセット | `~/.ugh_audit/golden_store.json` |
 | Audit DB | 監査ログ | `~/.ugh_audit/audit.db` |
+| HA48 統合 CSV | 48件統合アノテーション | `data/human_annotation_48/annotation_48_merged.csv` |
 
 ### 環境変数
 
@@ -355,6 +357,17 @@ python examples/basic_audit.py
 分析データ:
 - Model C': `analysis/semantic_loss/ha20_merged_for_model_c.csv`
 - ΔE 検証: `analysis/pipeline_a_correlation/`
+
+### HA48 統合アノテーション
+
+HA20 (20件) + HA28 (28件) を統一スキーマで結合した 48件データセット。
+
+- **スキーマ**: `id, category, S, C, O, propositions_hit, notes`
+- **S/C**: 全48件入力済み（HA20 は annotation_spec_v2 遡及テーブルから取得）
+- **O**: HA20 は human_score (1-5)、HA28 は O (1-4)
+- **統合 CSV**: `data/human_annotation_48/annotation_48_merged.csv`
+- **生成スクリプト**: `scripts/merge_annotations_48.py`
+- **用途**: Model C' パラメータ再校正 (n=48)
 
 ## Public API
 
