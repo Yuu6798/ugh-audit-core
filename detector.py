@@ -1025,7 +1025,7 @@ def check_propositions(
     negation_cues = [
         "ではなく", "ではない", "のではなく", "のではない",
         "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
-        "逆", "否定", "不要", "不可能",
+        "否定", "不要", "不可能",
     ]
     if disqualifying:
         for shortcut in disqualifying:
@@ -1286,7 +1286,7 @@ def detect(
         _DQ_NEGATION_CUES = [
             "ではなく", "ではない", "のではなく", "のではない",
             "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
-            "逆", "否定", "不要", "不可能",
+            "否定", "不要", "不可能",
         ]
         for shortcut in disqualifying:
             if not shortcut or shortcut not in response_text:
