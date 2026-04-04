@@ -194,10 +194,19 @@ def main():
     print(f"\n判定: {verdict} ({n_pass}/5 PASS)")
 
     # --- results_summary 出力 ---
-    # v1 の結果を読み込み
-    rho_ref_v1 = 0.8375  # 前回の結果
-    rho_sys_v1 = 0.4839
-    loo_std_v1 = 0.0083
+    # v1 のベースラインを ha48_merged.csv (v1) から算出
+    v1_de_ref = np.array([float(v1_rows[r["id"]]["delta_e_a_ref"]) for r in rows])
+    v1_de_sys = np.array([float(v1_rows[r["id"]]["delta_e_a_sys"]) for r in rows])
+    v1_pred_ref = 5 - 4 * v1_de_ref
+    v1_pred_sys = 5 - 4 * v1_de_sys
+    rho_ref_v1, _ = spearmanr(v1_pred_ref, scores_o)
+    rho_sys_v1, _ = spearmanr(v1_pred_sys, scores_o)
+    v1_rho_list = []
+    for i in range(len(rows)):
+        idx = [j for j in range(len(rows)) if j != i]
+        rho_i, _ = spearmanr(v1_pred_ref[idx], scores_o[idx])
+        v1_rho_list.append(rho_i)
+    loo_std_v1 = float(np.std(v1_rho_list))
 
     lines = [
         "# ΔE_A 再計算結果 — HA28 命題 hit 数復元版",
@@ -211,14 +220,14 @@ def main():
         f"| reference ρ (n=48) | {rho_ref_v1:.4f} | {rho_ref:.4f} | {rho_ref - rho_ref_v1:+.4f} |",
         f"| system ρ (n=48) | {rho_sys_v1:.4f} | {rho_sys:.4f} | (変化なし) |",
         f"| LOO-CV std | {loo_std_v1:.4f} | {loo_std:.4f} | {loo_std - loo_std_v1:+.4f} |",
-        f"| n=20→48 劣化 | 0.0905 | {degradation:.4f} | {degradation - 0.0905:+.4f} |",
+        f"| n=20→48 劣化 | {0.928 - rho_ref_v1:.4f} | {degradation:.4f} | {degradation - (0.928 - rho_ref_v1):+.4f} |",
         "",
         "## 受理基準",
         "",
         "| 基準 | 閾値 | v1 | v2 | 判定 |",
         "|------|------|----|----|------|",
         f"| reference ρ | ≥0.85 | {rho_ref_v1:.4f} | {rho_ref:.4f} | {'PASS' if criteria['ref_rho >= 0.85'] else 'FAIL'} |",
-        f"| 劣化 | ≤0.08 | 0.0905 | {degradation:.4f} | {'PASS' if criteria['degradation <= 0.08'] else 'FAIL'} |",
+        f"| 劣化 | ≤0.08 | {0.928 - rho_ref_v1:.4f} | {degradation:.4f} | {'PASS' if criteria['degradation <= 0.08'] else 'FAIL'} |",
         f"| system ρ | ≥0.50 | {rho_sys_v1:.4f} | {rho_sys:.4f} | {'PASS' if criteria['sys_rho >= 0.50'] else 'FAIL'} |",
         f"| LOO-CV std | ≤0.05 | {loo_std_v1:.4f} | {loo_std:.4f} | {'PASS' if criteria['loo_std <= 0.05'] else 'FAIL'} |",
         f"| 序列一貫性 | O≤2>O=3>O≥4 | PASS | {'PASS' if ordinal_ok else 'FAIL'} | {'PASS' if criteria['ordinal_consistency'] else 'FAIL'} |",
