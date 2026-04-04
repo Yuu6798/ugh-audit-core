@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import csv
 import json
-import os
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -25,7 +23,7 @@ HA48_CSV = DATA / "human_annotation_48" / "annotation_48_merged.csv"
 GATE_CSV = DATA / "gate_results" / "structural_gate_summary.csv"
 CASCADE_CSV = DATA / "eval" / "audit_102_main_baseline_cascade.csv"
 QUESTIONS_JSONL = DATA / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
-HA20_MODEL_C_CSV = BASE / "analysis" / "semantic_loss" / "ha20_merged_for_model_c.csv"
+
 
 # --- 確定済み重み (ugh_calculator.py / engine/models.py) ---
 W_F1 = 5
@@ -99,20 +97,6 @@ def load_ha20_human_hit_rates() -> dict:
     return rates
 
 
-def load_ha20_model_c_data() -> dict:
-    """ha20_merged_for_model_c.csv から追加データを取得"""
-    data = {}
-    with open(HA20_MODEL_C_CSV) as f:
-        for row in csv.DictReader(f):
-            data[row["id"]] = {
-                "human_hit_rate": float(row["human_hit_rate"]),
-                "system_hit_rate": float(row["system_hit_rate"]),
-                "fail_max": float(row["fail_max"]),
-                "delta_e_full": float(row["delta_e_full"]),
-            }
-    return data
-
-
 def load_core_propositions_count() -> dict:
     """各質問の core_propositions 数を取得"""
     counts = {}
@@ -180,7 +164,6 @@ def build_merged_table() -> list[dict]:
     gate = load_structural_gate_t0()
     baseline = load_cascade_baseline()
     ha20_hr = load_ha20_human_hit_rates()
-    ha20_mc = load_ha20_model_c_data()
     n_props = load_core_propositions_count()
 
     # HA48 merged を読む
@@ -270,7 +253,7 @@ def write_merged_csv(rows: list[dict]):
 
 def run_correlations(rows: list[dict]) -> dict:
     """Task 3: Spearman ρ 算出"""
-    O = np.array([r["O"] for r in rows])
+    scores_o = np.array([r["O"] for r in rows])
     de_ref = np.array([r["delta_e_a_ref"] for r in rows])
     de_sys = np.array([r["delta_e_a_sys"] for r in rows])
     sys_hr = np.array([r["system_hit_rate"] for r in rows])
@@ -280,14 +263,14 @@ def run_correlations(rows: list[dict]) -> dict:
     pred_ref = 5 - 4 * de_ref
     pred_sys = 5 - 4 * de_sys
 
-    rho_ref, p_ref = spearmanr(pred_ref, O)
-    rho_sys, p_sys = spearmanr(pred_sys, O)
-    rho_hr, p_hr = spearmanr(sys_hr, O)
-    rho_mc, p_mc = spearmanr(mc, O)
+    rho_ref, p_ref = spearmanr(pred_ref, scores_o)
+    rho_sys, p_sys = spearmanr(pred_sys, scores_o)
+    rho_hr, p_hr = spearmanr(sys_hr, scores_o)
+    rho_mc, p_mc = spearmanr(mc, scores_o)
 
     # ΔE 直接 (負の相関)
-    rho_de_ref, p_de_ref = spearmanr(de_ref, O)
-    rho_de_sys, p_de_sys = spearmanr(de_sys, O)
+    rho_de_ref, p_de_ref = spearmanr(de_ref, scores_o)
+    rho_de_sys, p_de_sys = spearmanr(de_sys, scores_o)
 
     results = {
         "n": len(rows),
@@ -310,14 +293,14 @@ def run_correlations(rows: list[dict]) -> dict:
 def run_loo_cv(rows: list[dict]) -> dict:
     """Task 4: LOO-CV"""
     n = len(rows)
-    O = np.array([r["O"] for r in rows])
+    scores_o = np.array([r["O"] for r in rows])
     de_ref = np.array([r["delta_e_a_ref"] for r in rows])
     pred_ref = 5 - 4 * de_ref
 
     rho_list = []
     for i in range(n):
         idx = [j for j in range(n) if j != i]
-        rho_i, _ = spearmanr(pred_ref[idx], O[idx])
+        rho_i, _ = spearmanr(pred_ref[idx], scores_o[idx])
         rho_list.append(rho_i)
 
     rho_arr = np.array(rho_list)
@@ -347,14 +330,14 @@ def run_subgroup_analysis(rows: list[dict]) -> list[dict]:
             })
             return
 
-        O = np.array([r["O"] for r in subset])
+        scores_o = np.array([r["O"] for r in subset])
         de_ref = np.array([r["delta_e_a_ref"] for r in subset])
         pred = 5 - 4 * de_ref
-        rho, p = spearmanr(pred, O)
+        rho, p = spearmanr(pred, scores_o)
         results.append({
             "group": label,
             "n": len(subset),
-            "O_mean": round(float(np.mean(O)), 3),
+            "O_mean": round(float(np.mean(scores_o)), 3),
             "de_a_ref_mean": round(float(np.mean(de_ref)), 4),
             "de_a_sys_mean": round(float(np.mean([r["delta_e_a_sys"] for r in subset])), 4),
             "rho_ref": round(rho, 4),
@@ -393,15 +376,15 @@ def run_sensitivity_analysis(rows: list[dict]) -> dict:
     suspect_ids = {"q003", "q041", "q053"}
 
     clean = [r for r in rows if r["id"] not in suspect_ids]
-    O = np.array([r["O"] for r in clean])
+    scores_o = np.array([r["O"] for r in clean])
     de_ref = np.array([r["delta_e_a_ref"] for r in clean])
     de_sys = np.array([r["delta_e_a_sys"] for r in clean])
 
     pred_ref = 5 - 4 * de_ref
     pred_sys = 5 - 4 * de_sys
 
-    rho_ref, p_ref = spearmanr(pred_ref, O)
-    rho_sys, p_sys = spearmanr(pred_sys, O)
+    rho_ref, p_ref = spearmanr(pred_ref, scores_o)
+    rho_sys, p_sys = spearmanr(pred_sys, scores_o)
 
     return {
         "n_clean": len(clean),
