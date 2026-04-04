@@ -97,6 +97,25 @@ op = detect_operator("低ΔEは良い回答を保証しない")
    - positive deontic (すべき): 回答が否定していたら却下
    - skeptical_modality: 極性チェック不要
 
+### Relaxed Tier1 Safety Valve（緩和閾値による命題回収）
+
+`check_propositions()` の通常閾値 (direct≥0.15, full≥0.35, overlap≥3) で miss した命題に対し、
+低い閾値で再判定する安全弁。`detect()` が `relaxed_context` を自動付与。
+
+**昇格条件** (全て AND):
+1. 緩和閾値を通過（バイグラム数に応じた段階的閾値）
+2. `_relaxed_candidate_allowed`: 内容チャンクの文レベル一致 + 汎用チャンクのみ除外
+3. 極性検証 (`needs_polarity_full` / `is_positive_deontic`) を通過
+4. `fail_max < 1.0` (構造的欠陥がない)
+5. 現状 ΔE ≤ 0.04 かつ relaxed ΔE ≤ 0.04 (既に高品質なケースのみ)
+
+**極性チェックの2層構造**:
+- メインhitパス: `needs_polarity_deontic` (deontic否定のみ)
+- 演算子回収パス + relaxedパス: `needs_polarity_full` (polarity_flip + deontic)
+
+実験スクリプト: `analysis/threshold_validation/run_proposition_hit_experiment.py`
+テスト: `tests/test_relaxed_tier1.py`
+
 ### UGH 計算式（ugh_calculator.py — 電卓層）
 
 Audit Engine の電卓層で PoR 座標と ΔE を算出する。推論ゼロ、決定的。
@@ -295,6 +314,9 @@ python examples/basic_audit.py
 | ΔE: WEIGHT_S | 2 | `ugh_calculator.py` |
 | ΔE: WEIGHT_C | 1 | `ugh_calculator.py` |
 | S: WEIGHTS_F | f1=5, f2=25, f3=5, f4=5 | `ugh_calculator.py` |
+| relaxed: ΔE上限 | ≤ 0.04 (current + relaxed) | `detector.py` |
+| relaxed: 大命題 (≥8bg) | direct≥0.10, full≥0.30, overlap≥2 | `detector.py` |
+| relaxed: 中命題 (≥5bg) | direct≥0.12, full≥0.30, overlap≥2 | `detector.py` |
 
 ## Baseline & HA20
 

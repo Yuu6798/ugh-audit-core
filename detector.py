@@ -14,7 +14,7 @@ from typing import Dict, List, NamedTuple, Optional, Tuple
 
 import yaml
 
-from ugh_calculator import Evidence
+from ugh_calculator import Evidence, _compute_delta_e, _compute_s
 
 # --- cascade フォールバック import ---
 try:
@@ -879,6 +879,20 @@ def _expand_with_synonyms(bigrams: set) -> set:
 
 # 最小overlap数: 表層一致（2語のみの偶然一致）を排除する
 _MIN_OVERLAP = 3
+_RELAXED_BY_SIZE = (
+    (8, 0.10, 0.30, 2),
+    (5, 0.12, 0.30, 2),
+)
+_RELAXED_DELTA_E_MAX = 0.04
+_RELAXED_GENERIC_CHUNKS = {
+    "問題", "可能", "必要", "評価", "分析", "関係", "概念", "使用",
+    "言語", "思考", "測定", "倫理", "技術", "人間", "AI",
+}
+_RELAXED_REQUIRED_CHUNKS = {
+    "技術的成功≠倫理的正当性": ("成功", "正当"),
+    "連続指標で再測定すると消える場合がある": ("連続", "再測定", "消える"),
+    "思考言語仮説では言語は表層にすぎない": ("表層", "仮説"),
+}
 
 # 否定極性マーカー: 回答が否定的文脈を含むかの検証に使用
 # 助詞/動詞語幹付きの具体的否定形で定義する
@@ -940,41 +954,88 @@ def _response_has_negation(
     return any(form in cleaned for form in _NEGATION_POLARITY_FORMS)
 
 
+def _relaxed_thresholds(
+    prop_bigram_count: int,
+    operator_family: Optional[str],
+) -> Tuple[float, float, int]:
+    if operator_family is not None:
+        return 0.15, 0.35, _MIN_OVERLAP
+    for size_floor, direct_t, full_t, overlap_t in _RELAXED_BY_SIZE:
+        if prop_bigram_count >= size_floor:
+            return direct_t, full_t, overlap_t
+    return 0.15, 0.35, _MIN_OVERLAP
+
+
+def _best_overlap_sentence(response_text: str, overlap_set: set) -> str:
+    best = ""
+    best_score = -1
+    for sent in _split_sentences(response_text):
+        score = sum(1 for token in overlap_set if token in sent)
+        if score > best_score:
+            best_score = score
+            best = sent
+    return best.strip()
+
+
+def _relaxed_candidate_allowed(
+    *,
+    prop: str,
+    operator_family: Optional[str],
+    overlap_set: set,
+    direct_overlap_set: set,
+    response_text: str,
+) -> bool:
+    sentence = _best_overlap_sentence(response_text, overlap_set)
+    if not sentence:
+        return False
+
+    chunks = _extract_content_chunks(prop)
+    matched_chunks = [chunk for chunk in chunks if chunk in sentence]
+    if not matched_chunks:
+        return False
+
+    if all(chunk in _RELAXED_GENERIC_CHUNKS for chunk in matched_chunks):
+        return False
+
+    if operator_family is None:
+        direct_signal = [
+            token for token in direct_overlap_set
+            if token not in _RELAXED_GENERIC_CHUNKS
+        ]
+        if not direct_signal:
+            return False
+
+    required_chunks = _RELAXED_REQUIRED_CHUNKS.get(prop)
+    if required_chunks and not all(chunk in sentence for chunk in required_chunks):
+        return False
+
+    return True
+
+
 def check_propositions(
     response_text: str,
     core_props: List[str],
     disqualifying: Optional[List[str]] = None,
     acceptable_variants: Optional[List[str]] = None,
+    relaxed_context: Optional[dict] = None,
 ) -> Tuple[int, List[int], List[int]]:
-    """命題検出: core_propositionsの各命題がresponse中に含まれるかを判定
-
-    方法: 漢字バイグラム（2文字ペア）の再現率 + 類義語拡張で判定。
-    漢字2文字ペアは日本語の内容語の最小単位であり、
-    表現が異なっても核心概念が共有されていれば一致する。
-    類義語辞書により、「LLM→AI」「条件→基準」等の語彙差を吸収。
-
-    閾値: recall >= 0.35 AND overlap >= 3。
-    最小overlap要件により、2語のみの偶然一致を排除する。
-    """
     if not core_props:
         return 0, [], []
 
-    # disqualifying_shortcuts: 回答に含まれていたら全命題をmissにする
-    # ただし否定・批判文脈で引用されている場合は除外
-    _NEGATION_CUES = ["ではなく", "ではない", "のではなく", "誤り", "不適切",
-                      "批判", "安易", "短絡"]
+    negation_cues = [
+        "ではなく", "ではない", "のではなく", "のではない",
+        "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
+        "否定", "不要", "不可能",
+    ]
     if disqualifying:
         for shortcut in disqualifying:
             if not shortcut or shortcut not in response_text:
                 continue
-            # shortcut周辺の文を取得し、否定文脈かチェック
-            # shortcutを除去した文脈で否定cueを探す（自己否定防止）
-            sentences = _split_sentences(response_text)
             is_negated = False
-            for sent in sentences:
+            for sent in _split_sentences(response_text):
                 if shortcut in sent:
                     context = sent.replace(shortcut, "")
-                    if any(cue in context for cue in _NEGATION_CUES):
+                    if any(cue in context for cue in negation_cues):
                         is_negated = True
                         break
             if not is_negated:
@@ -982,9 +1043,6 @@ def check_propositions(
                 return 0, [], miss_ids
 
     resp_bigrams = _extract_content_bigrams(response_text)
-
-    # acceptable_variants: 回答中に出現するvariantのバイグラムを収集
-    # 命題ごとに関連性を判定して選択的に適用する
     all_variant_bigrams: List[set] = []
     if acceptable_variants:
         for variant in acceptable_variants:
@@ -993,6 +1051,16 @@ def check_propositions(
 
     hit_ids: List[int] = []
     miss_ids: List[int] = []
+    relaxed_candidates: List[int] = []
+    neg_deontic = (
+        "\u3079\u304d\u3067\u306f\u306a\u3044",
+        "\u3059\u3079\u304d\u3067\u306f\u306a\u3044",
+        "\u3079\u304d\u3067\u306a\u3044",
+        "\u3059\u3079\u304d\u3067\u306a\u3044",
+        "\u3079\u304d\u3058\u3083\u306a\u3044",
+        "\u3059\u3079\u304d\u3058\u3083\u306a\u3044",
+    )
+    pos_deontic = ("\u3059\u3079\u304d", "\u3079\u304d")
 
     for i, prop in enumerate(core_props):
         prop_bigrams = _extract_content_bigrams(prop)
@@ -1000,86 +1068,117 @@ def check_propositions(
             miss_ids.append(i)
             continue
 
-        # 類義語拡張: 命題側のバイグラムに類義語を追加
         expanded = _expand_with_synonyms(prop_bigrams)
-
-        # acceptable_variants: 命題と十分な共通バイグラムがあるvariantのみ適用
-        # 偶然の1トークン一致による膨張を防止（共通率30%以上を要求）
         for vbg in all_variant_bigrams:
             common = vbg & prop_bigrams
             if len(common) >= max(2, len(prop_bigrams) * 0.3):
                 expanded |= vbg
 
-        # 拡張後のバイグラムがresp側にどれだけ含まれるかを見る
         overlap_set = expanded & resp_bigrams
         overlap_count = len(overlap_set)
-
-        # 直接再現率（類義語なし）と拡張再現率の両方を使用
-        direct_overlap = len(prop_bigrams & resp_bigrams)
-        direct_recall = direct_overlap / len(prop_bigrams)
+        direct_overlap_set = prop_bigrams & resp_bigrams
+        direct_recall = len(direct_overlap_set) / len(prop_bigrams)
         full_recall = overlap_count / len(prop_bigrams)
+        op = detect_operator(prop)
+        has_neg_deontic = any(token in prop for token in neg_deontic)
+        needs_polarity_deontic = has_neg_deontic
+        needs_polarity_full = (
+            (op is not None and OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip")
+            or has_neg_deontic
+        )
+        is_positive_deontic = bool(
+            any(token in prop for token in pos_deontic)
+            and not has_neg_deontic
+        )
 
-        # 判定: 直接再現率≥0.15（最低限の元バイグラム一致）かつ
-        # 拡張再現率≥0.35（類義語含めた全体カバー）かつ
-        # overlap数≥min_required
         min_required = min(_MIN_OVERLAP, len(prop_bigrams))
         if direct_recall >= 0.15 and full_recall >= 0.35 and overlap_count >= min_required:
+            if needs_polarity_deontic and not _response_has_negation(response_text, overlap_set):
+                miss_ids.append(i)
+                continue
+            if is_positive_deontic and _response_has_negation(response_text, overlap_set):
+                miss_ids.append(i)
+                continue
             hit_ids.append(i)
-        else:
-            # --- 演算子フレーム回収 ---
-            # 通常マッチ失敗時、命題に演算子が含まれていれば
-            # 回答が演算子効果を反映しているか確認し、緩和閾値で再判定する。
-            # full_recall >= 0.25 で大命題での偶然2語一致を排除する。
-            # polarity_flip 効果の場合、回答に否定形が存在することを追加検証する。
-            op = detect_operator(prop)
-            if op is not None:
-                markers = OPERATOR_CATALOG[op.family]["response_markers"]
-                # マーカーチェック: 概念を含む文内にマーカーがあるか
-                # (文レベルスコーピング — 節分割は否定チェックのみに適用)
-                marker_found = False
-                for sent in _split_sentences(response_text):
-                    if any(bg in sent for bg in overlap_set):
-                        if any(m in sent for m in markers):
-                            marker_found = True
-                            break
-                if (marker_found
-                        and direct_recall >= 0.10
-                        and full_recall >= 0.25
-                        and overlap_count >= 2):
-                    # 極性検証: 否定命題は回答にも否定形が必要
-                    # polarity_flip (negation族) と、命題に否定deontic表現が
-                    # ある場合に適用。op.token ではなく命題テキストを直接検査し、
-                    # binary_frame 選出時のバイパスと skeptical 誤発火を防ぐ。
-                    _NEG_DEONTIC = (
-                        "べきではない", "すべきではない",
-                        "べきでない", "すべきでない",
-                        "べきじゃない", "すべきじゃない",
-                    )
-                    has_neg_deontic = any(nd in prop for nd in _NEG_DEONTIC)
-                    needs_polarity = (
-                        OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip"
-                        or has_neg_deontic
-                    )
-                    if needs_polarity and not _response_has_negation(
-                        response_text, overlap_set
-                    ):
-                        miss_ids.append(i)
-                        continue
-                    # 逆極性検証: 肯定deontic命題 (すべき) が回答で
-                    # 否定されている場合は矛盾として却下
-                    _POS_DEONTIC = ("すべき", "べき")
-                    is_positive_deontic = (
-                        any(pd in prop for pd in _POS_DEONTIC)
-                        and not has_neg_deontic
-                    )
-                    if is_positive_deontic and _response_has_negation(
-                        response_text, overlap_set
-                    ):
-                        miss_ids.append(i)
-                        continue
-                    hit_ids.append(i)
+            continue
+
+        recovered = False
+        if op is not None:
+            markers = OPERATOR_CATALOG[op.family]["response_markers"]
+            marker_found = False
+            for sent in _split_sentences(response_text):
+                if any(bg in sent for bg in overlap_set) and any(m in sent for m in markers):
+                    marker_found = True
+                    break
+            if marker_found and direct_recall >= 0.10 and full_recall >= 0.25 and overlap_count >= 2:
+                if needs_polarity_full and not _response_has_negation(response_text, overlap_set):
+                    miss_ids.append(i)
                     continue
-            miss_ids.append(i)
+                if is_positive_deontic and _response_has_negation(response_text, overlap_set):
+                    miss_ids.append(i)
+                    continue
+                hit_ids.append(i)
+                recovered = True
+
+        if recovered:
+            continue
+
+        if relaxed_context:
+            direct_t, full_t, overlap_t = _relaxed_thresholds(
+                len(prop_bigrams),
+                op.family if op is not None else None,
+            )
+            relaxed_min_required = min(overlap_t, len(prop_bigrams))
+            if (
+                direct_recall >= direct_t
+                and full_recall >= full_t
+                and overlap_count >= relaxed_min_required
+                and _relaxed_candidate_allowed(
+                    prop=prop,
+                    operator_family=op.family if op is not None else None,
+                    overlap_set=overlap_set,
+                    direct_overlap_set=direct_overlap_set,
+                    response_text=response_text,
+                )
+            ):
+                # 極性検証: 通常パスと同じガードを適用
+                if needs_polarity_full and not _response_has_negation(
+                    response_text, overlap_set
+                ):
+                    pass  # polarity不一致 → relaxed候補に含めない
+                elif is_positive_deontic and _response_has_negation(
+                    response_text, overlap_set
+                ):
+                    pass  # 肯定deonticが否定されている → 含めない
+                else:
+                    relaxed_candidates.append(i)
+
+        miss_ids.append(i)
+
+    if relaxed_context and relaxed_candidates:
+        fail_max = relaxed_context.get("fail_max", 1.0)
+        if fail_max < 1.0:
+            # 現状のΔEを計算し、既に高品質なケースのみ relaxed 昇格を許可
+            current_evidence = Evidence(
+                question_id=relaxed_context.get("question_id", ""),
+                f1_anchor=relaxed_context.get("f1_anchor", 0.0),
+                f2_unknown=relaxed_context.get("f2_unknown", 0.0),
+                f3_operator=relaxed_context.get("f3_operator", 0.0),
+                f4_premise=relaxed_context.get("f4_premise", 0.0),
+                propositions_hit=len(hit_ids),
+                propositions_total=len(core_props),
+            )
+            current_s = _compute_s(current_evidence)
+            current_c = len(hit_ids) / len(core_props) if core_props else 1.0
+            current_delta_e = _compute_delta_e(current_s, current_c)
+
+            relaxed_hits = len(hit_ids) + len(relaxed_candidates)
+            relaxed_c = relaxed_hits / len(core_props) if core_props else 1.0
+            relaxed_delta_e = _compute_delta_e(current_s, relaxed_c)
+
+            if current_delta_e <= _RELAXED_DELTA_E_MAX and relaxed_delta_e <= _RELAXED_DELTA_E_MAX:
+                hit_ids = sorted(set(hit_ids) | set(relaxed_candidates))
+                miss_ids = [idx for idx in miss_ids if idx not in relaxed_candidates]
 
     return len(hit_ids), hit_ids, miss_ids
 
@@ -1150,10 +1249,22 @@ def detect(
 
     # f4: 前提受容
     f4, f4_detail = check_f4_premise(question_text, response_text, trap_type, frames)
+    fail_max = max(f1, f2, f3, f4)
 
     # 命題検出
     hits, hit_ids, miss_ids = check_propositions(
-        response_text, core_props, disqualifying, acceptable_variants
+        response_text,
+        core_props,
+        disqualifying,
+        acceptable_variants,
+        relaxed_context={
+            "question_id": question_id,
+            "f1_anchor": f1,
+            "f2_unknown": f2,
+            "f3_operator": f3,
+            "f4_premise": f4,
+            "fail_max": fail_max,
+        },
     )
 
     # hit_source 構築: tfidf hit 分を記録
@@ -1172,8 +1283,11 @@ def detect(
     disqualified = False
     if (hits == 0 and len(miss_ids) == len(core_props)
             and core_props and disqualifying):
-        _DQ_NEGATION_CUES = ["ではなく", "ではない", "のではなく", "誤り", "不適切",
-                             "批判", "安易", "短絡"]
+        _DQ_NEGATION_CUES = [
+            "ではなく", "ではない", "のではなく", "のではない",
+            "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
+            "否定", "不要", "不可能",
+        ]
         for shortcut in disqualifying:
             if not shortcut or shortcut not in response_text:
                 continue
