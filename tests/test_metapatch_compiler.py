@@ -1,6 +1,13 @@
 from pathlib import Path
 
-from ugh_audit.engine import MetaPatchCompiler
+import pytest
+
+try:
+    from ugh_audit.engine import MetaPatchCompiler
+except ImportError:
+    MetaPatchCompiler = None  # type: ignore[assignment,misc]
+
+pytestmark = pytest.mark.skipif(MetaPatchCompiler is None, reason="PyYAML not installed")
 
 
 def test_legacy_action_normalization():

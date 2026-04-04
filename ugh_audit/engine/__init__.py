@@ -1,8 +1,15 @@
 from .calculator import build_state, compute_c, compute_delta_e, compute_grv, compute_s
 from .decision import build_budget, build_policy
-from .metapatch import MetaPatchCompiler, MetaPatchPlan
 from .models import Budget, EngineConfig, EngineResult, Evidence, Policy, State
 from .runtime import UGHAuditEngine, to_legacy_payload
+
+# MetaPatchCompiler は PyYAML に依存するため、未インストール時はスキップ
+try:
+    from .metapatch import MetaPatchCompiler, MetaPatchPlan
+
+    _HAS_METAPATCH = True
+except ImportError:
+    _HAS_METAPATCH = False
 
 __all__ = [
     "Evidence",
@@ -11,8 +18,6 @@ __all__ = [
     "Budget",
     "EngineResult",
     "EngineConfig",
-    "MetaPatchCompiler",
-    "MetaPatchPlan",
     "compute_s",
     "compute_c",
     "compute_delta_e",
@@ -23,3 +28,6 @@ __all__ = [
     "UGHAuditEngine",
     "to_legacy_payload",
 ]
+
+if _HAS_METAPATCH:
+    __all__ += ["MetaPatchCompiler", "MetaPatchPlan"]
