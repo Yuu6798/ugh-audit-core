@@ -23,7 +23,7 @@ def compute_s(evidence: Evidence, config: Optional[EngineConfig] = None) -> floa
 
 def compute_c(evidence: Evidence) -> float:
     if evidence.n_propositions <= 0:
-        return 0.0
+        return 1.0  # 命題なし = 完全被覆と見なす（ugh_calculator.py と同一仕様）
     return clamp(evidence.proposition_hits / evidence.n_propositions)
 
 

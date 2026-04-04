@@ -14,10 +14,18 @@ def build_policy(state: State, config: Optional[EngineConfig] = None) -> Policy:
         repair_order = []
         rationale = ["delta_e_bin=same_meaning"]
     elif state.delta_e_bin == "minor_drift":
-        decision = "minor_drift"
-        verdict_label = "軽微なズレ"
-        repair_order = ["tighten_proposition_coverage"]
-        rationale = ["delta_e_bin=minor_drift"]
+        if state.c_bin == "low":
+            # カバレッジ低: rewrite 相当 — 命題補完が必要
+            decision = "minor_drift"
+            verdict_label = "軽微なズレ（低カバレッジ）"
+            repair_order = ["tighten_proposition_coverage", "repair_core_proposition"]
+            rationale = ["delta_e_bin=minor_drift", "c_bin=low"]
+        else:
+            # カバレッジ中〜高: accept 相当
+            decision = "minor_drift"
+            verdict_label = "軽微なズレ"
+            repair_order = ["tighten_proposition_coverage"]
+            rationale = ["delta_e_bin=minor_drift", f"c_bin={state.c_bin}"]
     else:
         decision = "meaning_drift"
         verdict_label = "意味乖離"
