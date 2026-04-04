@@ -177,7 +177,6 @@ def build_merged_table() -> list[dict]:
             o = float(o_raw)
             category = row["category"]
             notes = row.get("notes", "")
-            props_hit = row.get("propositions_hit", "")
 
             # 構造ゲート (t=0.0)
             g = gate.get(qid, {"f1_flag": 0, "f2_flag": 0, "f3_flag": 0, "f4_flag": 0,
@@ -187,11 +186,10 @@ def build_merged_table() -> list[dict]:
             bl = baseline.get(qid, {"system_hit_rate": 0, "delta_e_cosine": 0})
 
             # human hit rate
+            # v1 方法論: HA20 は propositions_hit から、HA28 は (C-1)/2 粗視化で統一
+            # (v2 の命題単位復元は delta_e_a_recalc.py で実施)
             if qid in ha20_ids and qid in ha20_hr:
                 human_hr = ha20_hr[qid]
-            elif props_hit and "/" in props_hit:
-                num, den = props_hit.split("/")
-                human_hr = float(num) / float(den)
             else:
                 human_hr = compute_human_hit_rate_ha28(c_ann, n_props.get(qid, 3))
 
@@ -582,20 +580,37 @@ def main():
     write_model_comparison(corr, sensitivity)
     write_results_summary(corr, loo, sg, sensitivity)
 
-    # 判定
+    # 判定 (write_results_summary と同一の5基準)
     print("\n" + "=" * 60)
     degradation = 0.928 - corr["rho_ref"]
     print(f"reference ρ: {corr['rho_ref']:.4f} (n=20: 0.928, 劣化: {degradation:.4f})")
     print(f"system ρ:    {corr['rho_sys']:.4f}")
     print(f"LOO-CV std:  {loo['std']:.4f}")
 
-    all_pass = (
-        corr["rho_ref"] >= 0.85
-        and degradation <= 0.08
-        and corr["rho_sys"] >= 0.50
-        and loo["std"] <= 0.05
+    # サブグループ序列チェック
+    o_groups = {}
+    for s in sg:
+        if s["group"] in ("O<=2", "O=3", "O>=4"):
+            o_groups[s["group"]] = s["de_a_ref_mean"]
+    ordinal_ok = (
+        o_groups.get("O<=2", 0) > o_groups.get("O=3", 0) > o_groups.get("O>=4", 0)
     )
-    print(f"\n判定: {'GO' if all_pass else 'CONDITIONAL / NO-GO'}")
+    print(f"序列一貫性:  {ordinal_ok}")
+
+    criteria_pass = sum([
+        corr["rho_ref"] >= 0.85,
+        degradation <= 0.08,
+        corr["rho_sys"] >= 0.50,
+        loo["std"] <= 0.05,
+        ordinal_ok,
+    ])
+    if criteria_pass == 5:
+        verdict = "GO"
+    elif criteria_pass >= 3:
+        verdict = "CONDITIONAL"
+    else:
+        verdict = "NO-GO"
+    print(f"\n判定: {verdict} ({criteria_pass}/5 PASS)")
     print("=" * 60)
 
 
