@@ -718,12 +718,15 @@ def main() -> None:
                             }
 
     if best is None:
+        fallback_record = dict(search_rows[0]) if search_rows else {}
+        fallback_record["status"] = "NO-GO (fallback: no GO candidate found)"
         best = {
-            "record": search_rows[0],
+            "record": fallback_record,
             "accepted": set(),
             "summary": baseline_summary,
             "runs": baseline_runs,
             "low_score_new_hits": [],
+            "is_fallback": True,
         }
 
     accepted_rows = [
@@ -774,6 +777,7 @@ def main() -> None:
             "cascade_duplicates": sum(1 for row in candidate_rows if row["cascade_duplicate"]),
         },
         "best_filter": best["record"],
+        "best_filter_is_fallback": best.get("is_fallback", False),
         "filtered": {
             "overall_hit_rate": best["summary"]["overall_hit_rate"],
             "ha20_direction_matches": best["summary"]["ha20_direction_matches"],
