@@ -1,0 +1,6 @@
+model,n20_rho,n48_rho,n48_p,note
+ΔE_A (reference),0.928,0.8375,1.17e-13,human hit_rate使用
+ΔE_A (system),—,0.4839,4.93e-04,system hit_rate使用
+Model C',0.80,0.3291,2.24e-02,n=20暫定パラメータ
+hit_rate only,0.40,0.2921,4.40e-02,system hit_rate単独
+ΔE_A ref (n=45 clean),—,0.8406,5.04e-13,疑義3件除外
