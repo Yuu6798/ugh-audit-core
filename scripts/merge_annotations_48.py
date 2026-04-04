@@ -1,7 +1,7 @@
 """merge_annotations_48.py — HA20 + HA28 を統一スキーマで結合
 
 出力スキーマ: id, category, S, C, O, propositions_hit, notes
-- HA20: O = human_score, propositions_hit はそのまま, S/C は空欄（遡及アノテーション待ち）
+- HA20: O = human_score, S/C は annotation_spec_v2 遡及テーブルから取得
 - HA28: S/C/O はそのまま, propositions_hit は空欄（後で算出）
 - category はベースライン CSV から取得
 """
@@ -11,6 +11,30 @@ import csv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# --- annotation_spec_v2 遡及テーブル（HA20 の S/C 確定値） ---
+HA20_RETRO_SC: dict[str, tuple[int, int]] = {
+    "q032": (1, 1),
+    "q024": (2, 1),
+    "q095": (2, 1),
+    "q015": (3, 1),
+    "q025": (3, 1),
+    "q037": (3, 1),
+    "q033": (2, 2),
+    "q044": (3, 2),
+    "q069": (3, 1),
+    "q012": (3, 2),
+    "q019": (3, 2),
+    "q061": (3, 2),
+    "q071": (3, 2),
+    "q100": (2, 2),
+    "q049": (3, 3),
+    "q075": (3, 3),
+    "q080": (3, 3),
+    "q009": (3, 3),
+    "q083": (3, 3),
+    "q063": (3, 3),
+}
 
 # --- ベースラインから category を取得 ---
 baseline_path = ROOT / "data" / "eval" / "audit_102_main_baseline_cascade.csv"
@@ -25,11 +49,14 @@ ha20_rows: list[dict[str, str]] = []
 with ha20_path.open(encoding="utf-8") as f:
     for row in csv.DictReader(f):
         qid = row["id"]
+        retro = HA20_RETRO_SC.get(qid)
+        if retro is None:
+            raise ValueError(f"遡及テーブルに {qid} が存在しない")
         ha20_rows.append({
             "id": qid,
             "category": category_map.get(qid, row.get("category", "")),
-            "S": "",  # 遡及アノテーション待ち
-            "C": "",  # 遡及アノテーション待ち
+            "S": str(retro[0]),
+            "C": str(retro[1]),
             "O": row["human_score"],
             "propositions_hit": row["propositions_hit"],
             "notes": row["notes"],
@@ -74,9 +101,11 @@ with out_path.open("w", encoding="utf-8", newline="") as f:
 # --- サマリー出力 ---
 ha20_ids = {r["id"] for r in ha20_rows}
 ha28_ids = {r["id"] for r in ha28_rows}
-print(f"HA20: {len(ha20_rows)} 件")
+print(f"HA20: {len(ha20_rows)} 件 (S/C: 遡及テーブルから全件埋め済み)")
 print(f"HA28: {len(ha28_rows)} 件")
 print(f"合計: {len(merged)} 件 (重複なし)")
-print(f"HA20 S/C 未入力: {sum(1 for r in merged if r['id'] in ha20_ids and r['S'] == '')} 件")
+s_filled = sum(1 for r in merged if r["S"] != "")
+c_filled = sum(1 for r in merged if r["C"] != "")
+print(f"S 入力済み: {s_filled}/{len(merged)}, C 入力済み: {c_filled}/{len(merged)}")
 print(f"HA28 propositions_hit 未入力: {sum(1 for r in merged if r['id'] in ha28_ids and r['propositions_hit'] == '')} 件")
 print(f"出力: {out_path}")
