@@ -33,7 +33,7 @@ from ugh_calculator import Evidence, calculate  # noqa: E402
 
 # --- verdict ロジック（暫定閾値） ---
 _VERDICT_ACCEPT = 0.10
-_VERDICT_REWRITE = 0.40
+_VERDICT_REWRITE = 0.25
 
 
 def _verdict(delta_e: float) -> str:
