@@ -2,7 +2,7 @@ id,category,trap_type,f1,f2,f3,f4,hits,total,hit_ids,miss_ids,hit_sources,S,C,dE
 q001,ugh_theory,metric_omnipotence,0.0,1.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.375,0.6667,0,rewrite
 q002,ugh_theory,scope_deflection,0.0,0.0,0.0,0.5,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.9375,0.3333,0,rewrite
 q003,ugh_theory,metric_omnipotence,0.0,0.5,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.6875,0.3333,0,rewrite
-q004,ugh_theory,binary_reduction,0.0,0.5,0.0,0.0,3,4,"[0, 1, 3]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""3"": ""tfidf"", ""2"": ""miss""}",0.6875,0.75,0,accept
+q004,ugh_theory,binary_reduction,0.0,0.5,0.0,0.0,2,4,"[0, 3]","[1, 2]","{""0"": ""tfidf"", ""3"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.6875,0.5,0,rewrite
 q005,technical_ai,scope_deflection,0.0,0.0,1.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.875,0.6667,0,accept
 q006,technical_ai,premise_acceptance,0.0,0.0,0.5,0.5,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.875,0.6667,0,accept
 q007,technical_ai,binary_reduction,0.0,0.0,0.0,0.5,1,3,[2],"[0, 1]","{""2"": ""tfidf"", ""0"": ""miss"", ""1"": ""miss""}",0.9375,0.3333,0,rewrite
@@ -67,7 +67,7 @@ q065,ai_ethics,binary_reduction,0.0,0.0,0.0,0.0,1,3,[1],"[0, 2]","{""1"": ""tfid
 q066,ai_ethics,scope_deflection,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,accept
 q067,ai_ethics,binary_reduction,0.0,0.0,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,rewrite
 q068,ai_ethics,authority_appeal,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,accept
-q069,ai_ethics,binary_reduction,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,accept
+q069,ai_ethics,binary_reduction,0.0,0.0,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,rewrite
 q070,ai_ethics,binary_reduction,0.0,0.0,0.0,0.5,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.9375,0.6667,0,accept
 q071,ai_ethics,scope_deflection,0.0,0.0,0.0,0.5,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.9375,0.6667,0,accept
 q072,ai_ethics,binary_reduction,0.0,0.0,0.0,0.5,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.9375,1.0,0,accept
@@ -87,7 +87,7 @@ q085,epistemology,premise_acceptance,0.0,0.0,0.0,0.5,2,3,"[0, 2]",[1],"{""0"": "
 q086,epistemology,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.875,0.6667,0,accept
 q087,epistemology,binary_reduction,0.0,0.0,0.0,0.5,2,3,"[1, 2]",[0],"{""1"": ""tfidf"", ""2"": ""tfidf"", ""0"": ""miss""}",0.9375,0.6667,0,accept
 q088,epistemology,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.875,0.6667,0,accept
-q089,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.875,1.0,0,accept
+q089,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.875,0.6667,0,accept
 q090,adversarial,binary_reduction,0.0,0.0,0.0,0.5,0,3,[],"[0, 1, 2]","{""0"": ""miss"", ""1"": ""miss"", ""2"": ""miss""}",0.9375,0.0,0,rewrite
 q091,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[1, 2]",[0],"{""1"": ""tfidf"", ""2"": ""tfidf"", ""0"": ""miss""}",0.875,0.6667,0,accept
 q092,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.875,0.6667,0,accept
