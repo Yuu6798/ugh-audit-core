@@ -77,6 +77,9 @@ def _run_pipeline(
     """パイプライン A を実行し、新仕様の出力 dict を返す"""
     if question_meta and _HAS_DETECTOR:
         question_id = question_meta.get("id", "unknown")
+        # question_meta に question フィールドがなければリクエストの question を注入
+        if "question" not in question_meta:
+            question_meta = {**question_meta, "question": question}
         evidence = _detect(question_id, response, question_meta)
     else:
         evidence = Evidence(question_id="unknown")
