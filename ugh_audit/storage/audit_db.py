@@ -48,6 +48,25 @@ class AuditDB:
                     created_at      TEXT NOT NULL
                 )
             """)
+            # v0.2 → v0.3 マイグレーション: 既存テーブルに新カラムを追加
+            _new_columns = [
+                ("S", "REAL DEFAULT 0.0"),
+                ("C", "REAL DEFAULT 0.0"),
+                ("quality_score", "REAL DEFAULT 5.0"),
+                ("verdict", "TEXT DEFAULT ''"),
+                ("f1", "REAL DEFAULT 0.0"),
+                ("f2", "REAL DEFAULT 0.0"),
+                ("f3", "REAL DEFAULT 0.0"),
+                ("f4", "REAL DEFAULT 0.0"),
+                ("hit_rate", "TEXT DEFAULT ''"),
+            ]
+            for col_name, col_type in _new_columns:
+                try:
+                    conn.execute(
+                        f"ALTER TABLE audit_runs ADD COLUMN {col_name} {col_type}"
+                    )
+                except sqlite3.OperationalError:
+                    pass  # カラムが既に存在する場合はスキップ
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_session
                 ON audit_runs(session_id)
@@ -59,6 +78,12 @@ class AuditDB:
 
     def _conn(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db_path)
+
+    def _table_columns(self) -> set:
+        """audit_runs テーブルの既存カラム名を返す"""
+        with self._conn() as conn:
+            cursor = conn.execute("PRAGMA table_info(audit_runs)")
+            return {row[1] for row in cursor.fetchall()}
 
     def save(
         self,
@@ -80,30 +105,45 @@ class AuditDB:
     ) -> int:
         """監査結果を保存してrow idを返す"""
         now = datetime.now(timezone.utc).isoformat()
+        row = {
+            "session_id": session_id,
+            "question": question,
+            "response": response,
+            "reference": reference,
+            "S": S,
+            "C": C,
+            "delta_e": delta_e,
+            "quality_score": quality_score,
+            "verdict": verdict,
+            "f1": f1,
+            "f2": f2,
+            "f3": f3,
+            "f4": f4,
+            "hit_rate": hit_rate,
+            "created_at": now,
+        }
+        # レガシー DB にも NOT NULL カラムのデフォルト値を提供
+        existing = self._table_columns()
+        if "por" in existing:
+            row.setdefault("por", 0.0)
+        if "por_fired" in existing:
+            row.setdefault("por_fired", 0)
+        if "meaning_drift" in existing:
+            row.setdefault("meaning_drift", verdict or "")
+        if "model_id" in existing:
+            row.setdefault("model_id", "pipeline-a")
+        if "grv_json" in existing:
+            row.setdefault("grv_json", "{}")
+        # 実際に存在するカラムのみ INSERT
+        cols = [c for c in row if c in existing]
+        placeholders = ", ".join("?" for _ in cols)
+        col_names = ", ".join(cols)
+        values = [row[c] for c in cols]
         with self._conn() as conn:
-            cursor = conn.execute("""
-                INSERT INTO audit_runs
-                    (session_id, question, response, reference,
-                     S, C, delta_e, quality_score, verdict,
-                     f1, f2, f3, f4, hit_rate, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                session_id,
-                question,
-                response,
-                reference,
-                S,
-                C,
-                delta_e,
-                quality_score,
-                verdict,
-                f1,
-                f2,
-                f3,
-                f4,
-                hit_rate,
-                now,
-            ))
+            cursor = conn.execute(
+                f"INSERT INTO audit_runs ({col_names}) VALUES ({placeholders})",
+                values,
+            )
             return cursor.lastrowid
 
     def list_recent(self, limit: int = 20) -> List[dict]:
