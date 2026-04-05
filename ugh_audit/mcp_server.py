@@ -26,6 +26,13 @@ from .storage.audit_db import AuditDB
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import Evidence, calculate  # noqa: E402
 
+# detector（検出層）— 利用可能な場合のみ使用
+try:
+    from detector import detect as _detect  # noqa: E402
+    _HAS_DETECTOR = True
+except ImportError:
+    _HAS_DETECTOR = False
+
 # --- verdict ロジック（暫定閾値） ---
 _VERDICT_ACCEPT = 0.10
 _VERDICT_REWRITE = 0.25
@@ -136,25 +143,35 @@ def audit_answer(
     response: str,
     reference: Optional[str] = None,
     session_id: Optional[str] = None,
+    question_meta: Optional[Dict] = None,
 ) -> AuditOutput:
     """AI回答を意味監査する。
 
     question（質問）、response（AI回答）、reference（期待回答、省略可）を受け取り、
-    S（構造完全性）、C（命題被覆率）、ΔE（意味距離）、quality_score（品質スコア）、
-    verdict（判定）を返す。結果はDBに自動保存される。
+    PoR（S, C）、ΔE（意味ズレ量）、quality_score（品質スコア）、verdict（判定）を返す。
+    結果はDBに自動保存される。
 
     Args:
         question: ユーザーの質問
         response: AIの回答
         reference: 期待される正解（省略時は GoldenStore から自動検索）
-        session_id: セッションID（省略時は空文字列）
+        session_id: セッションID（省略時は自動生成）
+        question_meta: 問題メタデータ（core_propositions 等を含む dict）
     """
     db = _get_db()
     golden = _get_golden()
 
     ref = reference or golden.find_reference(question)
 
-    evidence = Evidence(question_id="unknown")
+    # detect → calculate パイプライン
+    if question_meta and _HAS_DETECTOR:
+        question_id = question_meta.get("id", "unknown")
+        if "question" not in question_meta:
+            question_meta = {**question_meta, "question": question}
+        evidence = _detect(question_id, response, question_meta)
+    else:
+        evidence = Evidence(question_id="unknown")
+
     state = calculate(evidence)
     verdict = _verdict(state.delta_e)
 
