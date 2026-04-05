@@ -2,7 +2,7 @@
 
 **UGH Audit Core** — AI回答の意味論的監査基盤
 
-UGHer（無意識的重力仮説）の3指標 **PoR / ΔE / grv** を用いて、
+UGHer（無意識的重力仮説）の指標 **PoR / ΔE / grv** を用いて、
 AIの回答が「意味的に誠実だったか」を定量的に評価・記録するフレームワーク。
 
 ---
@@ -15,7 +15,7 @@ AIの回答が「意味的に誠実だったか」を定量的に評価・記録
 |------|---------|---------|
 | **PoR = (S, C)** | 問いの核心に対する回答の位置座標 | 「答えた」のか「それっぽいことを言った」かの違い |
 | **ΔE** | PoR 座標上における理想回答からの距離 | バイアス・回避・過剰一般化 |
-| **grv** | 回答内の語彙重力分布 | どの概念に引っ張られて回答が歪んだか |
+| **grv** | 回答内の語彙重力分布 | どの概念に引っ張られて回答が歪んだか（操作化は未着手） |
 
 ### 計算式
 
@@ -28,17 +28,34 @@ S = 1 - Σ(w_k × f_k) / 40     構造完全性 [0,1]
 C = hits / n_propositions       命題カバレッジ [0,1]
 
 ΔE = (2(1-S)² + (1-C)²) / 3    意味距離 [0,1]
+
+quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 ```
 
-ΔE (system C) vs human_score: Spearman ρ=-0.774 (p<0.001, HA20 n=20, t=0.0)
+### verdict 判定（HA48 検証済み確定値）
+
+| verdict | 条件 | 意味 |
+|---------|------|------|
+| **accept** | ΔE ≤ 0.10 | 意味的に十分な回答 |
+| **rewrite** | 0.10 < ΔE ≤ 0.25 | 部分的な修正で改善可能 |
+| **regenerate** | ΔE > 0.25 | 再生成が必要 |
+
+### 検証結果（HA48, n=48）
+
+| 指標 | Spearman ρ | p値 | 備考 |
+|------|-----------|-----|------|
+| **ΔE vs O (system C)** | **0.5402** | **0.000074** | **デプロイ可能指標** |
+| ΔE vs O (human C) | 0.8568 | <0.001 | 参照上限（ターゲット情報含む） |
+
+注: system C の命題照合精度が ΔE のボトルネック。参照上限 ρ=0.857 との差は検出パイプラインの精度改善で縮まる。
 
 ---
 
 ## アーキテクチャ
 
-### Audit Engine（構造的意味監査パイプライン）
-
 推論ゼロ・決定的パターンマッチのみで動作する3層パイプライン。
+
+注: cascade（SBert）導入により推論ゼロの厳密な定義は再検討中。メインパイプライン（detect→calculate→decide）は推論ゼロだが、cascade_matcher は SBert embedding を使用する。
 
 ```
 [質問 Q + メタデータ]  →  [AI回答 R]
@@ -54,7 +71,7 @@ C = hits / n_propositions       命題カバレッジ [0,1]
 │  ugh_calculator.py (電卓層)      │
 │  Evidence → State                │
 │  S(構造完全性) C(命題被覆率)     │
-│  ΔE(意味距離)  ビン分類          │
+│  ΔE(意味距離) quality_score      │
 ├──────────────────────────────────┤
 │  decider.py (判定層)             │
 │  State + Evidence → Policy       │
@@ -89,89 +106,70 @@ C = hits / n_propositions       命題カバレッジ [0,1]
 | **skeptical_modality** | かもしれない / とは限らない | 確信度低下 — 断定との区別 |
 | **binary_frame** | ではなく / 二項対立 | 対立分割 — 両側の存在確認 |
 
-通常マッチ (dr≥0.15, fr≥0.35, ov≥3) 失敗時、演算子が検出された命題は
+通常マッチ (dr≥0.15, fr≥0.30, ov≥3) 失敗時、演算子が検出された命題は
 緩和閾値 (dr≥0.10, fr≥0.25, ov≥2) + 概念近傍マーカー + 極性検証で再判定される。
 
 #### 判定ロジック
 
 | ΔE bin | C bin | 判定 |
 |--------|-------|------|
-| 1 | — | accept |
+| 1 | -- | accept |
 | 2 | ≥ 2 | accept |
 | 2 | 1 | rewrite |
-| 3 | — | rewrite |
-| 4 | — | regenerate |
+| 3 | -- | rewrite |
+| 4 | -- | regenerate |
 
 #### 修復opcode
 
 判定が `rewrite` / `regenerate` の場合、検出された問題に応じた修復命令列（repair_order）を生成。
 opcodeは `opcodes/runtime_repair_opcodes.yaml` に定義（13種、コスト表付き）。
 
-### UGH Audit Layer（PoR/ΔE/grv スコアリング）
-
-2つのパイプラインが並存する:
-
-| パイプライン | エントリ | ΔE の計算 | 用途 |
-|-------------|---------|-----------|------|
-| **Audit Engine** | `audit.py` (detect→calculate→decide) | 理論式: `(2(1-S)²+(1-C)²)/3` | 構造的意味監査 |
-| **Scorer** | `ugh_audit/scorer/ugh_scorer.py` | cosine距離: `1-cos(ref,resp)` | PoR/ΔE/grv 蓄積 |
-
-```
-[質問 Q + AI回答 R + Reference]
-    │
-    ▼
-┌──────────────────────────────────┐
-│  scorer/ugh_scorer.py            │
-│  PoR / ΔE / grv 計算            │
-│  3層フォールバック               │
-└──────────────────────────────────┘
-    │
-    ▼
-[SQLite 蓄積] → [Phase Map レポート]
-```
-
 ---
 
 ## インストール
 
 ```bash
-# 基本（minimal backend — numpy のみ、テスト用）
+# 基本（テスト + サーバー依存）
 pip install -e ".[dev]"
 
-# フル機能（sentence-transformers + 日本語形態素解析）
-pip install -e ".[full]"
-
-# サーバーデプロイ（REST API + MCP + スコアリングバックエンド）
+# サーバーデプロイ（REST API + MCP）
 pip install -e ".[server]"
 
-# 日本語対応のみ追加
-pip install -e ".[ja]"
-
-# ugh3-metrics-lib native backend
-pip install -e ".[ugh3]"
+# 分析スクリプト (scipy + matplotlib)
+pip install -e ".[analysis]"
 ```
-
-依存：`ugh3-metrics-lib`（PoR/ΔE/grv計算エンジン）
 
 ---
 
 ## クイックスタート
 
+### CLI（Audit Engine）
+
+```bash
+python audit.py --question-id q001 --response "AIは..." --data data/question_sets/ugh-audit-100q-v3-1.json.txtl.txt --pretty
+```
+
+### REST API
+
+```bash
+uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
+```
+
 ```python
-from ugh_audit import UGHScorer, AuditDB
+import httpx
 
-scorer = UGHScorer()
-db = AuditDB()
-
-result = scorer.score(
-    question="AIは意味を持てるか？",
-    response="AIは意味を処理することができますが、人間のような主観的体験は持ちません。",
-    reference="AIは意味を『持つ』のではなく意味位相空間で『共振』する動的プロセスです。"
-)
-
-db.save(result)
-print(result)
-# AuditResult(PoR=0.84, delta_e=0.09, grv={'意味': 0.41, '処理': 0.28, ...}, fired=True)
+resp = httpx.post("http://localhost:8000/api/audit", json={
+    "question": "AIは意味を持てるか？",
+    "response": "AIは意味を処理できます。",
+})
+print(resp.json())
+# {
+#   "S": 1.0, "C": 1.0, "delta_e": 0.0, "quality_score": 5.0,
+#   "verdict": "accept", "hit_rate": "",
+#   "structural_gate": {"f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": 0.0,
+#                        "gate_verdict": "pass", "primary_fail": "none"},
+#   "saved_id": 1
+# }
 ```
 
 ---
@@ -182,16 +180,15 @@ print(result)
 # Audit Engine（構造的意味監査）
 audit.py              # パイプライン統合 (detect → calculate → decide)
 detector.py           # 検出層 — テキスト → Evidence
-ugh_calculator.py     # 電卓層 — Evidence → State
+ugh_calculator.py     # 電卓層 — Evidence → State (S, C, ΔE, quality_score)
 decider.py            # 判定層 — State + Evidence → Policy
 cascade_matcher.py    # 回収補助 — SBert Tier 2 + 多条件 Tier 3
 registry/             # YAML辞書（予約語・演算子・前提フレーム）
 opcodes/              # 修復opcode定義
 
-# UGH Audit Layer（PoR/ΔE/grv スコアリング）
+# UGH Audit Layer（REST/MCP サーバー + 永続化）
 ugh_audit/
-├── scorer/           # UGH指標スコアリング（3層フォールバック）
-├── storage/          # SQLite永続化
+├── storage/          # SQLite永続化 (audit_runs table)
 ├── reference/        # referenceセット管理（golden store）
 ├── collector/        # ログ収集ユーティリティ
 ├── report/           # Phase Mapレポート生成
@@ -212,7 +209,6 @@ ChatGPT から `audit_answer` ツールを呼び出せる MCP (Model Context Pro
 ### セットアップ
 
 ```bash
-# サーバー + スコアリングバックエンド一括インストール
 pip install -e ".[server]"
 ```
 
@@ -240,37 +236,33 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 | POST | `/mcp` | MCP Streamable HTTP エンドポイント |
 | GET | `/health` | ヘルスチェック (`{"status": "ok"}`) |
 
-### 外部公開
-
-```bash
-# ngrok で公開
-ngrok http 8000
-
-# → https://<xxx>.ngrok-free.app/mcp が MCP URL になる
-```
-
-### ChatGPT への登録
-
-1. ChatGPT → Settings → Connectors → Add Connector
-2. MCP URL を入力: `https://<your-host>/mcp`
-3. 保存後、会話中に `audit_answer` ツールが利用可能になる
-
 ### ツール仕様
 
-**audit_answer** — AI回答を意味監査する
+**audit_answer** -- AI回答を意味監査する
 
 入力:
 - `question` (string, 必須): ユーザーの質問
 - `response` (string, 必須): AIの回答
 - `reference` (string, 省略可): 期待される正解（省略時は GoldenStore から自動検索）
-- `session_id` (string, 省略可): セッションID（同一会話の複数ターンを紐付ける。省略時は自動生成）
+- `session_id` (string, 省略可): セッションID
 
 出力:
-- `por`: 意味的共鳴度 (0–1)
-- `delta_e`: 意味ズレ量 (0–1)
-- `grv`: 語彙重力分布
-- `verdict`: 判定 (同一意味圏 / 軽微なズレ / 意味乖離)
-- `saved_id`: DB保存時の行ID
+```json
+{
+  "S": 1.0,
+  "C": 1.0,
+  "delta_e": 0.0,
+  "quality_score": 5.0,
+  "verdict": "accept",
+  "hit_rate": "",
+  "structural_gate": {
+    "f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": 0.0,
+    "gate_verdict": "pass",
+    "primary_fail": "none"
+  },
+  "saved_id": 1
+}
+```
 
 ### 環境変数
 
@@ -282,12 +274,38 @@ ngrok http 8000
 
 ---
 
+## 確定パラメータ一覧
+
+| パラメータ | 確定値 | 場所 |
+|-----------|--------|------|
+| S の重み | f1:5, f2:25, f3:5, f4:5 | `ugh_calculator.py` |
+| ΔE の重み | w_s=2, w_c=1 | `ugh_calculator.py` |
+| quality_score | 5 - 4 × ΔE | `ugh_calculator.py` |
+| synonym_dict | 110 キー | `detector.py` |
+| 命題マッチ: fr 閾値 | 0.30 | `detector.py` |
+| 命題マッチ: direct_recall | ≥ 0.15 | `detector.py` |
+| 命題マッチ: overlap | ≥ 3 | `detector.py` |
+| 演算子回収: direct_recall | ≥ 0.10 | `detector.py` |
+| 演算子回収: full_recall | ≥ 0.25 | `detector.py` |
+| 演算子回収: overlap | ≥ 2 | `detector.py` |
+| cascade: θ_sbert | 0.50 | `cascade_matcher.py` |
+| cascade: SBert モデル | paraphrase-multilingual-MiniLM-L12-v2 | `cascade_matcher.py` |
+| verdict: accept | ΔE ≤ 0.10 | `server.py` / `mcp_server.py` |
+| verdict: rewrite | 0.10 < ΔE ≤ 0.25 | 同上 |
+| verdict: regenerate | ΔE > 0.25 | 同上 |
+
+---
+
 ## フェーズロードマップ
 
 - **Phase 1**: スコアリング基盤 + ログ蓄積
 - **Phase 2（現在）**: Audit Engine — 構造的意味監査パイプライン（detector / calculator / decider）
 - **Phase 3**: referenceセット設計（Human-golden / Cross-model / Self-baseline）
 - **Phase 4**: Phase Map可視化 + パターン分析
+
+### 未実装
+
+- **grv**: 語彙重力分布の操作化（理論式は定義済み、実装は中期タスク）
 
 ---
 
@@ -302,4 +320,4 @@ ngrok http 8000
 
 ## License
 
-MIT License © 2025 Yuu6798
+MIT License (C) 2025 Yuu6798

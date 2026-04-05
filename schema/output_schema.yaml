@@ -18,6 +18,7 @@ output:
     S: "float — 構造完全性 [0,1]"
     C: "float — 命題被覆率 [0,1]"
     delta_e: "float — 意味距離 [0,1]"
+    quality_score: "float — 品質スコア [1,5] = 5 - 4 × ΔE"
     delta_e_bin: "int — ΔEビン (1-4)"
     C_bin: "int — Cビン (1-3)"
     por_state: "str — PoR状態"
@@ -82,6 +83,7 @@ example:
     S: 0.375
     C: 0.0
     delta_e: 0.594
+    quality_score: 2.624
     delta_e_bin: 4
     C_bin: 1
     por_state: "inactive"
