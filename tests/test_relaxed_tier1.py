@@ -42,10 +42,10 @@ def _run(question_id: str) -> dict:
     return audit(question_id, response, meta)
 
 
-def test_q016_p2_hits_with_fr030() -> None:
-    """q016[2] は fr=0.30 で standard path から hit (full=0.333≥0.30)"""
+def test_q016_p2_blocked_by_required_chunks() -> None:
+    """q016[2] は fr=0.30 で閾値を通過するが required_chunks ガードで miss"""
     result = _run("q016")
-    assert 2 in result["evidence"]["hit_ids"]
+    assert 2 in result["evidence"]["miss_ids"]
 
 
 def test_relaxed_tier1_keeps_q042_p1_blocked() -> None:

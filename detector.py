@@ -1099,6 +1099,13 @@ def check_propositions(
             if is_positive_deontic and _response_has_negation(response_text, overlap_set):
                 miss_ids.append(i)
                 continue
+            # required_chunks ガード: 緩和帯 (0.30-0.35) で hit する命題のうち
+            # _RELAXED_REQUIRED_CHUNKS に登録されたものは必要概念の存在を検証
+            if full_recall < 0.35:
+                req = _RELAXED_REQUIRED_CHUNKS.get(prop)
+                if req and not all(chunk in response_text for chunk in req):
+                    miss_ids.append(i)
+                    continue
             hit_ids.append(i)
             continue
 
