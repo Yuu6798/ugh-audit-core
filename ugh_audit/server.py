@@ -13,6 +13,7 @@ ChatGPT Connectors から MCP URL (http://<host>:<port>/mcp) を登録して利�
 from __future__ import annotations
 
 import sys
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
@@ -113,7 +114,7 @@ def _run_pipeline(
             ),
         },
         # DB 保存用メタデータ
-        "_session_id": session_id or "",
+        "_session_id": session_id or str(uuid.uuid4()),
         "_question": question,
         "_response": response,
         "_reference": reference,

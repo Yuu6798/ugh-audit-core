@@ -12,6 +12,7 @@ ChatGPT Settings > Connectors から MCP URL を登録して利用する。
 from __future__ import annotations
 
 import sys
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
@@ -177,7 +178,7 @@ def audit_answer(
     }
 
     saved_id = db.save(
-        session_id=session_id or "",
+        session_id=session_id or str(uuid.uuid4()),
         question=question,
         response=response,
         reference=ref,
