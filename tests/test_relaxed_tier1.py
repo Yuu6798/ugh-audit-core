@@ -42,7 +42,8 @@ def _run(question_id: str) -> dict:
     return audit(question_id, response, meta)
 
 
-def test_relaxed_tier1_keeps_q016_p2_blocked() -> None:
+def test_q016_p2_blocked_by_required_chunks() -> None:
+    """q016[2] は fr=0.30 で閾値を通過するが required_chunks ガードで miss"""
     result = _run("q016")
     assert 2 in result["evidence"]["miss_ids"]
 

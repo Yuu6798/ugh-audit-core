@@ -1092,13 +1092,40 @@ def check_propositions(
         )
 
         min_required = min(_MIN_OVERLAP, len(prop_bigrams))
-        if direct_recall >= 0.15 and full_recall >= 0.35 and overlap_count >= min_required:
+        if direct_recall >= 0.15 and full_recall >= 0.30 and overlap_count >= min_required:
             if needs_polarity_deontic and not _response_has_negation(response_text, overlap_set):
                 miss_ids.append(i)
                 continue
             if is_positive_deontic and _response_has_negation(response_text, overlap_set):
                 miss_ids.append(i)
                 continue
+            # 緩和帯ガード (0.30-0.35): relaxed tier より厳格な検証を適用
+            # 1. _relaxed_candidate_allowed: 文レベル接地 + 汎用チャンクフィルタ
+            # 2. 非汎用チャンク2個以上: best sentence に命題固有語が複数必要
+            # 3. _RELAXED_REQUIRED_CHUNKS: 登録命題は必要概念の存在を検証
+            if full_recall < 0.35:
+                if not _relaxed_candidate_allowed(
+                    prop=prop,
+                    operator_family=op.family if op is not None else None,
+                    overlap_set=overlap_set,
+                    direct_overlap_set=direct_overlap_set,
+                    response_text=response_text,
+                ):
+                    miss_ids.append(i)
+                    continue
+                best_sent = _best_overlap_sentence(response_text, overlap_set)
+                chunks = _extract_content_chunks(prop)
+                non_generic_matched = [
+                    c for c in chunks
+                    if c in best_sent and c not in _RELAXED_GENERIC_CHUNKS
+                ]
+                if len(non_generic_matched) < 2:
+                    miss_ids.append(i)
+                    continue
+                req = _RELAXED_REQUIRED_CHUNKS.get(prop)
+                if req and not all(chunk in response_text for chunk in req):
+                    miss_ids.append(i)
+                    continue
             hit_ids.append(i)
             continue
 
