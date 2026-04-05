@@ -1,10 +1,11 @@
 """
 ugh_audit/report/phase_map.py
-Phase Map レポート生成 — ΔE / PoR の時系列可視化
+Phase Map レポート生成 — ΔE / quality_score の時系列可視化
 """
 from __future__ import annotations
-from typing import List
+
 from datetime import datetime
+from typing import List
 
 
 def generate_text_report(history: List[dict]) -> str:
@@ -18,34 +19,33 @@ def generate_text_report(history: List[dict]) -> str:
     lines.append(f"総計: {len(history)} 件")
     lines.append("=" * 60)
 
-    # 集計
-    fired = sum(1 for r in history if r.get("por_fired"))
-    avg_por = sum(r.get("por", 0) for r in history) / len(history)
     avg_de = sum(r.get("delta_e", 0) for r in history) / len(history)
+    avg_qs = sum(r.get("quality_score", 0) for r in history) / len(history)
 
-    drift_counts = {}
+    verdict_counts: dict = {}
     for r in history:
-        d = r.get("meaning_drift", "不明")
-        drift_counts[d] = drift_counts.get(d, 0) + 1
+        v = r.get("verdict", "unknown")
+        verdict_counts[v] = verdict_counts.get(v, 0) + 1
 
-    lines.append("\n📊 集計サマリー")
-    lines.append(f"  平均 PoR:    {avg_por:.3f}  (発火率: {fired}/{len(history)})")
-    lines.append(f"  平均 ΔE:     {avg_de:.3f}")
-    lines.append("\n  意味ズレ分布:")
-    for drift, count in sorted(drift_counts.items(), key=lambda x: -x[1]):
-        bar = "█" * count
-        lines.append(f"    {drift:10s} {bar} ({count}件)")
+    lines.append("\n集計サマリー")
+    lines.append(f"  平均 ΔE:            {avg_de:.3f}")
+    lines.append(f"  平均 quality_score: {avg_qs:.3f}")
+    lines.append("\n  verdict 分布:")
+    for v, count in sorted(verdict_counts.items(), key=lambda x: -x[1]):
+        bar = "#" * count
+        lines.append(f"    {v:12s} {bar} ({count}件)")
 
-    lines.append("\n📈 時系列 (ΔE推移)")
-    lines.append(f"  {'時刻':20s} {'PoR':>6} {'ΔE':>6} {'発火':>4} {'ドリフト'}")
-    lines.append(f"  {'-'*20} {'-'*6} {'-'*6} {'-'*4} {'-'*10}")
-    for r in history[-20:]:  # 直近20件
+    lines.append("\n時系列 (ΔE推移)")
+    lines.append(f"  {'時刻':20s} {'S':>6} {'C':>6} {'ΔE':>6} {'QS':>6} {'verdict'}")
+    lines.append(f"  {'-'*20} {'-'*6} {'-'*6} {'-'*6} {'-'*6} {'-'*12}")
+    for r in history[-20:]:
         ts = r.get("created_at", "")[:19]
-        por = r.get("por", 0)
+        s = r.get("S", 0)
+        c = r.get("C", 0)
         de = r.get("delta_e", 0)
-        fired_mark = "🔥" if r.get("por_fired") else "○"
-        drift = r.get("meaning_drift", "不明")
-        lines.append(f"  {ts:20s} {por:6.3f} {de:6.3f} {fired_mark:>4} {drift}")
+        qs = r.get("quality_score", 0)
+        verdict = r.get("verdict", "unknown")
+        lines.append(f"  {ts:20s} {s:6.3f} {c:6.3f} {de:6.3f} {qs:6.3f} {verdict}")
 
     lines.append("=" * 60)
     return "\n".join(lines)
@@ -53,18 +53,16 @@ def generate_text_report(history: List[dict]) -> str:
 
 def generate_csv(history: List[dict]) -> str:
     """CSV形式でエクスポート"""
-    headers = ["created_at", "session_id", "model_id", "por", "por_fired",
-               "delta_e", "meaning_drift"]
+    headers = ["created_at", "S", "C", "delta_e", "quality_score", "verdict"]
     lines = [",".join(headers)]
     for r in history:
         row = [
             r.get("created_at", ""),
-            r.get("session_id", ""),
-            r.get("model_id", ""),
-            str(r.get("por", 0)),
-            str(r.get("por_fired", 0)),
+            str(r.get("S", 0)),
+            str(r.get("C", 0)),
             str(r.get("delta_e", 0)),
-            r.get("meaning_drift", ""),
+            str(r.get("quality_score", 0)),
+            r.get("verdict", ""),
         ]
         lines.append(",".join(row))
     return "\n".join(lines)
