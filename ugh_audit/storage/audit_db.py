@@ -80,7 +80,7 @@ class AuditDB:
                     WHEN delta_e <= 0.25 THEN 'rewrite'
                     ELSE 'regenerate'
                 END
-                WHERE verdict = '' AND delta_e != 0.0
+                WHERE verdict = ''
             """)
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_session

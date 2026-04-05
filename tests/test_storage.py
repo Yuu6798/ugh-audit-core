@@ -100,6 +100,13 @@ def test_migration_from_v02_schema(tmp_path):
              delta_e, meaning_drift, created_at)
         VALUES ('s1', 'test', 'Q2', 'R2', 0.50, 0, 0.30, '意味乖離', '2026-01-02T00:00:00')
     """)
+    # delta_e=0.0 のレコード（zero-ΔE backfill 検証用）
+    conn.execute("""
+        INSERT INTO audit_runs
+            (session_id, model_id, question, response, por, por_fired,
+             delta_e, meaning_drift, created_at)
+        VALUES ('s1', 'test', 'Q3', 'R3', 0.99, 1, 0.0, '同一意味圏', '2026-01-03T00:00:00')
+    """)
     conn.commit()
     conn.close()
 
@@ -121,7 +128,7 @@ def test_migration_from_v02_schema(tmp_path):
 
     # 新旧両方のデータが取得できること
     rows = db.list_recent(10)
-    assert len(rows) == 3
+    assert len(rows) == 4
 
     # レガシー行の quality_score / verdict が backfill されていること
     legacy_rows = sorted(
@@ -134,3 +141,6 @@ def test_migration_from_v02_schema(tmp_path):
     # delta_e=0.30 → quality_score=3.80, verdict=regenerate
     assert legacy_rows[1]["quality_score"] == pytest.approx(3.80, abs=0.01)
     assert legacy_rows[1]["verdict"] == "regenerate"
+    # delta_e=0.0 → quality_score=5.0 (default), verdict=accept
+    assert legacy_rows[2]["quality_score"] == pytest.approx(5.0)
+    assert legacy_rows[2]["verdict"] == "accept"
