@@ -1,11 +1,10 @@
 """
 tests/test_server.py
-ChatGPT Connector API サーバーのテスト
+REST API サーバーのテスト（パイプライン A 対応）
 """
 import pytest
 
 from ugh_audit.reference.golden_store import GoldenStore
-from ugh_audit.scorer.ugh_scorer import UGHScorer
 from ugh_audit.storage.audit_db import AuditDB
 
 # FastAPI / httpx はオプショナル依存 — なければスキップ
@@ -30,12 +29,11 @@ def tmp_golden(tmp_path):
 @pytest.fixture
 def client(tmp_db, tmp_golden):
     """テスト用クライアント（tmp_path DB / GoldenStore を使用）"""
-    scorer = UGHScorer(model_id="test-server")
-    configure(db=tmp_db, scorer=scorer, golden=tmp_golden)
+    configure(db=tmp_db, golden=tmp_golden)
     with TestClient(app) as c:
         yield c
     # リセット
-    configure(db=None, scorer=None, golden=None)
+    configure(db=None, golden=None)
 
 
 def test_health(client):
@@ -52,13 +50,17 @@ def test_audit_returns_scores(client):
     })
     assert resp.status_code == 200
     data = resp.json()
-    assert "por" in data
+    assert "S" in data
+    assert "C" in data
     assert "delta_e" in data
-    assert "grv" in data
+    assert "quality_score" in data
     assert "verdict" in data
+    assert "hit_rate" in data
+    assert "structural_gate" in data
     assert "saved_id" in data
     assert isinstance(data["saved_id"], int)
     assert data["saved_id"] >= 1
+    assert data["verdict"] in ("accept", "rewrite", "regenerate")
 
 
 def test_audit_saves_to_db(client, tmp_db):
@@ -100,7 +102,6 @@ def test_history_empty(client):
 
 
 def test_history_returns_items(client):
-    # 2件監査を実行
     for i in range(2):
         client.post("/api/audit", json={
             "question": f"質問{i}",
@@ -111,8 +112,9 @@ def test_history_returns_items(client):
     items = resp.json()
     assert len(items) == 2
     assert "id" in items[0]
-    assert "por" in items[0]
-    assert "meaning_drift" in items[0]
+    assert "S" in items[0]
+    assert "delta_e" in items[0]
+    assert "verdict" in items[0]
 
 
 def test_openapi_schema(client):
@@ -126,25 +128,20 @@ def test_openapi_schema(client):
 def test_audit_resolves_reference_from_golden(tmp_db, tmp_path):
     """reference 省略時に GoldenStore から自動解決されることを検証"""
     golden = GoldenStore(path=tmp_path / "golden.json")
-    # GoldenStore にはデフォルトで ugh_definition が入っている
-    # "AIは意味を持てるか？" に対して find_reference が返る
     ref = golden.find_reference("AIは意味を持てるか？")
-    assert ref is not None  # GoldenStore が解決できることを前提確認
+    assert ref is not None
 
-    scorer = UGHScorer(model_id="test-server")
-    configure(db=tmp_db, scorer=scorer, golden=golden)
+    configure(db=tmp_db, golden=golden)
     with TestClient(app) as c:
         resp = c.post("/api/audit", json={
             "question": "AIは意味を持てるか？",
             "response": "AIは意味を処理できます。",
-            # reference を省略 → GoldenStore から自動解決される
         })
-    configure(db=None, scorer=None, golden=None)
+    configure(db=None, golden=None)
     assert resp.status_code == 200
     data = resp.json()
     assert data["saved_id"] >= 1
 
-    # DB に保存された reference が question ではなく GoldenStore の値であることを確認
     rows = tmp_db.list_recent(1)
     assert rows[0]["reference"] == ref
 
@@ -164,5 +161,19 @@ def test_mcp_session_manager_starts(client):
     """MCP セッションマネージャーがライフスパンで起動することを検証"""
     from ugh_audit.mcp_server import mcp as mcp_instance
 
-    # TestClient のライフスパンで session_manager が起動済み
     assert mcp_instance.session_manager is not None
+
+
+def test_structural_gate_fields(client):
+    """structural_gate が全フィールドを含むことを検証"""
+    resp = client.post("/api/audit", json={
+        "question": "テスト",
+        "response": "テスト回答",
+    })
+    gate = resp.json()["structural_gate"]
+    assert "f1" in gate
+    assert "f2" in gate
+    assert "f3" in gate
+    assert "f4" in gate
+    assert "gate_verdict" in gate
+    assert "primary_fail" in gate

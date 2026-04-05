@@ -183,7 +183,7 @@ class TestDecider:
 
     def test_accept_bin1(self):
         """delta_e_bin=1 → accept"""
-        s = State(S=1.0, C=1.0, delta_e=0.0, delta_e_bin=1, C_bin=3,
+        s = State(S=1.0, C=1.0, delta_e=0.0, quality_score=5.0, delta_e_bin=1, C_bin=3,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t", propositions_hit=3, propositions_total=3)
         result = decide(s, e)
@@ -191,7 +191,7 @@ class TestDecider:
 
     def test_regenerate_bin4(self):
         """delta_e_bin=4 → regenerate"""
-        s = State(S=0.375, C=0.0, delta_e=0.59, delta_e_bin=4, C_bin=1,
+        s = State(S=0.375, C=0.0, delta_e=0.59, quality_score=2.64, delta_e_bin=4, C_bin=1,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t", f2_unknown=1.0,
                      propositions_hit=0, propositions_total=3, miss_ids=[0, 1, 2])
@@ -200,7 +200,7 @@ class TestDecider:
 
     def test_rewrite_bin3(self):
         """delta_e_bin=3 → rewrite"""
-        s = State(S=1.0, C=0.333, delta_e=0.15, delta_e_bin=3, C_bin=1,
+        s = State(S=1.0, C=0.333, delta_e=0.15, quality_score=4.4, delta_e_bin=3, C_bin=1,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t", propositions_hit=1, propositions_total=3,
                      hit_ids=[0], miss_ids=[1, 2])
@@ -209,7 +209,7 @@ class TestDecider:
 
     def test_rewrite_bin2_low_c(self):
         """delta_e_bin=2, C_bin=1 → rewrite"""
-        s = State(S=1.0, C=0.2, delta_e=0.05, delta_e_bin=2, C_bin=1,
+        s = State(S=1.0, C=0.2, delta_e=0.05, quality_score=4.8, delta_e_bin=2, C_bin=1,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t")
         result = decide(s, e)
@@ -217,7 +217,7 @@ class TestDecider:
 
     def test_accept_bin2_high_c(self):
         """delta_e_bin=2, C_bin=2 → accept"""
-        s = State(S=1.0, C=0.5, delta_e=0.08, delta_e_bin=2, C_bin=2,
+        s = State(S=1.0, C=0.5, delta_e=0.08, quality_score=4.68, delta_e_bin=2, C_bin=2,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t")
         result = decide(s, e)
@@ -225,7 +225,7 @@ class TestDecider:
 
     def test_repair_order_f2(self):
         """f2検出時に PRESERVE_TERM + BLOCK_REINTERPRETATION が含まれる"""
-        s = State(S=0.5, C=0.0, delta_e=0.5, delta_e_bin=4, C_bin=1,
+        s = State(S=0.5, C=0.0, delta_e=0.5, quality_score=3.0, delta_e_bin=4, C_bin=1,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t", f2_unknown=1.0,
                      propositions_hit=0, propositions_total=3, miss_ids=[0, 1, 2])
@@ -237,7 +237,7 @@ class TestDecider:
 
     def test_budget_calculation(self):
         """budgetの合計コストが正しいか"""
-        s = State(S=1.0, C=1.0, delta_e=0.0, delta_e_bin=1, C_bin=3,
+        s = State(S=1.0, C=1.0, delta_e=0.0, quality_score=5.0, delta_e_bin=1, C_bin=3,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t")
         result = decide(s, e)

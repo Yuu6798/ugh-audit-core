@@ -6,13 +6,9 @@ from __future__ import annotations
 from .collector.audit_collector import AuditCollector, SessionCollector
 from .reference.golden_store import GoldenEntry, GoldenStore
 from .report.phase_map import generate_csv, generate_text_report
-from .scorer.models import AuditResult
-from .scorer.ugh_scorer import UGHScorer
 from .storage.audit_db import AuditDB
 
 __all__ = [
-    "AuditResult",
-    "UGHScorer",
     "AuditDB",
     "AuditCollector",
     "SessionCollector",
@@ -22,4 +18,4 @@ __all__ = [
     "generate_csv",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
