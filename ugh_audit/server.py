@@ -54,7 +54,9 @@ def _gate_verdict(f1: float, f2: float, f3: float, f4: float) -> str:
     fail_max = max(f1, f2, f3, f4)
     if fail_max == 0.0:
         return "pass"
-    return "fail"
+    if fail_max >= 1.0:
+        return "fail"
+    return "warn"
 
 
 def _primary_fail(f1: float, f2: float, f3: float, f4: float) -> str:

@@ -126,6 +126,30 @@ class TestVerdict:
         assert coll_verdict(0.26) == "regenerate"
 
 
+class TestGateVerdict:
+    """structural_gate の gate_verdict テスト (pass / warn / fail)"""
+
+    def test_gate_pass(self):
+        from ugh_audit.server import _gate_verdict
+        assert _gate_verdict(0.0, 0.0, 0.0, 0.0) == "pass"
+
+    def test_gate_warn(self):
+        from ugh_audit.server import _gate_verdict
+        assert _gate_verdict(0.5, 0.0, 0.0, 0.0) == "warn"
+        assert _gate_verdict(0.0, 0.5, 0.5, 0.0) == "warn"
+
+    def test_gate_fail(self):
+        from ugh_audit.server import _gate_verdict
+        assert _gate_verdict(1.0, 0.0, 0.0, 0.0) == "fail"
+        assert _gate_verdict(0.5, 1.0, 0.0, 0.0) == "fail"
+
+    def test_gate_mcp_consistent(self):
+        from ugh_audit.server import _gate_verdict as srv
+        from ugh_audit.mcp_server import _gate_verdict as mcp
+        for args in [(0.0, 0.0, 0.0, 0.0), (0.5, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0)]:
+            assert srv(*args) == mcp(*args)
+
+
 # --- API 出力フォーマットテスト ---
 
 fastapi = pytest.importorskip("fastapi")
