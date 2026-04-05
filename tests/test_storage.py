@@ -93,10 +93,17 @@ def test_migration_from_v02_schema(tmp_path):
              delta_e, meaning_drift, created_at)
         VALUES ('s1', 'test', 'Q', 'R', 0.85, 1, 0.03, '同一意味圏', '2026-01-01T00:00:00')
     """)
+    # delta_e=0.30 のレコードも追加（backfill 検証用）
+    conn.execute("""
+        INSERT INTO audit_runs
+            (session_id, model_id, question, response, por, por_fired,
+             delta_e, meaning_drift, created_at)
+        VALUES ('s1', 'test', 'Q2', 'R2', 0.50, 0, 0.30, '意味乖離', '2026-01-02T00:00:00')
+    """)
     conn.commit()
     conn.close()
 
-    # AuditDB を開くとマイグレーションが実行される
+    # AuditDB を開くとマイグレーション + backfill が実行される
     db = AuditDB(db_path=db_path)
 
     # 新カラムで INSERT できること
@@ -114,4 +121,16 @@ def test_migration_from_v02_schema(tmp_path):
 
     # 新旧両方のデータが取得できること
     rows = db.list_recent(10)
-    assert len(rows) == 2
+    assert len(rows) == 3
+
+    # レガシー行の quality_score / verdict が backfill されていること
+    legacy_rows = sorted(
+        [r for r in rows if r["session_id"] == "s1"],
+        key=lambda r: r["created_at"],
+    )
+    # delta_e=0.03 → quality_score=4.88, verdict=accept
+    assert legacy_rows[0]["quality_score"] == pytest.approx(4.88, abs=0.01)
+    assert legacy_rows[0]["verdict"] == "accept"
+    # delta_e=0.30 → quality_score=3.80, verdict=regenerate
+    assert legacy_rows[1]["quality_score"] == pytest.approx(3.80, abs=0.01)
+    assert legacy_rows[1]["verdict"] == "regenerate"

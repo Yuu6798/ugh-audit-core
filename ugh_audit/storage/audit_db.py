@@ -67,6 +67,21 @@ class AuditDB:
                     )
                 except sqlite3.OperationalError:
                     pass  # カラムが既に存在する場合はスキップ
+            # レガシー行の quality_score / verdict を delta_e から backfill
+            conn.execute("""
+                UPDATE audit_runs
+                SET quality_score = MAX(1.0, MIN(5.0, 5.0 - 4.0 * delta_e))
+                WHERE quality_score = 5.0 AND delta_e != 0.0
+            """)
+            conn.execute("""
+                UPDATE audit_runs
+                SET verdict = CASE
+                    WHEN delta_e <= 0.10 THEN 'accept'
+                    WHEN delta_e <= 0.25 THEN 'rewrite'
+                    ELSE 'regenerate'
+                END
+                WHERE verdict = '' AND delta_e != 0.0
+            """)
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_session
                 ON audit_runs(session_id)
