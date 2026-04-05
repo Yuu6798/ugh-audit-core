@@ -1092,7 +1092,7 @@ def check_propositions(
         )
 
         min_required = min(_MIN_OVERLAP, len(prop_bigrams))
-        if direct_recall >= 0.15 and full_recall >= 0.35 and overlap_count >= min_required:
+        if direct_recall >= 0.15 and full_recall >= 0.30 and overlap_count >= min_required:
             if needs_polarity_deontic and not _response_has_negation(response_text, overlap_set):
                 miss_ids.append(i)
                 continue

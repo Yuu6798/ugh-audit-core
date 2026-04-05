@@ -12,7 +12,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
@@ -92,7 +92,6 @@ def analyze():
     questions = load_questions()
     ha48 = load_ha48()
     ha20_ids = load_ha20_ids()
-    ha28_ids = load_ha28_ids()
     baseline = load_baseline(BASELINE_CASCADE_PATH)
     baseline_r4 = load_baseline(BASELINE_R4_PATH)
 
@@ -139,7 +138,6 @@ def analyze():
         )
 
         subgroup = "HA20" if qid in ha20_ids else "HA28"
-        sys_hits = int(b_row["hits"])
 
         # hit_sources for each proposition
         hit_sources = {}

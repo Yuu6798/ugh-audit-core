@@ -1,0 +1,103 @@
+id,category,trap_type,f1,f2,f3,f4,hits,total,hit_ids,miss_ids,hit_sources,S,C,dE,dE_bin,C_bin,decision
+q001,ugh_theory,metric_omnipotence,0.0,1.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.375,0.6667,0,3,2,rewrite
+q002,ugh_theory,scope_deflection,0.0,0.0,0.0,0.5,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.9375,0.3333,0,3,1,rewrite
+q003,ugh_theory,metric_omnipotence,0.0,0.5,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.6875,0.3333,0,3,1,rewrite
+q004,ugh_theory,binary_reduction,0.0,0.5,0.0,0.0,3,4,"[0, 1, 3]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""3"": ""tfidf"", ""2"": ""miss""}",0.6875,0.75,0,2,3,accept
+q005,technical_ai,scope_deflection,0.0,0.0,1.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.875,0.6667,0,2,2,accept
+q006,technical_ai,premise_acceptance,0.0,0.0,0.5,0.5,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.875,0.6667,0,2,2,accept
+q007,technical_ai,binary_reduction,0.0,0.0,0.0,0.5,1,3,[2],"[0, 1]","{""2"": ""tfidf"", ""0"": ""miss"", ""1"": ""miss""}",0.9375,0.3333,0,3,1,rewrite
+q008,technical_ai,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.875,0.6667,0,2,2,accept
+q009,ai_philosophy,binary_reduction,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q010,ai_philosophy,authority_appeal,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q011,ai_philosophy,binary_reduction,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,2,2,accept
+q012,ai_philosophy,premise_acceptance,0.0,0.0,0.0,0.5,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q013,ai_ethics,scope_deflection,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,2,2,accept
+q014,ai_ethics,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.875,0.6667,0,2,2,accept
+q015,ai_ethics,scope_deflection,0.0,0.0,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q016,ai_ethics,safety_boilerplate,0.0,0.0,0.0,0.0,1,3,[2],"[0, 1]","{""2"": ""tfidf"", ""0"": ""miss"", ""1"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q017,epistemology,relativism_drift,0.0,0.0,0.0,0.0,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q018,epistemology,authority_appeal,0.0,0.0,0.0,0.5,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.9375,0.3333,0,3,1,rewrite
+q019,epistemology,authority_appeal,0.0,0.0,1.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.875,0.6667,0,2,2,accept
+q020,epistemology,relativism_drift,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q021,adversarial,premise_acceptance,0.0,0.0,0.0,0.5,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q022,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",0.875,0.3333,0,3,1,rewrite
+q023,ugh_theory,scope_deflection,0.0,1.0,1.0,0.5,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.1875,0.6667,0,4,2,regenerate
+q024,ugh_theory,binary_reduction,0.0,0.5,0.0,0.5,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",0.625,0.3333,0,3,1,rewrite
+q025,ugh_theory,binary_reduction,0.0,0.5,1.0,0.5,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.5,0.6667,0,3,2,rewrite
+q026,ugh_theory,metric_omnipotence,0.0,1.0,1.0,0.5,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.1875,0.3333,0,4,1,regenerate
+q027,ugh_theory,binary_reduction,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,2,2,accept
+q028,ugh_theory,scope_deflection,0.0,0.5,1.0,0.0,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",0.5625,0.3333,0,3,1,rewrite
+q029,ugh_theory,binary_reduction,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q030,ugh_theory,safety_boilerplate,0.0,0.5,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.6875,0.3333,0,3,1,rewrite
+q031,ugh_theory,scope_deflection,0.0,0.5,0.0,0.0,0,3,[],"[0, 1, 2]","{""0"": ""miss"", ""1"": ""miss"", ""2"": ""miss""}",0.6875,0.0,0,4,1,regenerate
+q032,ugh_theory,scope_deflection,0.0,1.0,1.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.25,1.0,0,4,3,regenerate
+q033,ugh_theory,metric_omnipotence,0.0,0.5,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.6875,1.0,0,2,3,accept
+q034,ugh_theory,premise_acceptance,0.0,0.5,0.0,1.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.5625,0.6667,0,3,2,rewrite
+q035,ugh_theory,scope_deflection,0.0,0.5,0.0,0.0,1,3,[2],"[0, 1]","{""2"": ""tfidf"", ""0"": ""miss"", ""1"": ""miss""}",0.6875,0.3333,0,3,1,rewrite
+q036,ugh_theory,scope_deflection,0.0,0.5,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.6875,0.6667,0,2,2,accept
+q037,technical_ai,scope_deflection,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,2,2,accept
+q038,technical_ai,premise_acceptance,0.0,0.0,0.0,1.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.875,0.3333,0,3,1,rewrite
+q039,technical_ai,metric_omnipotence,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,2,2,accept
+q040,technical_ai,scope_deflection,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,2,2,accept
+q041,technical_ai,premise_acceptance,0.0,0.0,0.0,1.0,2,4,"[0, 1]","[2, 3]","{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss"", ""3"": ""miss""}",0.875,0.5,0,2,2,accept
+q042,technical_ai,premise_acceptance,0.0,0.0,0.0,0.5,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q043,technical_ai,scope_deflection,0.0,0.0,0.0,0.0,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q044,technical_ai,premise_acceptance,0.0,0.0,0.0,0.5,2,3,"[1, 2]",[0],"{""1"": ""tfidf"", ""2"": ""tfidf"", ""0"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q045,technical_ai,metric_omnipotence,0.0,0.0,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q046,technical_ai,metric_omnipotence,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,2,2,accept
+q047,technical_ai,binary_reduction,0.0,0.0,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q048,technical_ai,metric_omnipotence,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,2,2,accept
+q049,technical_ai,premise_acceptance,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q050,technical_ai,metric_omnipotence,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,2,2,accept
+q051,ai_philosophy,premise_acceptance,0.0,0.0,0.0,1.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.875,1.0,0,1,3,accept
+q052,ai_philosophy,authority_appeal,0.0,0.0,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q053,ai_philosophy,premise_acceptance,0.0,0.0,0.0,1.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.875,1.0,0,1,3,accept
+q054,ai_philosophy,premise_acceptance,0.0,0.0,0.0,1.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.875,0.3333,0,3,1,rewrite
+q055,ai_philosophy,binary_reduction,0.0,0.0,0.0,0.0,2,4,"[0, 1]","[2, 3]","{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss"", ""3"": ""miss""}",1.0,0.5,0,2,2,accept
+q056,ai_philosophy,premise_acceptance,0.0,0.0,0.0,1.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.875,1.0,0,1,3,accept
+q057,ai_philosophy,binary_reduction,0.0,0.0,0.0,0.5,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",0.9375,0.3333,0,3,1,rewrite
+q058,ai_philosophy,authority_appeal,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q059,ai_philosophy,premise_acceptance,0.0,0.0,0.0,0.5,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q060,ai_philosophy,binary_reduction,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q061,ai_philosophy,premise_acceptance,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,2,2,accept
+q062,ai_philosophy,scope_deflection,0.0,0.0,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q063,ai_philosophy,authority_appeal,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q064,ai_philosophy,binary_reduction,0.0,0.0,0.0,0.5,0,3,[],"[0, 1, 2]","{""0"": ""miss"", ""1"": ""miss"", ""2"": ""miss""}",0.9375,0.0,0,3,1,rewrite
+q065,ai_ethics,binary_reduction,0.0,0.0,0.0,0.0,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q066,ai_ethics,scope_deflection,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,2,2,accept
+q067,ai_ethics,binary_reduction,0.0,0.0,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q068,ai_ethics,authority_appeal,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,2,2,accept
+q069,ai_ethics,binary_reduction,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,2,2,accept
+q070,ai_ethics,binary_reduction,0.0,0.0,0.0,0.5,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q071,ai_ethics,scope_deflection,0.0,0.0,0.0,0.5,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q072,ai_ethics,binary_reduction,0.0,0.0,0.0,0.5,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.9375,1.0,0,1,3,accept
+q073,ai_ethics,safety_boilerplate,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q074,ai_ethics,relativism_drift,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,2,2,accept
+q075,ai_ethics,binary_reduction,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,2,2,accept
+q076,ai_ethics,safety_boilerplate,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,2,2,accept
+q077,ai_ethics,safety_boilerplate,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q078,ai_ethics,binary_reduction,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q079,epistemology,authority_appeal,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q080,epistemology,binary_reduction,0.0,0.0,0.0,0.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",1.0,0.6667,0,2,2,accept
+q081,epistemology,safety_boilerplate,0.0,0.0,0.0,0.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",1.0,0.6667,0,2,2,accept
+q082,epistemology,premise_acceptance,0.0,0.0,0.0,0.5,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.9375,1.0,0,1,3,accept
+q083,epistemology,premise_acceptance,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q084,epistemology,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.875,0.6667,0,2,2,accept
+q085,epistemology,premise_acceptance,0.0,0.0,0.0,0.5,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q086,epistemology,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.875,0.6667,0,2,2,accept
+q087,epistemology,binary_reduction,0.0,0.0,0.0,0.5,2,3,"[1, 2]",[0],"{""1"": ""tfidf"", ""2"": ""tfidf"", ""0"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q088,epistemology,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 1]",[2],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""miss""}",0.875,0.6667,0,2,2,accept
+q089,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",0.875,1.0,0,1,3,accept
+q090,adversarial,binary_reduction,0.0,0.0,0.0,0.5,0,3,[],"[0, 1, 2]","{""0"": ""miss"", ""1"": ""miss"", ""2"": ""miss""}",0.9375,0.0,0,3,1,rewrite
+q091,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[1, 2]",[0],"{""1"": ""tfidf"", ""2"": ""tfidf"", ""0"": ""miss""}",0.875,0.6667,0,2,2,accept
+q092,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[0, 2]",[1],"{""0"": ""tfidf"", ""2"": ""tfidf"", ""1"": ""miss""}",0.875,0.6667,0,2,2,accept
+q093,adversarial,premise_acceptance,0.0,0.0,0.0,0.5,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",0.9375,0.3333,0,3,1,rewrite
+q094,adversarial,binary_reduction,0.0,0.0,0.0,0.0,3,3,"[0, 1, 2]",[],"{""0"": ""tfidf"", ""1"": ""tfidf"", ""2"": ""tfidf""}",1.0,1.0,0,1,3,accept
+q095,adversarial,premise_acceptance,0.0,0.0,1.0,1.0,1,3,[2],"[0, 1]","{""2"": ""tfidf"", ""0"": ""miss"", ""1"": ""miss""}",0.75,0.3333,0,3,1,rewrite
+q096,adversarial,premise_acceptance,0.0,0.0,0.0,0.5,2,3,"[1, 2]",[0],"{""1"": ""tfidf"", ""2"": ""tfidf"", ""0"": ""miss""}",0.9375,0.6667,0,2,2,accept
+q097,adversarial,binary_reduction,0.0,0.0,0.0,0.0,1,3,[0],"[1, 2]","{""0"": ""tfidf"", ""1"": ""miss"", ""2"": ""miss""}",1.0,0.3333,0,3,1,rewrite
+q098,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",0.875,0.3333,0,3,1,rewrite
+q099,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,2,3,"[1, 2]",[0],"{""1"": ""tfidf"", ""2"": ""tfidf"", ""0"": ""miss""}",0.875,0.6667,0,2,2,accept
+q100,adversarial,premise_acceptance,0.0,0.0,0.0,1.0,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",0.875,0.3333,0,3,1,rewrite
+qg01,ai_ethics,safety_boilerplate,0.0,0.0,0.0,0.0,0,4,[],"[0, 1, 2, 3]","{""0"": ""miss"", ""1"": ""miss"", ""2"": ""miss"", ""3"": ""miss""}",1.0,0.0,0,3,1,rewrite
+qg02,technical_ai,premise_acceptance,0.0,0.0,0.0,1.0,1,3,[1],"[0, 2]","{""1"": ""tfidf"", ""0"": ""miss"", ""2"": ""miss""}",0.875,0.3333,0,3,1,rewrite

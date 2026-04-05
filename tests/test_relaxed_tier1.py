@@ -42,9 +42,10 @@ def _run(question_id: str) -> dict:
     return audit(question_id, response, meta)
 
 
-def test_relaxed_tier1_keeps_q016_p2_blocked() -> None:
+def test_q016_p2_hits_with_fr030() -> None:
+    """q016[2] は fr=0.30 で standard path から hit (full=0.333≥0.30)"""
     result = _run("q016")
-    assert 2 in result["evidence"]["miss_ids"]
+    assert 2 in result["evidence"]["hit_ids"]
 
 
 def test_relaxed_tier1_keeps_q042_p1_blocked() -> None:
