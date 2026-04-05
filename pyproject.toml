@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ugh-audit-core"
-version = "0.2.0"
+version = "0.3.0"
 description = "UGH指標（PoR/ΔE/grv）によるAI回答の意味論的監査基盤"
 readme = "README.md"
 license = {text = "MIT"}

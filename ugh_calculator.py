@@ -7,6 +7,7 @@ Evidence → State の決定的変換を行う。
     S = 1 - Σ(w_k × f_k) / Σ(w_k)       # 構造完全性 [0,1]
     C = hits / n_propositions              # 命題被覆率 [0,1]
     ΔE = (w_s(1-S)² + w_c(1-C)²) / (w_s + w_c)  # 距離 [0,1]
+    quality_score = 5 - 4 * ΔE            # 品質スコア [1,5]
 """
 from __future__ import annotations
 
@@ -53,6 +54,7 @@ class State:
     S: float              # 構造完全性 [0,1]
     C: float              # 命題被覆率 [0,1]
     delta_e: float        # 意味距離 [0,1]
+    quality_score: float  # 品質スコア [1,5] = 5 - 4 * ΔE
     delta_e_bin: int      # ΔEビン (1-4)
     C_bin: int            # Cビン (1-3)
     por_state: str        # PoR状態 ("inactive" — 本エンジンではPoR非使用)
@@ -141,6 +143,15 @@ def _grv_tag(evidence: Evidence) -> str:
     return "none"
 
 
+def _compute_quality_score(delta_e: float) -> float:
+    """品質スコアを計算する
+
+    quality_score = 5 - 4 * ΔE
+    パラメータフリー。ΔE=0 → 5.0, ΔE=1 → 1.0
+    """
+    return max(1.0, min(5.0, 5.0 - 4.0 * delta_e))
+
+
 def calculate(evidence: Evidence) -> State:
     """電卓層: Evidence → State
 
@@ -149,6 +160,7 @@ def calculate(evidence: Evidence) -> State:
     s = _compute_s(evidence)
     c = _compute_c(evidence)
     delta_e = _compute_delta_e(s, c)
+    quality_score = _compute_quality_score(delta_e)
     delta_e_bin = _bin_delta_e(delta_e)
     c_bin = _bin_c(c)
 
@@ -156,6 +168,7 @@ def calculate(evidence: Evidence) -> State:
         S=round(s, 4),
         C=round(c, 4),
         delta_e=round(delta_e, 4),
+        quality_score=round(quality_score, 4),
         delta_e_bin=delta_e_bin,
         C_bin=c_bin,
         por_state="inactive",

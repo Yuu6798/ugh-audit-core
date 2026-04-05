@@ -1,10 +1,9 @@
 """
 tests/test_collector.py
-AuditCollector の基本テスト
+AuditCollector の基本テスト（パイプライン A 対応）
 """
 import pytest
 from ugh_audit.collector.audit_collector import AuditCollector
-from ugh_audit.scorer.models import AuditResult
 from ugh_audit.storage.audit_db import AuditDB
 from ugh_audit.reference.golden_store import GoldenStore
 
@@ -13,18 +12,21 @@ from ugh_audit.reference.golden_store import GoldenStore
 def tmp_collector(tmp_path):
     db = AuditDB(db_path=tmp_path / "test.db")
     golden = GoldenStore(path=tmp_path / "golden.json")
-    return AuditCollector(model_id="test", db=db, golden=golden)
+    return AuditCollector(db=db, golden=golden)
 
 
-def test_collect_returns_audit_result(tmp_collector):
+def test_collect_returns_dict(tmp_collector):
     result = tmp_collector.collect(
         question="AIは意味を持てるか？",
         response="AIは意味位相空間で共振する動的プロセスです。",
     )
-    assert isinstance(result, AuditResult)
-    assert result.model_id == "test"
-    assert 0.0 <= result.por <= 1.0
-    assert 0.0 <= result.delta_e <= 1.0
+    assert isinstance(result, dict)
+    assert "S" in result
+    assert "C" in result
+    assert "delta_e" in result
+    assert "quality_score" in result
+    assert "verdict" in result
+    assert result["verdict"] in ("accept", "rewrite", "regenerate")
 
 
 def test_collect_saves_to_db(tmp_collector):
@@ -57,7 +59,3 @@ def test_session_context_manager(tmp_collector):
     assert len(s.results) == 2
     summary = s.summary()
     assert summary["total"] == 2
-
-
-def test_backend_property(tmp_collector):
-    assert tmp_collector.backend in ("ugh3-metrics-lib", "sentence-transformers", "minimal")

@@ -1,6 +1,6 @@
 """
 tests/test_mcp_server.py
-MCP サーバーのテスト — audit_answer ツールの動作を検証
+MCP サーバーのテスト — audit_answer ツールの動作を検証（パイプライン A 対応）
 """
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import asyncio
 import pytest
 
 from ugh_audit.reference.golden_store import GoldenStore
-from ugh_audit.scorer.ugh_scorer import UGHScorer
 from ugh_audit.storage.audit_db import AuditDB
 
 # MCP SDK はオプショナル依存 — なければスキップ
@@ -31,10 +30,9 @@ def tmp_golden(tmp_path):
 @pytest.fixture(autouse=True)
 def _configure_mcp(tmp_db, tmp_golden):
     """MCP サーバーのグローバルインスタンスをテスト用に差し替える"""
-    scorer = UGHScorer(model_id="test-mcp")
-    configure(db=tmp_db, scorer=scorer, golden=tmp_golden)
+    configure(db=tmp_db, golden=tmp_golden)
     yield
-    configure(db=None, scorer=None, golden=None)
+    configure(db=None, golden=None)
 
 
 def _run(coro):
@@ -50,11 +48,10 @@ def test_tools_list_includes_audit_answer():
 
 
 def test_audit_answer_tool_schema():
-    """audit_answer の入力/出力スキーマが正しいことを検証"""
+    """audit_answer の入力スキーマが正しいことを検証"""
     tools = _run(mcp.list_tools())
     audit_tool = next(t for t in tools if t.name == "audit_answer")
 
-    # 入力スキーマ
     schema = audit_tool.inputSchema
     assert "question" in schema["properties"]
     assert "response" in schema["properties"]
@@ -62,10 +59,9 @@ def test_audit_answer_tool_schema():
     assert "question" in schema["required"]
     assert "response" in schema["required"]
 
-    # 出力スキーマ（構造化出力）
     out = audit_tool.outputSchema
     assert out is not None
-    for field in ("por", "delta_e", "grv", "verdict", "saved_id"):
+    for field in ("S", "C", "delta_e", "quality_score", "verdict", "hit_rate", "saved_id"):
         assert field in out["properties"], f"{field} missing from outputSchema"
 
 
@@ -77,18 +73,17 @@ def test_audit_answer_returns_structured_output():
         "reference": "AIは意味と共振する動的プロセスです。",
     }))
 
-    # structured dict に全フィールドが含まれる
     assert isinstance(structured, dict)
-    assert isinstance(structured["por"], float)
+    assert isinstance(structured["S"], float)
+    assert isinstance(structured["C"], float)
     assert isinstance(structured["delta_e"], float)
-    assert isinstance(structured["grv"], dict)
+    assert isinstance(structured["quality_score"], float)
     assert isinstance(structured["verdict"], str)
     assert isinstance(structured["saved_id"], int)
     assert structured["saved_id"] >= 1
+    assert structured["verdict"] in ("accept", "rewrite", "regenerate")
 
-    # content にもテキスト表現が含まれる
     assert len(content) >= 1
-    assert "por" in content[0].text
 
 
 def test_audit_answer_saves_to_db(tmp_db):
