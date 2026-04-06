@@ -177,3 +177,32 @@ class TestTypeStability:
 
         # f4=None と f4=0.0 は異なる S を返す
         assert s.S != s2.S
+
+    def test_history_preserves_zero_scores(self, client):
+        """9. C=0.0, delta_e=0.0 が history で null にならないことを確認"""
+        # computed モードで C=0.0 になるケース (全命題 miss)
+        resp = client.post("/api/audit", json={
+            "question": "テスト質問",
+            "response": "無関係な回答です。",
+            "question_meta": {
+                "question": "テスト質問",
+                "core_propositions": ["存在しない命題XYZ"],
+                "disqualifying_shortcuts": [],
+                "acceptable_variants": [],
+                "trap_type": "metric_omnipotence",
+            },
+        })
+        data = resp.json()
+        assert data["mode"] == "computed"
+
+        # history 読み出し
+        hist = client.get("/api/history").json()
+        assert len(hist) >= 1
+        item = hist[0]
+        # C/delta_e/quality_score が 0.0 でも null にならない
+        assert item["C"] is not None
+        assert item["delta_e"] is not None
+        assert item["quality_score"] is not None
+        assert isinstance(item["C"], float)
+        assert isinstance(item["delta_e"], float)
+        assert isinstance(item["quality_score"], float)

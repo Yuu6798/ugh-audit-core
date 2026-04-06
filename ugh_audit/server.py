@@ -420,9 +420,9 @@ def get_history(limit: int = 20) -> List[HistoryItem]:
             question=r["question"],
             response=r["response"],
             S=round(r["S"], 4),
-            C=round(r["C"], 4) if r["C"] else None,
-            delta_e=round(r["delta_e"], 4) if r["delta_e"] else None,
-            quality_score=round(r["quality_score"], 4) if r["quality_score"] else None,
+            C=round(r["C"], 4) if r["C"] is not None else None,
+            delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
+            quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
             verdict=r["verdict"],
             created_at=r["created_at"],
         )

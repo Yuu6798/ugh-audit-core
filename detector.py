@@ -1313,7 +1313,7 @@ def detect(
             t3 = tier3_filter(
                 tier2_result=t2,
                 tier1_hit=False,
-                f4_flag=f4,
+                f4_flag=f4 if f4 is not None else 0.0,
                 atomic_units=atomic_units,
                 synonym_dict=_SYNONYM_MAP,
                 response=response_text,
