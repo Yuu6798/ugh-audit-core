@@ -60,7 +60,7 @@ def test_audit_returns_scores(client):
     assert "saved_id" in data
     assert isinstance(data["saved_id"], int)
     assert data["saved_id"] >= 1
-    assert data["verdict"] in ("accept", "rewrite", "regenerate")
+    assert data["verdict"] in ("accept", "rewrite", "regenerate", "degraded")
 
 
 def test_audit_saves_to_db(client, tmp_db):

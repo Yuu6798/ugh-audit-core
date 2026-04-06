@@ -518,6 +518,8 @@ def check_f4_premise(
 
     trap_typeに基づき、質問の前提に対する回答の態度を判定。
     """
+    if not trap_type:
+        return None, None
     frame = frames.get(trap_type)
     if not frame:
         return 0.0, ""
@@ -1232,9 +1234,9 @@ def detect(
     # f3: 演算子無処理
     f3, f3_family = check_f3_operator(question_text, response_text, operators)
 
-    # f4: 前提受容
+    # f4: 前提受容 (trap_type 未提供時は None)
     f4, f4_detail = check_f4_premise(question_text, response_text, trap_type, frames)
-    fail_max = max(f1, f2, f3, f4)
+    fail_max = max(f1, f2, f3, f4 if f4 is not None else 0.0)
 
     # 命題検出
     hits, hit_ids, miss_ids = check_propositions(
@@ -1333,9 +1335,9 @@ def detect(
         f3_operator=f3,
         f4_premise=f4,
         f2_detail=f2_detail,
-        f4_detail=f4_detail,
+        f4_detail=f4_detail or "",
         f3_operator_family=f3_family,
-        f4_trap_type=trap_type if f4 > 0 else "",
+        f4_trap_type=trap_type if f4 and f4 > 0 else "",
         propositions_hit=hits,
         propositions_total=len(core_props),
         hit_ids=hit_ids,

@@ -61,12 +61,12 @@ def test_audit_answer_tool_schema():
 
     out = audit_tool.outputSchema
     assert out is not None
-    for field in ("S", "C", "delta_e", "quality_score", "verdict", "hit_rate", "saved_id"):
-        assert field in out["properties"], f"{field} missing from outputSchema"
+    for fld in ("S", "C", "delta_e", "quality_score", "verdict", "hit_rate", "saved_id"):
+        assert fld in out["properties"], f"{fld} missing from outputSchema"
 
 
-def test_audit_answer_returns_structured_output():
-    """tools/call で構造化出力が返ることを検証"""
+def test_audit_answer_degraded_without_question_meta():
+    """question_meta なしでは verdict="degraded", C=None を返すことを検証"""
     content, structured = _run(mcp.call_tool("audit_answer", {
         "question": "AIは意味を持てるか？",
         "response": "AIは意味を処理できます。",
@@ -75,13 +75,14 @@ def test_audit_answer_returns_structured_output():
 
     assert isinstance(structured, dict)
     assert isinstance(structured["S"], float)
-    assert isinstance(structured["C"], float)
-    assert isinstance(structured["delta_e"], float)
-    assert isinstance(structured["quality_score"], float)
-    assert isinstance(structured["verdict"], str)
+    assert structured["C"] is None
+    assert structured["delta_e"] is None
+    assert structured["quality_score"] is None
+    assert structured["verdict"] == "degraded"
+    assert structured["mode"] == "degraded"
     assert isinstance(structured["saved_id"], int)
     assert structured["saved_id"] >= 1
-    assert structured["verdict"] in ("accept", "rewrite", "regenerate")
+    assert structured["schema_version"] == "2.0.0"
 
     assert len(content) >= 1
 

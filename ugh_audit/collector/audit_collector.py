@@ -75,9 +75,13 @@ class AuditCollector:
 
         evidence = Evidence(question_id="unknown")
         state = calculate(evidence)
-        verdict = _verdict(state.delta_e)
 
-        hit_rate = ""
+        if state.C is not None and state.delta_e is not None:
+            verdict = _verdict(state.delta_e)
+        else:
+            verdict = "degraded"
+
+        hit_rate: Optional[str] = None
         if evidence.propositions_total > 0:
             hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
 
@@ -87,15 +91,15 @@ class AuditCollector:
             response=response,
             reference=ref,
             S=state.S,
-            C=state.C,
-            delta_e=state.delta_e,
-            quality_score=state.quality_score,
+            C=state.C if state.C is not None else 0.0,
+            delta_e=state.delta_e if state.delta_e is not None else 0.0,
+            quality_score=state.quality_score if state.quality_score is not None else 0.0,
             verdict=verdict,
             f1=evidence.f1_anchor,
             f2=evidence.f2_unknown,
             f3=evidence.f3_operator,
-            f4=evidence.f4_premise,
-            hit_rate=hit_rate,
+            f4=evidence.f4_premise if evidence.f4_premise is not None else 0.0,
+            hit_rate=hit_rate or "",
         )
 
         return {

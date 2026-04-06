@@ -26,7 +26,7 @@ def test_collect_returns_dict(tmp_collector):
     assert "delta_e" in result
     assert "quality_score" in result
     assert "verdict" in result
-    assert result["verdict"] in ("accept", "rewrite", "regenerate")
+    assert result["verdict"] in ("accept", "rewrite", "regenerate", "degraded")
 
 
 def test_collect_saves_to_db(tmp_collector):
