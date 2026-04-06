@@ -1236,7 +1236,8 @@ def detect(
 
     # f4: 前提受容 (trap_type 未提供時は None)
     f4, f4_detail = check_f4_premise(question_text, response_text, trap_type, frames)
-    fail_max = max(f1, f2, f3, f4 if f4 is not None else 0.0)
+    # f4=None (未計算) は fail-closed: fail_max に 1.0 を使い relaxed promotion をブロック
+    fail_max = max(f1, f2, f3, f4 if f4 is not None else 1.0)
 
     # 命題検出
     hits, hit_ids, miss_ids = check_propositions(
