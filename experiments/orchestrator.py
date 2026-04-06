@@ -16,13 +16,14 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 # パイプライン import (既存コード、変更なし)
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from experiments.meta_generator import generate_meta, improve_meta  # noqa: E402
-from experiments.response_source import get_response  # noqa: E402
+from experiments.response_source import get_response, improve_response  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -169,15 +170,22 @@ def run_single(
         logger.info("=== 改善ループ %d/%d ===", i, iterate)
         prev_delta_e = summary.get("delta_e")
 
-        # meta 改善
+        # Claude: meta 改善（出題者として質問の品質を磨く）
         meta = improve_meta(question, meta, audit_result, response_text)
         logger.info(
-            "改善後の命題数: %d",
+            "Claude 改善後の命題数: %d",
             len(meta.get("core_propositions", [])),
         )
 
-        # 回答も再生成（改善を促す）
-        response_text, source = get_response(question, use_codex=use_codex)
+        # Codex: 回答改善（被監査者として回答の品質を磨く）
+        response_text, source = improve_response(
+            question=question,
+            previous_response=response_text,
+            audit_result=audit_result,
+            core_propositions=meta.get("core_propositions", []),
+            use_codex=use_codex,
+        )
+        logger.info("Codex/回答者 改善ソース: %s", source)
 
         # 再監査
         audit_result = _run_audit(question_id, response_text, meta)
@@ -220,10 +228,6 @@ def run_single(
     )
 
     return records
-
-
-# Optional[Path] を import なしで使うための型ヒント
-from typing import Optional  # noqa: E402
 
 
 def main() -> None:
