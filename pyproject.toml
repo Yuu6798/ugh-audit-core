@@ -53,6 +53,10 @@ analysis = [
     "scipy>=1.10",
     "matplotlib>=3.7",
 ]
+experiment = [
+    "anthropic>=0.40",
+    "mcp>=1.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

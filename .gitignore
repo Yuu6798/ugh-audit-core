@@ -16,3 +16,5 @@ audit_102_results.csv
 audit_102_expanded_synonym.csv
 analysis/round3/
 scripts/round3_*.py
+experiments/logs/*.jsonl
+experiments/logs/*.json
