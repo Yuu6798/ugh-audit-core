@@ -12,7 +12,9 @@ from ugh_audit.report.phase_map import generate_text_report
 from ugh_calculator import Evidence, calculate
 
 
-def _verdict(delta_e: float) -> str:
+def _verdict(delta_e):
+    if delta_e is None:
+        return "degraded"
     if delta_e <= 0.10:
         return "accept"
     if delta_e <= 0.25:
@@ -53,17 +55,20 @@ def main():
         state = calculate(evidence)
         verdict = _verdict(state.delta_e)
 
-        saved_id = db.save(
-            question=case["question"],
-            response=case["response"],
-            reference=case.get("reference"),
-            S=state.S,
-            C=state.C,
-            delta_e=state.delta_e,
-            quality_score=state.quality_score,
-            verdict=verdict,
-            session_id="example-session-01",
-        )
+        # degraded 時は DB に保存しない
+        saved_id = None
+        if verdict != "degraded":
+            saved_id = db.save(
+                question=case["question"],
+                response=case["response"],
+                reference=case.get("reference"),
+                S=state.S,
+                C=state.C,
+                delta_e=state.delta_e,
+                quality_score=state.quality_score,
+                verdict=verdict,
+                session_id="example-session-01",
+            )
 
         print(f"[{i}] Q: {case['question'][:30]}...")
         print(f"    S={state.S}, C={state.C}, dE={state.delta_e}, QS={state.quality_score}")
