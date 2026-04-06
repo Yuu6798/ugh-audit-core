@@ -39,7 +39,7 @@ class TestTypeStability:
     """Task 6 受け入れテスト"""
 
     def test_no_core_propositions_returns_degraded(self, client):
-        """1. core_propositions なし → C=None, verdict=degraded, mode=degraded"""
+        """1. core_propositions なし → C=None, verdict=degraded, mode=degraded, f4=None"""
         resp = client.post("/api/audit", json={
             "question": "日本の首都はどこですか？",
             "response": "大阪です。",
@@ -52,6 +52,8 @@ class TestTypeStability:
         assert data["mode"] == "degraded"
         assert data["delta_e"] is None
         assert data["quality_score"] is None
+        # question_meta なしでは f4 も未計算
+        assert data["structural_gate"]["f4"] is None
 
     def test_no_trap_type_returns_f4_null(self, client):
         """2. trap_type なし → f4=None, S は f4 除外で算出"""

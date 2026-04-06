@@ -73,7 +73,7 @@ class AuditCollector:
         """
         ref = reference or self._golden.find_reference(question)
 
-        evidence = Evidence(question_id="unknown")
+        evidence = Evidence(question_id="unknown", f4_premise=None)
         state = calculate(evidence)
 
         if state.C is not None and state.delta_e is not None:

@@ -51,6 +51,32 @@ def test_collect_batch(tmp_collector):
     assert summary["total"] == 3
 
 
+def test_collect_degraded_none_roundtrip(tmp_collector):
+    """question_meta なし → degraded: None 値が DB 保存・読み出しで壊れないことを検証"""
+    result = tmp_collector.collect(
+        question="テスト質問",
+        response="テスト回答",
+    )
+    # collector は question_meta なしで動くので C/delta_e/quality_score は None
+    assert result["C"] is None
+    assert result["delta_e"] is None
+    assert result["quality_score"] is None
+    assert result["verdict"] == "degraded"
+    assert result["hit_rate"] is None
+
+    # DB に保存されたデータを読み出して確認
+    rows = tmp_collector._db.list_recent(1)
+    assert len(rows) == 1
+    row = rows[0]
+    # DB は NOT NULL カラムなので 0.0 で保存される（None → 0.0 変換）
+    assert row["C"] == 0.0
+    assert row["delta_e"] == 0.0
+    assert row["quality_score"] == 0.0
+    assert row["verdict"] == "degraded"
+    assert row["f4"] == 0.0
+    assert row["hit_rate"] == ""
+
+
 def test_session_context_manager(tmp_collector):
     with tmp_collector.session("ctx-session") as s:
         s.collect(question="Q1", response="R1")
