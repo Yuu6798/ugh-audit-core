@@ -96,6 +96,7 @@ def _run_pipeline(
     metadata_source = "none"
     matched_id: Optional[str] = None
 
+    detected = False
     if question_meta and _HAS_DETECTOR:
         metadata_source = "inline"
         question_id = question_meta.get("id", "unknown")
@@ -103,6 +104,7 @@ def _run_pipeline(
         if "question" not in question_meta:
             question_meta = {**question_meta, "question": question}
         evidence = _detect(question_id, response, question_meta)
+        detected = True
     else:
         evidence = Evidence(question_id="unknown", f4_premise=None)
         if not question_meta:
@@ -114,14 +116,18 @@ def _run_pipeline(
     computed: List[str] = ["S"]
     missing: List[str] = []
 
-    # f1-f3 は常に計算
-    computed.extend(["f1", "f2", "f3"])
-
-    if evidence.f4_premise is not None:
-        computed.append("f4")
+    if detected:
+        # detect() が実行された場合のみ f1-f3 を computed とする
+        computed.extend(["f1", "f2", "f3"])
+        if evidence.f4_premise is not None:
+            computed.append("f4")
+        else:
+            missing.append("f4")
+            errors.append("f4_trap_type_missing")
     else:
-        missing.append("f4")
-        errors.append("f4_trap_type_missing")
+        # detect() 未実行: f1-f4 は全て未計算（デフォルト値であり検出結果ではない）
+        missing.extend(["f1", "f2", "f3", "f4"])
+        errors.append("detection_skipped")
 
     if state.C is not None:
         computed.append("C")

@@ -107,13 +107,17 @@ class TestTypeStability:
         computed = data["computed_components"]
         missing = data["missing_components"]
 
-        # S, f1, f2, f3 は常に計算される
+        # S のみ計算される (detect() 未実行なので f1-f4 は未計算)
         assert "S" in computed
-        assert "f1" in computed
-        assert "f2" in computed
-        assert "f3" in computed
+        assert "f1" not in computed
+        assert "f2" not in computed
+        assert "f3" not in computed
 
-        # question_meta なし → C, f4, delta_e, quality_score が missing
+        # question_meta なし → f1-f4, C, delta_e, quality_score が missing
+        assert "f1" in missing
+        assert "f2" in missing
+        assert "f3" in missing
+        assert "f4" in missing
         assert "C" in missing
         assert "delta_e" in missing
         assert "quality_score" in missing

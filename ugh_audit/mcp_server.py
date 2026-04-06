@@ -203,6 +203,7 @@ def audit_answer(
     matched_id: Optional[str] = None
 
     # detect → calculate パイプライン
+    detected = False
     if question_meta and _HAS_DETECTOR:
         metadata_source = "inline"
         question_id = question_meta.get("id", "unknown")
@@ -210,6 +211,7 @@ def audit_answer(
         if "question" not in question_meta:
             question_meta = {**question_meta, "question": question}
         evidence = _detect(question_id, response, question_meta)
+        detected = True
     else:
         evidence = Evidence(question_id="unknown", f4_premise=None)
         if not question_meta:
@@ -218,14 +220,19 @@ def audit_answer(
     state = calculate(evidence)
 
     # computed_components / missing_components
-    computed: List[str] = ["S", "f1", "f2", "f3"]
+    computed: List[str] = ["S"]
     missing: List[str] = []
 
-    if evidence.f4_premise is not None:
-        computed.append("f4")
+    if detected:
+        computed.extend(["f1", "f2", "f3"])
+        if evidence.f4_premise is not None:
+            computed.append("f4")
+        else:
+            missing.append("f4")
+            errors.append("f4_trap_type_missing")
     else:
-        missing.append("f4")
-        errors.append("f4_trap_type_missing")
+        missing.extend(["f1", "f2", "f3", "f4"])
+        errors.append("detection_skipped")
 
     if state.C is not None:
         computed.append("C")
