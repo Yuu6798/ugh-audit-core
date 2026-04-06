@@ -218,7 +218,7 @@ class TestAPIOutput:
         assert data["mode"] == "degraded"
         assert data["hit_rate"] is None
         assert isinstance(data["structural_gate"], dict)
-        assert isinstance(data["saved_id"], int)
+        assert data["saved_id"] is None
         assert data["schema_version"] == "2.0.0"
 
     def test_structural_gate_fields(self, client):
@@ -238,6 +238,13 @@ class TestAPIOutput:
     def test_history_output_has_new_fields(self, client):
         client.post("/api/audit", json={
             "question": "Q", "response": "R",
+            "question_meta": {
+                "question": "Q",
+                "core_propositions": ["命題"],
+                "disqualifying_shortcuts": [],
+                "acceptable_variants": [],
+                "trap_type": "metric_omnipotence",
+            },
         })
         resp = client.get("/api/history")
         assert resp.status_code == 200

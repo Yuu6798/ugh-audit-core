@@ -226,7 +226,7 @@ class AuditResponse(BaseModel):
     )
     hit_rate: Optional[str] = Field(None, description="命題ヒット率 (例: '3/5')")
     structural_gate: Optional[StructuralGateResponse] = None
-    saved_id: int = Field(..., description="DB保存時の行ID")
+    saved_id: Optional[int] = Field(None, description="DB保存時の行ID (degraded時はnull)")
     mode: str = Field(..., description="実行モード: computed / degraded / error")
     matched_id: Optional[str] = Field(None, description="対応づけた question_id")
     metadata_source: str = Field(..., description="メタデータ源: inline / golden_store / none")
@@ -369,22 +369,25 @@ def audit_answer(req: AuditRequest) -> AuditResponse:
         session_id=req.session_id,
     )
 
-    saved_id = db.save(
-        session_id=result["_session_id"],
-        question=result["_question"],
-        response=result["_response"],
-        reference=result["_reference"],
-        S=result["S"],
-        C=result["C"] if result["C"] is not None else 0.0,
-        delta_e=result["delta_e"] if result["delta_e"] is not None else 0.0,
-        quality_score=result["quality_score"] if result["quality_score"] is not None else 0.0,
-        verdict=result["verdict"],
-        f1=result["structural_gate"]["f1"],
-        f2=result["structural_gate"]["f2"],
-        f3=result["structural_gate"]["f3"],
-        f4=result["structural_gate"]["f4"] if result["structural_gate"]["f4"] is not None else 0.0,
-        hit_rate=result["hit_rate"] or "",
-    )
+    # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
+    saved_id: Optional[int] = None
+    if result["mode"] == "computed":
+        saved_id = db.save(
+            session_id=result["_session_id"],
+            question=result["_question"],
+            response=result["_response"],
+            reference=result["_reference"],
+            S=result["S"],
+            C=result["C"],
+            delta_e=result["delta_e"],
+            quality_score=result["quality_score"],
+            verdict=result["verdict"],
+            f1=result["structural_gate"]["f1"],
+            f2=result["structural_gate"]["f2"],
+            f3=result["structural_gate"]["f3"],
+            f4=result["structural_gate"]["f4"] if result["structural_gate"]["f4"] is not None else 0.0,
+            hit_rate=result["hit_rate"] or "",
+        )
 
     return AuditResponse(
         schema_version=result["schema_version"],

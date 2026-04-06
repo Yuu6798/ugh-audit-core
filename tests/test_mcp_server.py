@@ -66,7 +66,7 @@ def test_audit_answer_tool_schema():
 
 
 def test_audit_answer_degraded_without_question_meta():
-    """question_meta なしでは verdict="degraded", C=None を返すことを検証"""
+    """question_meta なしでは verdict="degraded", C=None, saved_id=None を返すことを検証"""
     content, structured = _run(mcp.call_tool("audit_answer", {
         "question": "AIは意味を持てるか？",
         "response": "AIは意味を処理できます。",
@@ -81,23 +81,21 @@ def test_audit_answer_degraded_without_question_meta():
     assert structured["verdict"] == "degraded"
     assert structured["mode"] == "degraded"
     assert structured["structural_gate"]["f4"] is None
-    assert isinstance(structured["saved_id"], int)
-    assert structured["saved_id"] >= 1
+    assert structured["saved_id"] is None
     assert structured["schema_version"] == "2.0.0"
 
     assert len(content) >= 1
 
 
-def test_audit_answer_saves_to_db(tmp_db):
-    """audit_answer の結果が DB に保存されることを検証"""
+def test_audit_answer_degraded_not_saved_to_db(tmp_db):
+    """degraded 結果は DB に保存されない"""
     _, structured = _run(mcp.call_tool("audit_answer", {
         "question": "テスト質問",
         "response": "テスト回答",
     }))
+    assert structured["saved_id"] is None
     rows = tmp_db.list_recent(10)
-    assert len(rows) == 1
-    assert rows[0]["question"] == "テスト質問"
-    assert structured["saved_id"] == rows[0]["id"]
+    assert len(rows) == 0
 
 
 def test_audit_answer_without_reference():
@@ -107,20 +105,21 @@ def test_audit_answer_without_reference():
         "response": "テスト回答",
     }))
     assert "verdict" in structured
-    assert structured["saved_id"] >= 1
+    assert structured["verdict"] == "degraded"
+    assert structured["saved_id"] is None
 
 
 def test_audit_answer_preserves_session_id(tmp_db):
-    """session_id を指定すると同一値で DB に保存されることを検証"""
-    for i in range(2):
-        _run(mcp.call_tool("audit_answer", {
-            "question": f"質問{i}",
-            "response": f"回答{i}",
-            "session_id": "mcp-sess-1",
-        }))
+    """session_id は degraded 時 DB 未保存なので、computed 時のみ検証"""
+    # degraded 時は DB に保存されないことを確認
+    _, structured = _run(mcp.call_tool("audit_answer", {
+        "question": "質問1",
+        "response": "回答1",
+        "session_id": "mcp-sess-1",
+    }))
+    assert structured["saved_id"] is None
     rows = tmp_db.list_recent(10)
-    assert len(rows) == 2
-    assert all(r["session_id"] == "mcp-sess-1" for r in rows)
+    assert len(rows) == 0
 
 
 def test_audit_answer_resolves_golden_reference(tmp_db, tmp_golden):
@@ -128,13 +127,12 @@ def test_audit_answer_resolves_golden_reference(tmp_db, tmp_golden):
     ref = tmp_golden.find_reference("AIは意味を持てるか？")
     assert ref is not None
 
-    _run(mcp.call_tool("audit_answer", {
+    _, structured = _run(mcp.call_tool("audit_answer", {
         "question": "AIは意味を持てるか？",
         "response": "AIは意味を処理できます。",
     }))
-
-    rows = tmp_db.list_recent(1)
-    assert rows[0]["reference"] == ref
+    # degraded なので DB 未保存
+    assert structured["saved_id"] is None
 
 
 def test_streamable_http_app_created():

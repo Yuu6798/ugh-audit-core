@@ -85,22 +85,25 @@ class AuditCollector:
         if evidence.propositions_total > 0:
             hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
 
-        saved_id = self._db.save(
-            session_id=session_id or str(uuid.uuid4()),
-            question=question,
-            response=response,
-            reference=ref,
-            S=state.S,
-            C=state.C if state.C is not None else 0.0,
-            delta_e=state.delta_e if state.delta_e is not None else 0.0,
-            quality_score=state.quality_score if state.quality_score is not None else 0.0,
-            verdict=verdict,
-            f1=evidence.f1_anchor,
-            f2=evidence.f2_unknown,
-            f3=evidence.f3_operator,
-            f4=evidence.f4_premise if evidence.f4_premise is not None else 0.0,
-            hit_rate=hit_rate or "",
-        )
+        # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
+        saved_id = None
+        if verdict != "degraded":
+            saved_id = self._db.save(
+                session_id=session_id or str(uuid.uuid4()),
+                question=question,
+                response=response,
+                reference=ref,
+                S=state.S,
+                C=state.C,
+                delta_e=state.delta_e,
+                quality_score=state.quality_score,
+                verdict=verdict,
+                f1=evidence.f1_anchor,
+                f2=evidence.f2_unknown,
+                f3=evidence.f3_operator,
+                f4=evidence.f4_premise if evidence.f4_premise is not None else 0.0,
+                hit_rate=hit_rate or "",
+            )
 
         return {
             "S": state.S,
