@@ -1297,6 +1297,7 @@ def detect(
     cascade_model = (
         _get_cascade_model()
         if _HAS_CASCADE and miss_ids and has_any_atomic and not disqualified
+        and f4 is not None
         else None
     )
     if cascade_model is not None:
