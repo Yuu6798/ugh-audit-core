@@ -135,29 +135,34 @@ Audit Engine の電卓層で PoR 座標、ΔE、quality_score を算出する。
 PoR = (S, C)
 
 S = 1 - Σ(w_k × f_k) / Σ(w_k)
-    w = {f1: 5, f2: 25, f3: 5, f4: 5}    Σ(w_k) = 40
+    w = {f1: 5, f2: 25, f3: 5, f4: 5}    デフォルト Σ(w_k) = 40
+    f4=None 時: f4 の重み（5）を除外し Σ(w_k) = 35 で計算
 
 C = hits / n_propositions
+    n_propositions=0（未提供）時: C=None（計算不能）
 
 ΔE = (w_s × (1-S)² + w_c × (1-C)²) / (w_s + w_c)
     w_s = 2, w_c = 1
+    C=None 時: ΔE=None（算出不可）
 
 quality_score = 5 - 4 × ΔE    # パラメータフリー [1,5]
+    ΔE=None 時: quality_score=None
 ```
 
 **各式の意味:**
-- **S**: f1〜f4 の加重平均による構造完全性。f2（用語捏造）に最大重み 25 を配置
-- **C**: 命題照合（tfidf + cascade）による核心カバレッジ
-- **ΔE**: S と C の加重二乗和。両軸からの距離を1つのスカラーに統合
+- **S**: f1〜f4 の加重平均による構造完全性。f2（用語捏造）に最大重み 25 を配置。f4=None 時は重み除外
+- **C**: 命題照合（tfidf + cascade）による核心カバレッジ。命題未提供時は None
+- **ΔE**: S と C の加重二乗和。両軸からの距離を1つのスカラーに統合。C=None 時は算出不可
 - **quality_score**: ΔE の線形変換。ΔE=0 → 5.0, ΔE=1 → 1.0
 
 ### verdict 判定（HA48 検証済み確定値）
 
 | verdict | 条件 | 意味 |
 |---------|------|------|
-| accept | ΔE ≤ 0.10 | 意味的に十分な回答 |
-| rewrite | 0.10 < ΔE ≤ 0.25 | 部分的な修正で改善可能 |
-| regenerate | ΔE > 0.25 | 再生成が必要 |
+| accept | C≠None AND ΔE ≤ 0.10 | 意味的に十分な回答 |
+| rewrite | C≠None AND 0.10 < ΔE ≤ 0.25 | 部分的な修正で改善可能 |
+| regenerate | C≠None AND ΔE > 0.25 | 再生成が必要 |
+| degraded | C=None OR ΔE=None | メタデータ不足で本計算不能 |
 
 ### 検証結果
 
@@ -267,13 +272,14 @@ python examples/basic_audit.py
 
 | 定数 | 値 | 場所 |
 |------|-----|------|
-| S: WEIGHTS_F | f1=5, f2=25, f3=5, f4=5 | `ugh_calculator.py` |
+| S: WEIGHTS_F | f1=5, f2=25, f3=5, f4=5 (f4=None時は重み除外, ÷35) | `ugh_calculator.py` |
 | ΔE: WEIGHT_S | 2 | `ugh_calculator.py` |
 | ΔE: WEIGHT_C | 1 | `ugh_calculator.py` |
 | quality_score | 5 - 4 × ΔE | `ugh_calculator.py` |
-| verdict: accept | ΔE ≤ 0.10 | `server.py` / `mcp_server.py` |
-| verdict: rewrite | 0.10 < ΔE ≤ 0.25 | 同上 |
-| verdict: regenerate | ΔE > 0.25 | 同上 |
+| verdict: accept | C≠None AND ΔE ≤ 0.10 | `server.py` / `mcp_server.py` |
+| verdict: rewrite | C≠None AND 0.10 < ΔE ≤ 0.25 | 同上 |
+| verdict: regenerate | C≠None AND ΔE > 0.25 | 同上 |
+| verdict: degraded | C=None OR ΔE=None | 同上 |
 | Bigram Jaccard閾値 | ≥ 0.10 | `golden_store.py` |
 | 命題マッチ: direct_recall | ≥ 0.15 | `detector.py` |
 | 命題マッチ: full_recall | ≥ 0.30 | `detector.py` |
@@ -284,7 +290,8 @@ python examples/basic_audit.py
 | cascade: θ_sbert | 0.50 | `cascade_matcher.py` |
 | cascade: SBert モデル | paraphrase-multilingual-MiniLM-L12-v2 | `cascade_matcher.py` |
 | cascade: δ_gap | 0.04 (score > 0.70 時 0.02) | `cascade_matcher.py` |
-| cascade: c4 閾値 | f4_flag < 1.0 | `cascade_matcher.py` |
+| cascade: c4 閾値 | f4_flag < 1.0 (f4=None時はrescue全体をスキップ) | `cascade_matcher.py` |
+| fail_max (f4=None) | 1.0 (fail-closed: relaxed promotion をブロック) | `detector.py` |
 | relaxed: ΔE上限 | ≤ 0.04 (current + relaxed) | `detector.py` |
 | relaxed: 大命題 (≥8bg) | direct≥0.10, full≥0.30, overlap≥2 | `detector.py` |
 | relaxed: 中命題 (≥5bg) | direct≥0.12, full≥0.30, overlap≥2 | `detector.py` |
@@ -388,24 +395,70 @@ python -m ugh_audit.mcp_server --port 8000
 | POST | `/mcp` | MCP Streamable HTTP |
 | GET | `/health` | ヘルスチェック (`{"status": "ok"}`) |
 
-### API 出力フォーマット
+### API 出力フォーマット (schema_version: 2.0.0)
 
+**computed モード（本計算完了時）:**
 ```json
 {
-  "S": 1.0,
-  "C": 1.0,
-  "delta_e": 0.0,
-  "quality_score": 5.0,
-  "verdict": "accept",
-  "hit_rate": "",
+  "schema_version": "2.0.0",
+  "S": 0.6875,
+  "C": 0.5,
+  "delta_e": 0.1484,
+  "quality_score": 4.4062,
+  "verdict": "rewrite",
+  "hit_rate": "1/2",
   "structural_gate": {
-    "f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": 0.0,
-    "gate_verdict": "pass",
-    "primary_fail": "none"
+    "f1": 0.0, "f2": 0.5, "f3": 0.0, "f4": 0.0,
+    "gate_verdict": "warn",
+    "primary_fail": "f2"
   },
-  "saved_id": 1
+  "saved_id": 1,
+  "mode": "computed",
+  "matched_id": "q001",
+  "metadata_source": "inline",
+  "computed_components": ["C", "S", "delta_e", "f1", "f2", "f3", "f4", "quality_score"],
+  "missing_components": [],
+  "errors": [],
+  "degraded_reason": []
 }
 ```
+
+**degraded モード（メタデータ不足時）:**
+```json
+{
+  "schema_version": "2.0.0",
+  "S": 1.0,
+  "C": null,
+  "delta_e": null,
+  "quality_score": null,
+  "verdict": "degraded",
+  "hit_rate": null,
+  "structural_gate": {
+    "f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": null,
+    "gate_verdict": "incomplete",
+    "primary_fail": "none"
+  },
+  "saved_id": null,
+  "mode": "degraded",
+  "matched_id": null,
+  "metadata_source": "none",
+  "computed_components": ["S"],
+  "missing_components": ["C", "delta_e", "f1", "f2", "f3", "f4", "quality_score"],
+  "errors": ["question_meta_missing", "detection_skipped"],
+  "degraded_reason": ["question_meta_missing", "detection_skipped"]
+}
+```
+
+**gate_verdict の値:**
+
+| gate_verdict | 条件 | 意味 |
+|---|---|---|
+| pass | fail_max == 0.0 AND f4 ≠ None | 構造完全 |
+| warn | 0.0 < fail_max < 1.0 AND f4 ≠ None | 部分的な構造欠陥 |
+| fail | fail_max ≥ 1.0 | 構造的に破綻 |
+| incomplete | f4 == None | f4 未計算 |
+
+**DB 保存ポリシー:** degraded 結果は DB に保存しない（saved_id=null）。ベースライン汚染を防止。
 
 ### 設計方針
 
@@ -421,7 +474,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 3. `ruff check .` — lint
 4. `pytest -q --tb=short` — test (REST/MCP テスト含む)
 
-CI通過 = lint clean + 全テストpass (260 collected, 2 skipped: cascade SBert 未インストール)
+CI通過 = lint clean + 全テストpass (275 collected, 2 skipped: cascade SBert 未インストール)
 
 ## Important Notes
 
