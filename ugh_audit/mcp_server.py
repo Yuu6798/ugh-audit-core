@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import sys
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
@@ -33,7 +33,9 @@ try:
 except ImportError:
     _HAS_DETECTOR = False
 
-# --- verdict ロジック（暫定閾値） ---
+# --- 定数 ---
+SCHEMA_VERSION = "2.0.0"
+
 _VERDICT_ACCEPT = 0.10
 _VERDICT_REWRITE = 0.25
 
@@ -47,7 +49,8 @@ def _verdict(delta_e: float) -> str:
 
 
 def _gate_verdict(f1: float, f2: float, f3: float, f4: float) -> str:
-    fail_max = max(f1, f2, f3, f4)
+    vals = [f1, f2, f3, f4]
+    fail_max = max(vals)
     if fail_max == 0.0:
         return "pass"
     if fail_max >= 1.0:
@@ -55,11 +58,35 @@ def _gate_verdict(f1: float, f2: float, f3: float, f4: float) -> str:
     return "warn"
 
 
+def _gate_verdict_safe(f1: float, f2: float, f3: float, f4: Optional[float]) -> str:
+    vals = [f1, f2, f3] + ([f4] if f4 is not None else [])
+    fail_max = max(vals) if vals else 0.0
+    if fail_max >= 1.0:
+        return "fail"
+    if f4 is None:
+        return "incomplete"
+    if fail_max == 0.0:
+        return "pass"
+    return "warn"
+
+
 def _primary_fail(f1: float, f2: float, f3: float, f4: float) -> str:
     worst = max(f1, f2, f3, f4)
     if worst == 0.0:
         return "none"
-    labels = {"f1": f1, "f2": f2, "f3": f3, "f4": f4}
+    labels: Dict[str, float] = {"f1": f1, "f2": f2, "f3": f3, "f4": f4}
+    return max(labels, key=labels.get)
+
+
+def _primary_fail_safe(
+    f1: float, f2: float, f3: float, f4: Optional[float],
+) -> str:
+    labels: Dict[str, float] = {"f1": f1, "f2": f2, "f3": f3}
+    if f4 is not None:
+        labels["f4"] = f4
+    worst = max(labels.values()) if labels else 0.0
+    if worst == 0.0:
+        return "none"
     return max(labels, key=labels.get)
 
 
@@ -122,14 +149,22 @@ def configure(
 class AuditOutput:
     """audit_answer ツールの構造化出力"""
 
+    schema_version: str
     S: float
-    C: float
-    delta_e: float
-    quality_score: float
+    C: Optional[float]
+    delta_e: Optional[float]
+    quality_score: Optional[float]
     verdict: str
-    hit_rate: str
+    hit_rate: Optional[str]
     structural_gate: Dict
-    saved_id: int
+    saved_id: Optional[int]
+    mode: str
+    matched_id: Optional[str]
+    metadata_source: str
+    computed_components: List[str] = field(default_factory=list)
+    missing_components: List[str] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
+    degraded_reason: List[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +186,9 @@ def audit_answer(
     PoR（S, C）、ΔE（意味ズレ量）、quality_score（品質スコア）、verdict（判定）を返す。
     結果はDBに自動保存される。
 
+    question_meta が未提供の場合、命題カバレッジ（C）が計算できないため
+    verdict="degraded" を返す。verdict="accept" は本計算完了時のみ返される。
+
     Args:
         question: ユーザーの質問
         response: AIの回答
@@ -162,20 +200,60 @@ def audit_answer(
     golden = _get_golden()
 
     ref = reference or golden.find_reference(question)
+    errors: List[str] = []
+    metadata_source = "none"
+    matched_id: Optional[str] = None
 
     # detect → calculate パイプライン
+    detected = False
     if question_meta and _HAS_DETECTOR:
+        metadata_source = "inline"
         question_id = question_meta.get("id", "unknown")
+        matched_id = question_id
         if "question" not in question_meta:
             question_meta = {**question_meta, "question": question}
         evidence = _detect(question_id, response, question_meta)
+        detected = True
     else:
-        evidence = Evidence(question_id="unknown")
+        evidence = Evidence(question_id="unknown", f4_premise=None)
+        if not question_meta:
+            errors.append("question_meta_missing")
 
     state = calculate(evidence)
-    verdict = _verdict(state.delta_e)
 
-    hit_rate = ""
+    # computed_components / missing_components
+    computed: List[str] = ["S"]
+    missing: List[str] = []
+
+    if detected:
+        computed.extend(["f1", "f2", "f3"])
+        if evidence.f4_premise is not None:
+            computed.append("f4")
+        else:
+            missing.append("f4")
+            errors.append("f4_trap_type_missing")
+    else:
+        missing.extend(["f1", "f2", "f3", "f4"])
+        errors.append("detection_skipped")
+
+    if state.C is not None:
+        computed.append("C")
+    else:
+        missing.append("C")
+        if "question_meta_missing" not in errors:
+            errors.append("core_propositions_missing")
+
+    # verdict / mode
+    if state.C is not None and state.delta_e is not None:
+        verdict = _verdict(state.delta_e)
+        mode = "computed"
+        computed.extend(["delta_e", "quality_score"])
+    else:
+        verdict = "degraded"
+        mode = "degraded"
+        missing.extend(["delta_e", "quality_score"])
+
+    hit_rate: Optional[str] = None
     if evidence.propositions_total > 0:
         hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
 
@@ -184,34 +262,40 @@ def audit_answer(
         "f2": evidence.f2_unknown,
         "f3": evidence.f3_operator,
         "f4": evidence.f4_premise,
-        "gate_verdict": _gate_verdict(
+        "gate_verdict": _gate_verdict_safe(
             evidence.f1_anchor, evidence.f2_unknown,
             evidence.f3_operator, evidence.f4_premise,
         ),
-        "primary_fail": _primary_fail(
+        "primary_fail": _primary_fail_safe(
             evidence.f1_anchor, evidence.f2_unknown,
             evidence.f3_operator, evidence.f4_premise,
         ),
     }
 
-    saved_id = db.save(
-        session_id=session_id or str(uuid.uuid4()),
-        question=question,
-        response=response,
-        reference=ref,
-        S=state.S,
-        C=state.C,
-        delta_e=state.delta_e,
-        quality_score=state.quality_score,
-        verdict=verdict,
-        f1=evidence.f1_anchor,
-        f2=evidence.f2_unknown,
-        f3=evidence.f3_operator,
-        f4=evidence.f4_premise,
-        hit_rate=hit_rate,
-    )
+    # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
+    saved_id: Optional[int] = None
+    if mode == "computed":
+        saved_id = db.save(
+            session_id=session_id or str(uuid.uuid4()),
+            question=question,
+            response=response,
+            reference=ref,
+            S=state.S,
+            C=state.C,
+            delta_e=state.delta_e,
+            quality_score=state.quality_score,
+            verdict=verdict,
+            f1=evidence.f1_anchor,
+            f2=evidence.f2_unknown,
+            f3=evidence.f3_operator,
+            f4=evidence.f4_premise if evidence.f4_premise is not None else 0.0,
+            hit_rate=hit_rate or "",
+        )
+
+    degraded_reason = errors if mode != "computed" else []
 
     return AuditOutput(
+        schema_version=SCHEMA_VERSION,
         S=state.S,
         C=state.C,
         delta_e=state.delta_e,
@@ -220,6 +304,13 @@ def audit_answer(
         hit_rate=hit_rate,
         structural_gate=gate,
         saved_id=saved_id,
+        mode=mode,
+        matched_id=matched_id,
+        metadata_source=metadata_source,
+        computed_components=sorted(computed),
+        missing_components=sorted(missing),
+        errors=errors,
+        degraded_reason=degraded_reason,
     )
 
 

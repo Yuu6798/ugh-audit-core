@@ -34,11 +34,15 @@ def _decision(state: State) -> str:
     if delta_e_bin == 2 and C_bin == 1     → rewrite
     if delta_e_bin == 3                    → rewrite
     if delta_e_bin == 4                    → regenerate
+
+    delta_e_bin=None（C未計算）の場合は "degraded" を返す。
     """
+    if state.delta_e_bin is None:
+        return "degraded"
     if state.delta_e_bin == 1:
         return "accept"
     if state.delta_e_bin == 2:
-        if state.C_bin >= 2:
+        if state.C_bin is not None and state.C_bin >= 2:
             return "accept"
         return "rewrite"
     if state.delta_e_bin == 3:
@@ -67,8 +71,8 @@ def _build_repair_order(
         order.append("PRESERVE_TERM")
         order.append("BLOCK_REINTERPRETATION")
 
-    # f4: 前提受容 — trap_typeに応じた修復opcodeを選択
-    if evidence.f4_premise > 0:
+    # f4: 前提受容 — trap_typeに応じた修復opcodeを選択 (f4=None は未計算: スキップ)
+    if evidence.f4_premise is not None and evidence.f4_premise > 0:
         if evidence.f4_trap_type == "binary_reduction":
             order.append("CHALLENGE_BINARY")
             order.append("EXPAND_ALTERNATIVES")
@@ -96,8 +100,8 @@ def _build_repair_order(
     if evidence.f1_anchor > 0:
         order.append("RESTORE_ANCHOR")
 
-    # 命題補完
-    if state.C_bin < 3:
+    # 命題補完 (C_bin=None は未計算: スキップ)
+    if state.C_bin is not None and state.C_bin < 3:
         for _ in evidence.miss_ids:
             order.append("ADD_PROPOSITION")
 

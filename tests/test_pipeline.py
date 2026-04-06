@@ -142,10 +142,12 @@ class TestCalculator:
         assert s.delta_e_bin in (1, 2, 3, 4)
 
     def test_no_propositions(self):
-        """命題が定義されていない場合: C=1.0（完全被覆扱い）"""
+        """命題が定義されていない場合: C=None（未計算）"""
         e = Evidence(question_id="test", propositions_total=0)
         s = calculate(e)
-        assert s.C == 1.0
+        assert s.C is None
+        assert s.delta_e is None
+        assert s.quality_score is None
 
     def test_deterministic(self):
         """同じ入力で同じ出力（決定性の検証）"""

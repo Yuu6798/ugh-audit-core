@@ -62,7 +62,7 @@ class TestQualityScore:
 
     def test_quality_score_in_state(self):
         """State dataclass に quality_score フィールドが存在する"""
-        e = Evidence(question_id="t")
+        e = Evidence(question_id="t", propositions_hit=1, propositions_total=1)
         s = calculate(e)
         assert hasattr(s, "quality_score")
         assert isinstance(s.quality_score, float)
@@ -191,13 +191,19 @@ class TestAPIOutput:
         assert "hit_rate" in data
         assert "structural_gate" in data
         assert "saved_id" in data
+        assert "schema_version" in data
+        assert "mode" in data
+        assert "computed_components" in data
+        assert "missing_components" in data
+        assert "errors" in data
 
         # 旧フィールドが存在しない
         assert "por" not in data
         assert "grv" not in data
         assert "meaning_drift" not in data
 
-    def test_audit_output_types(self, client):
+    def test_audit_output_degraded_without_meta(self, client):
+        """question_meta なし → degraded モード"""
         resp = client.post("/api/audit", json={
             "question": "テスト質問",
             "response": "テスト回答",
@@ -205,13 +211,15 @@ class TestAPIOutput:
         data = resp.json()
 
         assert isinstance(data["S"], float)
-        assert isinstance(data["C"], float)
-        assert isinstance(data["delta_e"], float)
-        assert isinstance(data["quality_score"], float)
-        assert isinstance(data["verdict"], str)
-        assert isinstance(data["hit_rate"], str)
+        assert data["C"] is None
+        assert data["delta_e"] is None
+        assert data["quality_score"] is None
+        assert data["verdict"] == "degraded"
+        assert data["mode"] == "degraded"
+        assert data["hit_rate"] is None
         assert isinstance(data["structural_gate"], dict)
-        assert isinstance(data["saved_id"], int)
+        assert data["saved_id"] is None
+        assert data["schema_version"] == "2.0.0"
 
     def test_structural_gate_fields(self, client):
         resp = client.post("/api/audit", json={
@@ -230,6 +238,13 @@ class TestAPIOutput:
     def test_history_output_has_new_fields(self, client):
         client.post("/api/audit", json={
             "question": "Q", "response": "R",
+            "question_meta": {
+                "question": "Q",
+                "core_propositions": ["命題"],
+                "disqualifying_shortcuts": [],
+                "acceptable_variants": [],
+                "trap_type": "metric_omnipotence",
+            },
         })
         resp = client.get("/api/history")
         assert resp.status_code == 200

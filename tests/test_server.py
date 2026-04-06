@@ -42,7 +42,8 @@ def test_health(client):
     assert resp.json()["status"] == "ok"
 
 
-def test_audit_returns_scores(client):
+def test_audit_degraded_without_meta(client):
+    """question_meta なし → degraded, saved_id=None, DB 未保存"""
     resp = client.post("/api/audit", json={
         "question": "AIは意味を持てるか？",
         "response": "AIは意味を処理できます。",
@@ -58,19 +59,18 @@ def test_audit_returns_scores(client):
     assert "hit_rate" in data
     assert "structural_gate" in data
     assert "saved_id" in data
-    assert isinstance(data["saved_id"], int)
-    assert data["saved_id"] >= 1
-    assert data["verdict"] in ("accept", "rewrite", "regenerate")
+    assert data["saved_id"] is None
+    assert data["verdict"] == "degraded"
 
 
-def test_audit_saves_to_db(client, tmp_db):
+def test_audit_degraded_not_saved_to_db(client, tmp_db):
+    """degraded 結果は DB に保存されない"""
     client.post("/api/audit", json={
         "question": "テスト質問",
         "response": "テスト回答",
     })
     rows = tmp_db.list_recent(10)
-    assert len(rows) == 1
-    assert rows[0]["question"] == "テスト質問"
+    assert len(rows) == 0
 
 
 def test_audit_without_reference(client):
@@ -82,17 +82,29 @@ def test_audit_without_reference(client):
     assert "verdict" in resp.json()
 
 
-def test_audit_preserves_session_id(client, tmp_db):
-    """session_id を指定すると同一値で DB に保存されることを検証"""
-    for i in range(2):
-        client.post("/api/audit", json={
-            "question": f"質問{i}",
-            "response": f"回答{i}",
-            "session_id": "conv-abc",
-        })
+def test_audit_computed_with_meta(client, tmp_db):
+    """question_meta あり → computed, saved_id あり, DB 保存"""
+    resp = client.post("/api/audit", json={
+        "question": "PoRが高ければ誠実か？",
+        "response": "PoRは共鳴度であり、誠実性の十分条件ではない。",
+        "question_meta": {
+            "question": "PoRが高ければ誠実か？",
+            "core_propositions": ["PoRは誠実性の十分条件ではない"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "metric_omnipotence",
+        },
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "computed"
+    assert data["verdict"] in ("accept", "rewrite", "regenerate")
+    assert isinstance(data["saved_id"], int)
+    assert data["saved_id"] >= 1
+
     rows = tmp_db.list_recent(10)
-    assert len(rows) == 2
-    assert all(r["session_id"] == "conv-abc" for r in rows)
+    assert len(rows) == 1
+    assert rows[0]["question"] == "PoRが高ければ誠実か？"
 
 
 def test_history_empty(client):
@@ -101,17 +113,30 @@ def test_history_empty(client):
     assert resp.json() == []
 
 
-def test_history_returns_items(client):
-    for i in range(2):
-        client.post("/api/audit", json={
-            "question": f"質問{i}",
-            "response": f"回答{i}",
-        })
+def test_history_returns_computed_items(client):
+    """computed 結果のみ history に含まれる"""
+    # degraded (DB 未保存)
+    client.post("/api/audit", json={
+        "question": "質問1",
+        "response": "回答1",
+    })
+    # computed (DB 保存)
+    client.post("/api/audit", json={
+        "question": "質問2",
+        "response": "回答2",
+        "question_meta": {
+            "question": "質問2",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "metric_omnipotence",
+        },
+    })
     resp = client.get("/api/history?limit=10")
     assert resp.status_code == 200
     items = resp.json()
-    assert len(items) == 2
-    assert "id" in items[0]
+    assert len(items) == 1
+    assert items[0]["question"] == "質問2"
     assert "S" in items[0]
     assert "delta_e" in items[0]
     assert "verdict" in items[0]
@@ -130,7 +155,7 @@ def test_audit_resolves_reference_from_golden(tmp_db, tmp_path):
     golden = GoldenStore(path=tmp_path / "golden.json")
     ref = golden.find_reference("AIは意味を持てるか？")
     assert ref is not None
-
+    # degraded なので DB 保存はないが、GoldenStore は動作している
     configure(db=tmp_db, golden=golden)
     with TestClient(app) as c:
         resp = c.post("/api/audit", json={
@@ -140,10 +165,7 @@ def test_audit_resolves_reference_from_golden(tmp_db, tmp_path):
     configure(db=None, golden=None)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["saved_id"] >= 1
-
-    rows = tmp_db.list_recent(1)
-    assert rows[0]["reference"] == ref
+    assert data["verdict"] == "degraded"
 
 
 def test_mcp_endpoint_mounted():
