@@ -22,7 +22,7 @@ from cascade_matcher import (
 
 
 def load_tier1_hits(
-    path: str = "data/eval/audit_102_main_baseline_round4.csv",
+    path: str = "data/eval/audit_102_main_baseline_v5.csv",
 ) -> dict[str, set[int]]:
     """ベースラインから Tier 1 hit 済みの proposition index を読み込む。
 
