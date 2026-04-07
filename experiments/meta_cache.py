@@ -32,8 +32,9 @@ def _cache_dir() -> Path:
 def _prompt_fingerprint() -> str:
     """プロンプトテンプレートのハッシュを返す（改訂時にキャッシュ無効化）"""
     try:
-        from .prompts.meta_generation_v1 import SYSTEM_PROMPT
-        return hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:16]
+        from .prompts.meta_generation_v1 import SYSTEM_PROMPT, USER_TEMPLATE
+        raw = SYSTEM_PROMPT + "\0" + USER_TEMPLATE
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
     except Exception:
         return "unknown"
 
