@@ -68,7 +68,7 @@ def _extract_key_metrics(audit_result: dict) -> dict:
         "C": state.get("C"),
         "delta_e": state.get("delta_e"),
         "quality_score": state.get("quality_score"),
-        "verdict": policy.get("verdict", "unknown"),
+        "verdict": policy.get("decision", policy.get("verdict", "unknown")),
         "propositions_hit": evidence.get("propositions_hit", 0),
         "propositions_total": evidence.get("propositions_total", 0),
     }

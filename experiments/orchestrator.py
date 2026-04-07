@@ -59,7 +59,7 @@ def _extract_summary(audit_result: dict) -> dict:
             if state.get("quality_score") is not None
             else None
         ),
-        "verdict": policy.get("verdict", "unknown"),
+        "verdict": policy.get("decision", policy.get("verdict", "unknown")),
         "hit_ids": evidence.get("hit_ids", []),
         "miss_ids": evidence.get("miss_ids", []),
         "propositions_hit": evidence.get("propositions_hit", 0),
