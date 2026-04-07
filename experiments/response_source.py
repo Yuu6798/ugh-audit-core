@@ -1,24 +1,23 @@
 """experiments/response_source.py
-回答生成ソース — Codex MCP クライアント + フォールバックチェーン
+回答生成ソース — OpenAI GPT / Codex MCP + フォールバックチェーン
 
 役割分担:
-  Claude  → 質問の品質を磨く (meta_generator.py)
-  Codex   → 回答の品質を磨く (このモジュール)
+  Claude (Anthropic) → 質問の品質を磨く (meta_generator.py)
+  GPT/Codex (OpenAI) → 回答の品質を磨く (このモジュール)
   パイプライン → 審判
 
-自作自演を避けるため、回答生成は Claude ではなく Codex が担当する。
-Codex 不使用時は Anthropic SDK にフォールバックするが、
-改善ループでは回答者としてのフィードバックを受けて回答を磨く。
-
+自作自演を避けるため、回答生成は Claude ではなく OpenAI 側が担当する。
 フォールバック順:
-1. Codex MCP (codex --mcp の stdio transport)
-2. Anthropic SDK 直接呼び出し (回答者ロール)
-3. 静的プレースホルダー (オフライン/CI 用)
+1. Codex MCP (codex mcp-server の stdio transport)
+2. OpenAI GPT API (gpt-4o) — Codex 代替
+3. Anthropic SDK 直接呼び出し (最終フォールバック)
+4. 静的プレースホルダー (オフライン/CI 用)
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shutil
 from typing import List, Optional
 
@@ -27,6 +26,12 @@ try:
     _HAS_ANTHROPIC = True
 except ImportError:
     _HAS_ANTHROPIC = False
+
+try:
+    from openai import OpenAI
+    _HAS_OPENAI = True
+except ImportError:
+    _HAS_OPENAI = False
 
 try:
     from mcp import ClientSession
@@ -39,6 +44,12 @@ logger = logging.getLogger(__name__)
 
 # Codex バイナリの存在チェック
 _HAS_CODEX = shutil.which("codex") is not None
+
+# OpenAI API キーの存在チェック
+_HAS_OPENAI_KEY = bool(os.environ.get("OPENAI_API_KEY"))
+
+# OpenAI モデル設定
+OPENAI_MODEL = "gpt-4o"
 
 RESPONDENT_SYSTEM_PROMPT = """\
 あなたはAIアシスタントです。与えられた質問に対して、誠実かつ具体的に回答してください。
@@ -104,11 +115,34 @@ def _call_codex(prompt: str) -> Optional[str]:
     return None
 
 
+def _call_openai(
+    system: str,
+    user_content: str,
+) -> Optional[str]:
+    """OpenAI GPT API で回答を生成する"""
+    if not _HAS_OPENAI or not _HAS_OPENAI_KEY:
+        return None
+    try:
+        client = OpenAI()
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            max_tokens=2048,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_content},
+            ],
+        )
+        return response.choices[0].message.content
+    except Exception:
+        logger.exception("OpenAI GPT 回答生成失敗")
+    return None
+
+
 def _call_anthropic(
     system: str,
     user_content: str,
 ) -> Optional[str]:
-    """Anthropic SDK で回答を生成する"""
+    """Anthropic SDK で回答を生成する (最終フォールバック)"""
     if not _HAS_ANTHROPIC:
         return None
     try:
@@ -134,7 +168,7 @@ def get_response(question: str, use_codex: bool = True) -> tuple[str, str]:
 
     Returns:
         (response_text, source) のタプル
-        source は "codex_mcp" | "anthropic_direct" | "placeholder"
+        source は "codex_mcp" | "openai_gpt" | "anthropic_direct" | "placeholder"
     """
     # 1. Codex MCP
     if use_codex:
@@ -142,12 +176,17 @@ def get_response(question: str, use_codex: bool = True) -> tuple[str, str]:
         if result:
             return result, "codex_mcp"
 
-    # 2. Anthropic SDK (回答者ロール)
+    # 2. OpenAI GPT (Codex 代替 — 自作自演回避のため Claude より優先)
+    result = _call_openai(RESPONDENT_SYSTEM_PROMPT, question)
+    if result:
+        return result, "openai_gpt"
+
+    # 3. Anthropic SDK (最終フォールバック)
     result = _call_anthropic(RESPONDENT_SYSTEM_PROMPT, question)
     if result:
         return result, "anthropic_direct"
 
-    # 3. プレースホルダー
+    # 4. プレースホルダー
     logger.warning("全ソース利用不可: プレースホルダーを返します")
     return "", "placeholder"
 
@@ -161,8 +200,7 @@ def improve_response(
 ) -> tuple[str, str]:
     """監査結果を踏まえて回答を改善する
 
-    Codex に前回の回答 + 監査フィードバックを渡し、改善された回答を得る。
-    Codex 不使用時は Anthropic SDK にフォールバック。
+    GPT/Codex に前回の回答 + 監査フィードバックを渡し、改善された回答を得る。
 
     Args:
         question: 質問テキスト
@@ -186,7 +224,7 @@ def improve_response(
     feedback_prompt = RESPONDENT_IMPROVE_USER_TEMPLATE.format(
         question=question,
         previous_response=previous_response[:2000],
-        verdict=policy.get("verdict", "unknown"),
+        verdict=policy.get("decision", policy.get("verdict", "unknown")),
         S=round(state.get("S", 0.0), 4),
         C=round(state["C"], 4) if state.get("C") is not None else "N/A",
         delta_e=round(state["delta_e"], 4) if state.get("delta_e") is not None else "N/A",
@@ -203,11 +241,16 @@ def improve_response(
         if result:
             return result, "codex_mcp"
 
-    # 2. Anthropic SDK (改善ロール)
+    # 2. OpenAI GPT (改善ロール)
+    result = _call_openai(RESPONDENT_IMPROVE_SYSTEM_PROMPT, feedback_prompt)
+    if result:
+        return result, "openai_gpt"
+
+    # 3. Anthropic SDK (最終フォールバック)
     result = _call_anthropic(RESPONDENT_IMPROVE_SYSTEM_PROMPT, feedback_prompt)
     if result:
         return result, "anthropic_direct"
 
-    # 3. フォールバック: 前回の回答をそのまま返す
+    # 4. フォールバック: 前回の回答をそのまま返す
     logger.warning("回答改善不可: 前回の回答を返します")
     return previous_response, "fallback_unchanged"
