@@ -414,7 +414,8 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
     # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
     saved_id: Optional[int] = None
     if result["mode"] == "computed":
-        saved_id = db.save(
+        save_fn = partial(
+            db.save,
             session_id=result["_session_id"],
             question=result["_question"],
             response=result["_response"],
@@ -431,6 +432,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
             hit_rate=result["hit_rate"] or "",
             metadata_source=result["metadata_source"],
         )
+        saved_id = await loop.run_in_executor(None, save_fn)
 
     return AuditResponse(
         schema_version=result["schema_version"],
