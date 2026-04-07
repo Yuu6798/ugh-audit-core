@@ -59,6 +59,7 @@ class AuditDB:
                 ("f3", "REAL DEFAULT 0.0"),
                 ("f4", "REAL DEFAULT 0.0"),
                 ("hit_rate", "TEXT DEFAULT ''"),
+                ("metadata_source", "TEXT DEFAULT 'inline'"),
             ]
             for col_name, col_type in _new_columns:
                 try:
@@ -117,6 +118,7 @@ class AuditDB:
         f3: float = 0.0,
         f4: float = 0.0,
         hit_rate: str = "",
+        metadata_source: str = "inline",
     ) -> int:
         """監査結果を保存してrow idを返す"""
         now = datetime.now(timezone.utc).isoformat()
@@ -135,6 +137,7 @@ class AuditDB:
             "f3": f3,
             "f4": f4,
             "hit_rate": hit_rate,
+            "metadata_source": metadata_source,
             "created_at": now,
         }
         # レガシー DB にも NOT NULL カラムのデフォルト値を提供

@@ -12,9 +12,11 @@ ChatGPT Connectors から MCP URL (http://<host>:<port>/mcp) を登録して利�
 """
 from __future__ import annotations
 
+import asyncio
 import sys
 import uuid
 from contextlib import asynccontextmanager
+from functools import partial
 from pathlib import Path
 from typing import List, Optional
 
@@ -390,12 +392,15 @@ def configure(
     response_model=AuditResponse,
     summary="audit_answer — AI回答を意味監査する",
 )
-def audit_answer(req: AuditRequest) -> AuditResponse:
+async def audit_answer(req: AuditRequest) -> AuditResponse:
     db = _get_db()
     golden = _get_golden()
     ref = req.reference or golden.find_reference(req.question)
 
-    result = _run_pipeline(
+    # auto_generate_meta=True 時は LLM 呼び出しが発生するため
+    # スレッドプールで実行して他のリクエストをブロックしない
+    pipeline_fn = partial(
+        _run_pipeline,
         question=req.question,
         response=req.response,
         reference=ref,
@@ -403,6 +408,8 @@ def audit_answer(req: AuditRequest) -> AuditResponse:
         session_id=req.session_id,
         auto_generate_meta=req.auto_generate_meta,
     )
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, pipeline_fn)
 
     # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
     saved_id: Optional[int] = None
@@ -422,6 +429,7 @@ def audit_answer(req: AuditRequest) -> AuditResponse:
             f3=result["structural_gate"]["f3"],
             f4=result["structural_gate"]["f4"] if result["structural_gate"]["f4"] is not None else 0.0,
             hit_rate=result["hit_rate"] or "",
+            metadata_source=result["metadata_source"],
         )
 
     return AuditResponse(

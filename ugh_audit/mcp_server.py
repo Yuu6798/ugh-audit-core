@@ -305,6 +305,7 @@ def audit_answer(
             f3=evidence.f3_operator,
             f4=evidence.f4_premise if evidence.f4_premise is not None else 0.0,
             hit_rate=hit_rate or "",
+            metadata_source=metadata_source,
         )
 
     degraded_reason = errors if mode != "computed" else []
