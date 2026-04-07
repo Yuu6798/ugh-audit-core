@@ -111,16 +111,25 @@ def _fallback_meta(question: str) -> dict:
 def generate_meta(
     question: str,
     model: str = DEFAULT_MODEL,
+    use_cache: bool = True,
 ) -> dict:
     """自由質問から question_meta を生成する
 
     Args:
         question: 質問テキスト
         model: 使用する Claude モデル
+        use_cache: キャッシュを使用するか
 
     Returns:
         detect() が消費する question_meta dict
     """
+    # キャッシュチェック
+    if use_cache:
+        from .meta_cache import get_cached_meta, save_cached_meta
+        cached = get_cached_meta(question, model)
+        if cached is not None:
+            return cached
+
     if not _HAS_ANTHROPIC:
         logger.warning("anthropic SDK 未インストール: fallback meta を返します")
         return _fallback_meta(question)
@@ -140,7 +149,11 @@ def generate_meta(
         if parsed is None:
             logger.warning("JSON パース失敗: fallback meta を返します")
             return _fallback_meta(question)
-        return _validate_meta(parsed, question)
+        result = _validate_meta(parsed, question)
+        # キャッシュ保存（core_propositions が非空の場合のみ）
+        if use_cache and result.get("core_propositions"):
+            save_cached_meta(question, result, model)
+        return result
     except Exception:
         logger.exception("meta 生成に失敗: fallback meta を返します")
         return _fallback_meta(question)
