@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+from typing import List, Optional
 
 from .prompts.meta_generation_v1 import (
     SYSTEM_PROMPT as META_GEN_SYSTEM,
@@ -120,6 +120,38 @@ def generate_meta(
         return _fallback_meta(question)
 
 
+def _guard_hit_propositions(
+    original_meta: dict,
+    improved_meta: dict,
+    hit_ids: List[int],
+) -> dict:
+    """hit 命題が改変されていないかガードする
+
+    hit した命題は変更禁止。LLM が勝手に変えた場合は元に戻す。
+    """
+    orig_props = original_meta.get("core_propositions", [])
+    new_props = improved_meta.get("core_propositions", [])
+
+    guarded_props = list(new_props)
+    restored = []
+
+    for idx in hit_ids:
+        if idx < len(orig_props):
+            if idx < len(guarded_props):
+                if guarded_props[idx] != orig_props[idx]:
+                    guarded_props[idx] = orig_props[idx]
+                    restored.append(idx)
+            else:
+                guarded_props.append(orig_props[idx])
+                restored.append(idx)
+
+    if restored:
+        logger.warning("ガード発動: hit 命題 %s を元に復元しました", restored)
+
+    improved_meta = {**improved_meta, "core_propositions": guarded_props}
+    return improved_meta
+
+
 def improve_meta(
     question: str,
     current_meta: dict,
@@ -190,7 +222,16 @@ def improve_meta(
         if parsed is None:
             logger.warning("改善 JSON パース失敗: 現在の meta を返します")
             return current_meta
-        return _validate_meta(parsed, question)
+        improved = _validate_meta(parsed, question)
+
+        # ガード: hit 命題が改変されていたら復元
+        hit_ids = evidence.get("hit_ids", [])
+        improved = _guard_hit_propositions(current_meta, improved, hit_ids)
+
+        # refinement_notes をログ用に保持
+        improved["refinement_notes"] = parsed.get("refinement_notes", [])
+
+        return improved
     except Exception:
         logger.exception("meta 改善に失敗: 現在の meta を返します")
         return current_meta
