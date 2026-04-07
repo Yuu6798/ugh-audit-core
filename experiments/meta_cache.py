@@ -29,9 +29,18 @@ def _cache_dir() -> Path:
     return _DEFAULT_CACHE_DIR
 
 
+def _prompt_fingerprint() -> str:
+    """プロンプトテンプレートのハッシュを返す（改訂時にキャッシュ無効化）"""
+    try:
+        from .prompts.meta_generation_v1 import SYSTEM_PROMPT
+        return hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:16]
+    except Exception:
+        return "unknown"
+
+
 def _cache_key(question: str, model: str = "") -> str:
-    """質問テキスト + モデル名から SHA256 キーを生成"""
-    raw = f"{question.strip()}\0{model}"
+    """質問テキスト + モデル名 + プロンプト版から SHA256 キーを生成"""
+    raw = f"{question.strip()}\0{model}\0{_prompt_fingerprint()}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
