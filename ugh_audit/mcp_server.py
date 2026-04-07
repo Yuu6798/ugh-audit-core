@@ -206,7 +206,7 @@ def audit_answer(
     metadata_source = "none"
 
     # LLM meta 自動生成（opt-in）
-    if not question_meta and auto_generate_meta:
+    if not question_meta and auto_generate_meta and _HAS_DETECTOR:
         try:
             from experiments.meta_generator import generate_meta
             question_meta = generate_meta(question)

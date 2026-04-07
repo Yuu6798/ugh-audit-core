@@ -126,7 +126,7 @@ def generate_meta(
     # キャッシュチェック
     if use_cache:
         from .meta_cache import get_cached_meta, save_cached_meta
-        cached = get_cached_meta(question)
+        cached = get_cached_meta(question, model)
         if cached is not None:
             return cached
 
@@ -152,7 +152,7 @@ def generate_meta(
         result = _validate_meta(parsed, question)
         # キャッシュ保存（core_propositions が非空の場合のみ）
         if use_cache and result.get("core_propositions"):
-            save_cached_meta(question, result)
+            save_cached_meta(question, result, model)
         return result
     except Exception:
         logger.exception("meta 生成に失敗: fallback meta を返します")

@@ -29,18 +29,19 @@ def _cache_dir() -> Path:
     return _DEFAULT_CACHE_DIR
 
 
-def _cache_key(question: str) -> str:
-    """質問テキストから SHA256 キーを生成"""
-    return hashlib.sha256(question.strip().encode()).hexdigest()
+def _cache_key(question: str, model: str = "") -> str:
+    """質問テキスト + モデル名から SHA256 キーを生成"""
+    raw = f"{question.strip()}\0{model}"
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def get_cached_meta(question: str) -> Optional[dict]:
+def get_cached_meta(question: str, model: str = "") -> Optional[dict]:
     """キャッシュから question_meta を取得
 
     Returns:
         キャッシュヒット時は dict、ミス時は None
     """
-    key = _cache_key(question)
+    key = _cache_key(question, model)
     cache_file = _cache_dir() / f"{key}.json"
     if not cache_file.exists():
         return None
@@ -54,11 +55,11 @@ def get_cached_meta(question: str) -> Optional[dict]:
         return None
 
 
-def save_cached_meta(question: str, meta: dict) -> None:
+def save_cached_meta(question: str, meta: dict, model: str = "") -> None:
     """question_meta をキャッシュに保存"""
     cache_d = _cache_dir()
     cache_d.mkdir(parents=True, exist_ok=True)
-    key = _cache_key(question)
+    key = _cache_key(question, model)
     cache_file = cache_d / f"{key}.json"
     try:
         with open(cache_file, "w", encoding="utf-8") as f:

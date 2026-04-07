@@ -105,8 +105,8 @@ def _run_pipeline(
     metadata_source = "none"
     matched_id: Optional[str] = None
 
-    # LLM meta 自動生成（opt-in）
-    if not question_meta and auto_generate_meta:
+    # LLM meta 自動生成（opt-in、detector 利用可能時のみ）
+    if not question_meta and auto_generate_meta and _HAS_DETECTOR:
         try:
             from experiments.meta_generator import generate_meta
             question_meta = generate_meta(question)
