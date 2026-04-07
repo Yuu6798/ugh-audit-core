@@ -177,7 +177,12 @@ def run_single(
             len(meta.get("core_propositions", [])),
         )
 
-        # Codex: 回答改善（被監査者として回答の品質を磨く）
+        # meta 改善後に再監査して、新しい命題に対する hit/miss を確定する
+        # (旧 audit_result の hit_ids/miss_ids は旧命題に対応しており、
+        #  新命題とインデックスがずれる可能性があるため)
+        audit_result = _run_audit(question_id, response_text, meta)
+
+        # GPT/Codex: 回答改善（被監査者として回答の品質を磨く）
         response_text, source = improve_response(
             question=question,
             previous_response=response_text,
@@ -185,9 +190,9 @@ def run_single(
             core_propositions=meta.get("core_propositions", []),
             use_codex=use_codex,
         )
-        logger.info("Codex/回答者 改善ソース: %s", source)
+        logger.info("GPT/回答者 改善ソース: %s", source)
 
-        # 再監査
+        # 改善された回答で最終監査
         audit_result = _run_audit(question_id, response_text, meta)
         summary = _extract_summary(audit_result)
         logger.info(

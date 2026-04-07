@@ -30,6 +30,18 @@ logger = logging.getLogger(__name__)
 # デフォルトモデル
 DEFAULT_MODEL = "claude-sonnet-4-6"
 
+# 有効な trap_type (premise_frames.yaml から)
+_VALID_TRAP_TYPES = frozenset({
+    "premise_acceptance",
+    "binary_reduction",
+    "scope_deflection",
+    "metric_omnipotence",
+    "authority_appeal",
+    "safety_boilerplate",
+    "relativism_drift",
+    "",  # 罠なしも許容
+})
+
 
 def _parse_json_response(text: str) -> Optional[dict]:
     """LLM 応答から JSON を抽出してパースする"""
@@ -53,28 +65,42 @@ def _parse_json_response(text: str) -> Optional[dict]:
     return None
 
 
+def _coerce_str_list(value: object) -> List[str]:
+    """値を List[str] に正規化する。文字列なら1要素リストに、非リストなら空に。"""
+    if isinstance(value, str):
+        return [value] if value else []
+    if not isinstance(value, list):
+        return []
+    return [p for p in value if isinstance(p, str) and len(p) > 0]
+
+
 def _validate_meta(meta: dict, question: str) -> dict:
-    """question_meta のスキーマバリデーションと正規化"""
+    """question_meta のスキーマバリデーションと正規化
+
+    question は常に入力値を使用（LLM の言い換え/切り詰めを防止）。
+    """
+    # trap_type バリデーション: 不明な値は空文字に落とす
+    trap_type = meta.get("trap_type", "")
+    if not isinstance(trap_type, str):
+        trap_type = ""
+    if trap_type not in _VALID_TRAP_TYPES:
+        logger.warning("不明な trap_type '%s' を空文字に修正しました", trap_type)
+        trap_type = ""
+
     valid = {
-        "question": meta.get("question", question),
-        "core_propositions": meta.get("core_propositions", []),
-        "disqualifying_shortcuts": meta.get("disqualifying_shortcuts", []),
-        "acceptable_variants": meta.get("acceptable_variants", []),
-        "trap_type": meta.get("trap_type", ""),
+        "question": str(question),  # 常に入力値を使用、str に強制
+        "core_propositions": _coerce_str_list(meta.get("core_propositions")),
+        "disqualifying_shortcuts": _coerce_str_list(meta.get("disqualifying_shortcuts")),
+        "acceptable_variants": _coerce_str_list(meta.get("acceptable_variants")),
+        "trap_type": trap_type,
     }
-    # core_propositions が文字列リストであることを保証
-    if not isinstance(valid["core_propositions"], list):
-        valid["core_propositions"] = []
-    valid["core_propositions"] = [
-        p for p in valid["core_propositions"] if isinstance(p, str) and len(p) > 0
-    ]
     return valid
 
 
 def _fallback_meta(question: str) -> dict:
     """最小限のフォールバック meta（LLM 不使用時）"""
     return {
-        "question": question,
+        "question": str(question),
         "core_propositions": [],
         "disqualifying_shortcuts": [],
         "acceptable_variants": [],
@@ -128,22 +154,25 @@ def _guard_hit_propositions(
     """hit 命題が改変されていないかガードする
 
     hit した命題は変更禁止。LLM が勝手に変えた場合は元に戻す。
+    インデックス位置を保持する（append ではなく pad + assign）。
     """
     orig_props = original_meta.get("core_propositions", [])
     new_props = improved_meta.get("core_propositions", [])
 
-    guarded_props = list(new_props)
+    # 必要な最大インデックスまでパディング
+    max_idx = max(hit_ids) if hit_ids else -1
+    required_len = max(len(new_props), max_idx + 1)
+    guarded_props = list(new_props) + [""] * (required_len - len(new_props))
     restored = []
 
     for idx in hit_ids:
         if idx < len(orig_props):
-            if idx < len(guarded_props):
-                if guarded_props[idx] != orig_props[idx]:
-                    guarded_props[idx] = orig_props[idx]
-                    restored.append(idx)
-            else:
-                guarded_props.append(orig_props[idx])
+            if guarded_props[idx] != orig_props[idx]:
+                guarded_props[idx] = orig_props[idx]
                 restored.append(idx)
+
+    # パディングで追加された空文字を除去
+    guarded_props = [p for p in guarded_props if p]
 
     if restored:
         logger.warning("ガード発動: hit 命題 %s を元に復元しました", restored)
@@ -177,7 +206,8 @@ def improve_meta(
 
     state = audit_result.get("state", {})
     evidence = audit_result.get("evidence", {})
-    verdict = audit_result.get("policy", {}).get("verdict", "unknown")
+    policy = audit_result.get("policy", {})
+    verdict = policy.get("decision", policy.get("verdict", "unknown"))
 
     # 改善ヒント生成
     hints = []
@@ -185,7 +215,7 @@ def improve_meta(
     if c_val is not None and c_val < 0.5:
         hints.append(
             "C が低い: 命題が回答テキストの表現と乖離している可能性。"
-            "より具体的な用語を含む命題に修正してください。"
+            "同じ意味を保ったまま、より照合しやすい表現に調整してください。"
         )
     miss_ids = evidence.get("miss_ids", [])
     if miss_ids:

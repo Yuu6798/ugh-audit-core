@@ -222,7 +222,10 @@ def main() -> None:
     # 結果表示
     print("\n=== 102問検証サマリー ===")
     print(f"検証数: {summary['n']}")
-    print(f"degraded 数: {summary['degraded_count']} ({summary.get('degraded_rate', 0):.1%})")
+    if summary["n"] == 0:
+        print("検証対象なし")
+        return
+    print(f"degraded 数: {summary.get('degraded_count', 0)} ({summary.get('degraded_rate', 0):.1%})")
     print(
         f"verdict 一致率: {summary.get('verdict_match_count', 0)}"
         f" ({summary.get('verdict_match_rate', 0):.1%})"
