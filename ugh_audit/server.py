@@ -113,7 +113,9 @@ def _run_pipeline(
             if question_meta.get("core_propositions"):
                 metadata_source = "llm_generated"
             else:
-                question_meta = None  # 生成失敗、fallback
+                # core_propositions は空だが question は保持
+                # → detect() で f1/f2/f3 構造チェックは実行される（C=None, degraded）
+                metadata_source = "llm_generated"
         except Exception:
             pass  # import 失敗や API エラーは silent に degraded
 

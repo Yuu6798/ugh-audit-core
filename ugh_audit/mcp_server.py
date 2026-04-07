@@ -213,7 +213,8 @@ def audit_answer(
             if question_meta.get("core_propositions"):
                 metadata_source = "llm_generated"
             else:
-                question_meta = None
+                # core_propositions 空でも question を保持 → f1/f2/f3 構造チェック実行
+                metadata_source = "llm_generated"
         except Exception:
             pass  # silent fallback to degraded
     matched_id: Optional[str] = None
