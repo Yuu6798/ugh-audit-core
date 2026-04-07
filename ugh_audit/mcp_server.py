@@ -179,6 +179,7 @@ def audit_answer(
     reference: Optional[str] = None,
     session_id: Optional[str] = None,
     question_meta: Optional[Dict] = None,
+    auto_generate_meta: bool = False,
 ) -> AuditOutput:
     """AI回答を意味監査する。
 
@@ -186,8 +187,8 @@ def audit_answer(
     PoR（S, C）、ΔE（意味ズレ量）、quality_score（品質スコア）、verdict（判定）を返す。
     結果はDBに自動保存される。
 
-    question_meta が未提供の場合、命題カバレッジ（C）が計算できないため
-    verdict="degraded" を返す。verdict="accept" は本計算完了時のみ返される。
+    question_meta が未提供の場合、auto_generate_meta=True なら LLM で動的生成を試みる。
+    それでも生成できない場合は verdict="degraded" を返す。
 
     Args:
         question: ユーザーの質問
@@ -195,6 +196,7 @@ def audit_answer(
         reference: 期待される正解（省略時は GoldenStore から自動検索）
         session_id: セッションID（省略時は自動生成）
         question_meta: 問題メタデータ（core_propositions 等を含む dict）
+        auto_generate_meta: question_meta 未提供時に LLM で動的生成する (opt-in)
     """
     db = _get_db()
     golden = _get_golden()
@@ -202,12 +204,25 @@ def audit_answer(
     ref = reference or golden.find_reference(question)
     errors: List[str] = []
     metadata_source = "none"
+
+    # LLM meta 自動生成（opt-in）
+    if not question_meta and auto_generate_meta:
+        try:
+            from experiments.meta_generator import generate_meta
+            question_meta = generate_meta(question)
+            if question_meta.get("core_propositions"):
+                metadata_source = "llm_generated"
+            else:
+                question_meta = None
+        except Exception:
+            pass  # silent fallback to degraded
     matched_id: Optional[str] = None
 
     # detect → calculate パイプライン
     detected = False
     if question_meta and _HAS_DETECTOR:
-        metadata_source = "inline"
+        if metadata_source != "llm_generated":
+            metadata_source = "inline"
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
         if "question" not in question_meta:

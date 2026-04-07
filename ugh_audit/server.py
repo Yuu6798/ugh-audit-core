@@ -92,15 +92,33 @@ def _run_pipeline(
     reference: Optional[str],
     question_meta: Optional[dict],
     session_id: Optional[str],
+    auto_generate_meta: bool = False,
 ) -> dict:
-    """パイプライン A を実行し、mode 付きの出力 dict を返す"""
+    """パイプライン A を実行し、mode 付きの出力 dict を返す
+
+    auto_generate_meta=True の場合、question_meta 未提供時に
+    LLM (Claude API) で動的生成を試みる。
+    """
     errors: List[str] = []
     metadata_source = "none"
     matched_id: Optional[str] = None
 
+    # LLM meta 自動生成（opt-in）
+    if not question_meta and auto_generate_meta:
+        try:
+            from experiments.meta_generator import generate_meta
+            question_meta = generate_meta(question)
+            if question_meta.get("core_propositions"):
+                metadata_source = "llm_generated"
+            else:
+                question_meta = None  # 生成失敗、fallback
+        except Exception:
+            pass  # import 失敗や API エラーは silent に degraded
+
     detected = False
     if question_meta and _HAS_DETECTOR:
-        metadata_source = "inline"
+        if metadata_source != "llm_generated":
+            metadata_source = "inline"
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
         if "question" not in question_meta:
@@ -207,6 +225,14 @@ class AuditRequest(BaseModel):
     )
     question_meta: Optional[dict] = Field(
         None, description="問題メタデータ（core_propositions 等を含む dict）"
+    )
+    auto_generate_meta: bool = Field(
+        False,
+        description=(
+            "question_meta 未提供時に LLM で動的生成する (opt-in)。"
+            "metadata_source='llm_generated' として結果に明示される。"
+            "ANTHROPIC_API_KEY 環境変数が必要。"
+        ),
     )
 
 
@@ -375,6 +401,7 @@ def audit_answer(req: AuditRequest) -> AuditResponse:
         reference=ref,
         question_meta=req.question_meta,
         session_id=req.session_id,
+        auto_generate_meta=req.auto_generate_meta,
     )
 
     # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
