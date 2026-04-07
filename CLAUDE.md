@@ -45,7 +45,34 @@ ugh_audit/
 └── mcp_server.py     # MCP スタンドアロンサーバー (stateless_http)
 tests/                # pytest (フィクスチャはtmp_path, モック不使用)
 examples/             # basic_audit.py — E2Eサンプル
+
+# 実験基盤（LLM オーケストレーション PoC）
+experiments/
+├── meta_generator.py          # Claude API → question_meta 動的生成
+├── response_source.py         # Codex MCP / GPT-4o → 回答生成
+├── orchestrator.py            # 統合オーケストレーション + 改善ループ
+├── validate_against_102.py    # 手動メタ vs LLM メタ比較検証
+└── prompts/                   # プロンプトテンプレート
 ```
+
+### LLM オーケストレーション（自由質問対応 PoC）
+
+`experiments/` は自由質問に対して LLM で `question_meta` を動的生成し、
+既存パイプラインが有意な verdict を返せるかを検証する実験基盤。
+
+**既存パイプラインへの変更なし。** `audit()` を import して呼ぶだけ。
+
+- **Claude (Anthropic API)**: question_meta 生成・改善（出題者）
+- **GPT-4o / Codex MCP (OpenAI)**: 回答生成・改善（被監査者）
+- **既存パイプライン**: 審判（決定的、変更なし）
+
+自作自演を避けるため、meta 生成と回答生成を異なるベンダーに分離。
+改善ループで Claude が meta を磨き、GPT が回答を磨く。
+
+**検証結果 (n=30)**: degraded 排除 100%, verdict 一致率 73.3%, ΔE 相関 ρ=0.80
+
+設計詳細: `docs/orchestration_design.md`
+使用方法: `experiments/README.md`
 
 ### Cascade Matcher（命題回収補助）
 
@@ -198,6 +225,9 @@ pip install -e ".[server]"
 
 # 分析スクリプト (scipy + matplotlib)
 pip install -e ".[analysis]"
+
+# 実験基盤 (Claude/GPT オーケストレーション)
+pip install -e ".[experiment]"
 ```
 
 ## Commands
@@ -265,8 +295,11 @@ python examples/basic_audit.py
 | 変数名 | 説明 | デフォルト |
 |--------|------|-----------|
 | `UGH_AUDIT_DB` | SQLite DB ファイルパス | `~/.ugh_audit/audit.db` |
+| `ANTHROPIC_API_KEY` | Claude API キー（実験基盤用） | なし |
+| `OPENAI_API_KEY` | OpenAI API キー（GPT/Codex 回答生成用） | なし |
 
 読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` で書き込み可能パスを指定する。
+`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` は `experiments/` の実行時のみ必要。
 
 ## Key Thresholds
 
