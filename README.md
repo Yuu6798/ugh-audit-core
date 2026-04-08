@@ -36,9 +36,10 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 
 | verdict | 条件 | 意味 |
 |---------|------|------|
-| **accept** | ΔE ≤ 0.10 | 意味的に十分な回答 |
-| **rewrite** | 0.10 < ΔE ≤ 0.25 | 部分的な修正で改善可能 |
-| **regenerate** | ΔE > 0.25 | 再生成が必要 |
+| **accept** | C≠None AND ΔE ≤ 0.10 | 意味的に十分な回答 |
+| **rewrite** | C≠None AND 0.10 < ΔE ≤ 0.25 | 部分的な修正で改善可能 |
+| **regenerate** | C≠None AND ΔE > 0.25 | 再生成が必要 |
+| **degraded** | C=None OR ΔE=None | メタデータ不足で本計算不能 |
 
 ### 検証結果（HA48, n=48, v5 ベースライン 197/310 hits）
 
@@ -84,6 +85,34 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 │  → Z_RESCUED / miss              │
 └──────────────────────────────────┘
 ```
+
+### LLM メタデータ動的生成（自由質問対応）
+
+102問の手動キュレーション済みメタデータがない自由質問に対して、
+LLM で `question_meta` を動的生成し、パイプラインを実行する。
+
+```
+auto_generate_meta: true
+    │
+    ▼
+┌────────────────────────┐
+│  meta_generator.py     │  Claude API で
+│  (question → meta)     │  命題を動的生成
+├────────────────────────┤
+│  meta_cache            │  同一質問は
+│  (~/.ugh_audit/        │  キャッシュから返す
+│   meta_cache/)         │  (LLM呼び出しゼロ)
+└────────┬───────────────┘
+         ▼
+  既存パイプライン（変更なし）
+```
+
+- **metadata_source: "llm_generated"** で手動メタとの区別が明示される
+- **opt-in**: `auto_generate_meta=true` を指定しない限り従来通り degraded
+
+検証結果 (n=102): degraded 排除 100%, verdict 一致率 61.8%, ΔE 相関 ρ=0.378
+
+設計詳細: `docs/orchestration_design.md`, `experiments/README.md`
 
 #### 検出層の4指標
 
@@ -137,6 +166,9 @@ pip install -e ".[server]"
 
 # 分析スクリプト (scipy + matplotlib)
 pip install -e ".[analysis]"
+
+# 実験基盤 (Claude/GPT オーケストレーション)
+pip install -e ".[experiment]"
 ```
 
 ---
@@ -158,18 +190,23 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 ```python
 import httpx
 
+# 手動メタ付き（従来通り）
 resp = httpx.post("http://localhost:8000/api/audit", json={
-    "question": "AIは意味を持てるか？",
-    "response": "AIは意味を処理できます。",
+    "question": "PoRが高ければAI回答は誠実だと言えるか？",
+    "response": "PoRは...",
+    "question_meta": {
+        "core_propositions": ["PoRは共鳴度であり誠実性の十分条件ではない"],
+        "trap_type": "metric_omnipotence"
+    }
 })
-print(resp.json())
-# {
-#   "S": 1.0, "C": 1.0, "delta_e": 0.0, "quality_score": 5.0,
-#   "verdict": "accept", "hit_rate": "",
-#   "structural_gate": {"f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": 0.0,
-#                        "gate_verdict": "pass", "primary_fail": "none"},
-#   "saved_id": 1
-# }
+
+# 自由質問（LLM メタ自動生成）
+resp = httpx.post("http://localhost:8000/api/audit", json={
+    "question": "AIは本当に創造性を持てるのか？",
+    "response": "AIの創造性は...",
+    "auto_generate_meta": True,  # opt-in
+})
+print(resp.json()["metadata_source"])  # "llm_generated"
 ```
 
 ---
@@ -192,11 +229,38 @@ ugh_audit/
 ├── reference/        # referenceセット管理（golden store）
 ├── collector/        # ログ収集ユーティリティ
 ├── report/           # Phase Mapレポート生成
-├── server.py         # REST API + MCP 統合サーバー (FastAPI)
+├── engine/           # Phase 2 エンジン (calculator, decision, runtime)
+├── server.py         # REST API + MCP 統合サーバー (FastAPI, async)
 └── mcp_server.py     # MCP スタンドアロンサーバー
+
+# 実験基盤（LLM オーケストレーション）
+experiments/
+├── meta_generator.py          # Claude API → question_meta 動的生成
+├── meta_cache.py              # question_meta ファイルキャッシュ
+├── response_source.py         # Codex MCP / GPT-4o → 回答生成
+├── orchestrator.py            # 統合オーケストレーション + 改善ループ
+├── validate_against_102.py    # 手動メタ vs LLM メタ比較検証
+└── prompts/                   # プロンプトテンプレート
 
 examples/
 tests/
+docs/
+```
+
+---
+
+## Public API
+
+```python
+from ugh_audit import (
+    AuditDB,               # SQLite保存
+    AuditCollector,        # パイプライン (audit + save)
+    SessionCollector,      # セッション単位収集
+    GoldenStore,           # リファレンス管理
+    GoldenEntry,           # リファレンスエントリ
+    generate_text_report,  # テキストレポート
+    generate_csv,          # CSVエクスポート
+)
 ```
 
 ---
@@ -231,7 +295,7 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 
 | メソッド | パス | 説明 |
 |---------|------|------|
-| POST | `/api/audit` | AI回答を意味監査（question, response, reference?, session_id?） |
+| POST | `/api/audit` | AI回答を意味監査 |
 | GET | `/api/history` | 直近の監査履歴を取得 |
 | POST | `/mcp` | MCP Streamable HTTP エンドポイント |
 | GET | `/health` | ヘルスチェック (`{"status": "ok"}`) |
@@ -245,32 +309,53 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 - `response` (string, 必須): AIの回答
 - `reference` (string, 省略可): 期待される正解（省略時は GoldenStore から自動検索）
 - `session_id` (string, 省略可): セッションID
+- `question_meta` (dict, 省略可): 問題メタデータ（core_propositions 等）
+- `auto_generate_meta` (bool, デフォルト false): question_meta 未提供時に LLM で動的生成
 
 出力:
 ```json
 {
+  "schema_version": "2.0.0",
   "S": 1.0,
   "C": 1.0,
   "delta_e": 0.0,
   "quality_score": 5.0,
   "verdict": "accept",
-  "hit_rate": "",
+  "hit_rate": "3/3",
   "structural_gate": {
     "f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": 0.0,
     "gate_verdict": "pass",
     "primary_fail": "none"
   },
-  "saved_id": 1
+  "saved_id": 1,
+  "mode": "computed",
+  "metadata_source": "inline",
+  "computed_components": ["C", "S", "delta_e", "f1", "f2", "f3", "f4", "quality_score"],
+  "missing_components": [],
+  "errors": [],
+  "degraded_reason": []
 }
 ```
+
+**metadata_source の値:**
+
+| 値 | 意味 |
+|---|---|
+| `inline` | リクエストに question_meta が含まれていた |
+| `llm_generated` | LLM (Claude API) が動的生成した |
+| `none` | question_meta なし、auto_generate_meta も off |
 
 ### 環境変数
 
 | 変数名 | 説明 | デフォルト |
 |--------|------|-----------|
 | `UGH_AUDIT_DB` | SQLite DB ファイルパス | `~/.ugh_audit/audit.db` |
+| `ANTHROPIC_API_KEY` | Claude API キー（LLM meta 生成用） | なし |
+| `OPENAI_API_KEY` | OpenAI API キー（実験基盤の GPT 回答生成用） | なし |
+| `UGH_META_CACHE_DIR` | meta キャッシュディレクトリ | `~/.ugh_audit/meta_cache/` |
 
 読み取り専用コンテナやサーバーレス環境では `UGH_AUDIT_DB=/tmp/audit.db` のように書き込み可能なパスを指定する。
+`ANTHROPIC_API_KEY` は `auto_generate_meta=true` 時のみ必要。`OPENAI_API_KEY` は `experiments/` の実行時のみ必要。
 
 ---
 
@@ -290,9 +375,10 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 | 演算子回収: overlap | ≥ 2 | `detector.py` |
 | cascade: θ_sbert | 0.50 | `cascade_matcher.py` |
 | cascade: SBert モデル | paraphrase-multilingual-MiniLM-L12-v2 | `cascade_matcher.py` |
-| verdict: accept | ΔE ≤ 0.10 | `server.py` / `mcp_server.py` |
-| verdict: rewrite | 0.10 < ΔE ≤ 0.25 | 同上 |
-| verdict: regenerate | ΔE > 0.25 | 同上 |
+| verdict: accept | C≠None AND ΔE ≤ 0.10 | `server.py` / `mcp_server.py` |
+| verdict: rewrite | C≠None AND 0.10 < ΔE ≤ 0.25 | 同上 |
+| verdict: regenerate | C≠None AND ΔE > 0.25 | 同上 |
+| verdict: degraded | C=None OR ΔE=None | 同上 |
 
 ---
 
