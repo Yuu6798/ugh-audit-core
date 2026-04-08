@@ -291,6 +291,12 @@ class HistoryItem(BaseModel):
     delta_e: Optional[float] = None
     quality_score: Optional[float] = None
     verdict: str
+    f1: float = 0.0
+    f2: float = 0.0
+    f3: float = 0.0
+    f4: float = 0.0
+    hit_rate: str = ""
+    metadata_source: str = "inline"
     created_at: str
 
 
@@ -474,6 +480,12 @@ def get_history(limit: int = 20) -> List[HistoryItem]:
             delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
             quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
             verdict=r["verdict"],
+            f1=round(r.get("f1", 0.0), 4),
+            f2=round(r.get("f2", 0.0), 4),
+            f3=round(r.get("f3", 0.0), 4),
+            f4=round(r.get("f4", 0.0), 4),
+            hit_rate=r.get("hit_rate", ""),
+            metadata_source=r.get("metadata_source", "inline"),
             created_at=r["created_at"],
         )
         for r in rows
