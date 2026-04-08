@@ -122,8 +122,29 @@ iteration 1+:
 - iteration 0: verdict=rewrite, C=0.5, ΔE=0.177
 - iteration 1: verdict=accept, C=1.0, ΔE=0.094
 
+## 敵対的 meta hack 実験
+
+ミトスレベル AI が meta を逆算して監査を通過できるかの検証。
+
+```bash
+python -m experiments.adversarial_meta_hack --limit 30
+```
+
+3条件比較: hack（回答を見て meta 逆算）/ honest（回答を見ずに生成）/ hand（手動）
+
+### 結果 (n=30)
+
+- hack で C=1.0: **96.7%** — C 軸は完全に突破される
+- hack accept 率: **80%** vs hand: 43%
+- **hack C≥0.9 かつ S<0.9 (痕跡検出): 50%**
+  - f2（用語捏造）が UGH 固有用語で貫通発火
+  - 一般質問では S≈1.0 で検出困難 → grv 実装が必要
+
+詳細: `docs/orchestration_design.md`
+
 ## 既知の課題
 
 - **C 相関 0.37**: 命題の立て方が手動と異なるため。改善余地あり
 - **UGH 固有用語**: GPT が UGH 用語を知らないため C=0.00 になるケースあり
 - **Codex MCP**: `gpt-5.3-codex` モデルのアクセス権が必要（現在 GPT-4o で代替）
+- **hack 検出**: 一般質問で S≈1.0 の場合、C 軸の hack を検出できない（grv 未実装）
