@@ -20,8 +20,8 @@ WEIGHTS_F = {"f1": 5, "f2": 25, "f3": 5, "f4": 5}  # 構造要素の重み
 WEIGHT_S = 2   # ΔE計算における S の重み
 WEIGHT_C = 1   # ΔE計算における C の重み
 
-# --- ΔE ビン閾値 ---
-DELTA_E_BIN_THRESHOLDS = [0.02, 0.12, 0.35]  # bin1/2境界, bin2/3境界, bin3/4境界
+# --- ΔE ビン閾値 (HA48 検証済み確定値に統一) ---
+DELTA_E_BIN_THRESHOLDS = [0.10, 0.25]  # accept/rewrite境界, rewrite/regenerate境界
 
 # --- C ビン閾値 ---
 C_BIN_THRESHOLDS = [0.34, 0.67]  # bin1/2境界, bin2/3境界
@@ -112,20 +112,17 @@ def _compute_delta_e(s: float, c: float) -> float:
 
 
 def _bin_delta_e(delta_e: float) -> int:
-    """ΔEをビンに分類する (1-4)
+    """ΔEをビンに分類する (1-3, HA48 検証済み確定値)
 
-    bin 1: ΔE ≤ 0.02
-    bin 2: 0.02 < ΔE ≤ 0.12
-    bin 3: 0.12 < ΔE ≤ 0.35
-    bin 4: ΔE > 0.35
+    bin 1: ΔE ≤ 0.10  → accept
+    bin 2: 0.10 < ΔE ≤ 0.25  → rewrite
+    bin 3: ΔE > 0.25  → regenerate
     """
     if delta_e <= DELTA_E_BIN_THRESHOLDS[0]:
         return 1
     if delta_e <= DELTA_E_BIN_THRESHOLDS[1]:
         return 2
-    if delta_e <= DELTA_E_BIN_THRESHOLDS[2]:
-        return 3
-    return 4
+    return 3
 
 
 def _bin_c(c: float) -> int:

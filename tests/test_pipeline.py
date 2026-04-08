@@ -123,7 +123,7 @@ class TestCalculator:
         s = calculate(e)
         assert s.S == pytest.approx(0.375, abs=0.001)
         assert s.C == 0.0
-        assert s.delta_e_bin == 4
+        assert s.delta_e_bin == 3  # ΔE > 0.25 → bin 3 (regenerate)
         assert s.C_bin == 1
 
     def test_partial_evidence(self):
@@ -139,7 +139,7 @@ class TestCalculator:
         s = calculate(e)
         assert 0.0 < s.S < 1.0
         assert s.C == pytest.approx(0.6667, abs=0.001)
-        assert s.delta_e_bin in (1, 2, 3, 4)
+        assert s.delta_e_bin in (1, 2, 3)
 
     def test_no_propositions(self):
         """命題が定義されていない場合: C=None（未計算）"""
@@ -165,17 +165,17 @@ class TestCalculator:
         assert asdict(s1) == asdict(s2)
 
     def test_delta_e_bins(self):
-        """ΔEビンの境界値テスト"""
-        # bin 1: perfect → ΔE=0
+        """ΔEビンの境界値テスト (HA48 確定値: 0.10/0.25)"""
+        # bin 1: perfect → ΔE=0 → accept
         e1 = Evidence(question_id="t", propositions_hit=3, propositions_total=3)
         assert calculate(e1).delta_e_bin == 1
 
-        # bin 4: worst → ΔE high
+        # bin 3: worst → ΔE high → regenerate
         e4 = Evidence(
             question_id="t", f2_unknown=1.0,
             propositions_hit=0, propositions_total=3, miss_ids=[0, 1, 2],
         )
-        assert calculate(e4).delta_e_bin == 4
+        assert calculate(e4).delta_e_bin == 3
 
 
 # --- 判定層テスト ---
@@ -183,51 +183,51 @@ class TestCalculator:
 class TestDecider:
     """decider.py の単体テスト"""
 
-    def test_accept_bin1(self):
-        """delta_e_bin=1 → accept"""
+    def test_accept_low_delta_e(self):
+        """ΔE ≤ 0.10 → accept (HA48 確定値)"""
         s = State(S=1.0, C=1.0, delta_e=0.0, quality_score=5.0, delta_e_bin=1, C_bin=3,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t", propositions_hit=3, propositions_total=3)
         result = decide(s, e)
         assert result["policy"]["decision"] == "accept"
 
-    def test_regenerate_bin4(self):
-        """delta_e_bin=4 → regenerate"""
-        s = State(S=0.375, C=0.0, delta_e=0.59, quality_score=2.64, delta_e_bin=4, C_bin=1,
+    def test_accept_boundary(self):
+        """ΔE = 0.10 → accept (境界値)"""
+        s = State(S=0.9, C=0.8, delta_e=0.10, quality_score=4.6, delta_e_bin=1, C_bin=3,
+                  por_state="inactive", grv_tag="none")
+        e = Evidence(question_id="t", propositions_hit=2, propositions_total=3)
+        result = decide(s, e)
+        assert result["policy"]["decision"] == "accept"
+
+    def test_regenerate_high_delta_e(self):
+        """ΔE > 0.25 → regenerate (HA48 確定値)"""
+        s = State(S=0.375, C=0.0, delta_e=0.59, quality_score=2.64, delta_e_bin=3, C_bin=1,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t", f2_unknown=1.0,
                      propositions_hit=0, propositions_total=3, miss_ids=[0, 1, 2])
         result = decide(s, e)
         assert result["policy"]["decision"] == "regenerate"
 
-    def test_rewrite_bin3(self):
-        """delta_e_bin=3 → rewrite"""
-        s = State(S=1.0, C=0.333, delta_e=0.15, quality_score=4.4, delta_e_bin=3, C_bin=1,
+    def test_rewrite_mid_delta_e(self):
+        """0.10 < ΔE ≤ 0.25 → rewrite (HA48 確定値)"""
+        s = State(S=1.0, C=0.333, delta_e=0.15, quality_score=4.4, delta_e_bin=2, C_bin=1,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t", propositions_hit=1, propositions_total=3,
                      hit_ids=[0], miss_ids=[1, 2])
         result = decide(s, e)
         assert result["policy"]["decision"] == "rewrite"
 
-    def test_rewrite_bin2_low_c(self):
-        """delta_e_bin=2, C_bin=1 → rewrite"""
-        s = State(S=1.0, C=0.2, delta_e=0.05, quality_score=4.8, delta_e_bin=2, C_bin=1,
+    def test_rewrite_boundary(self):
+        """ΔE = 0.25 → rewrite (境界値)"""
+        s = State(S=0.8, C=0.5, delta_e=0.25, quality_score=4.0, delta_e_bin=2, C_bin=2,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t")
         result = decide(s, e)
         assert result["policy"]["decision"] == "rewrite"
 
-    def test_accept_bin2_high_c(self):
-        """delta_e_bin=2, C_bin=2 → accept"""
-        s = State(S=1.0, C=0.5, delta_e=0.08, quality_score=4.68, delta_e_bin=2, C_bin=2,
-                  por_state="inactive", grv_tag="none")
-        e = Evidence(question_id="t")
-        result = decide(s, e)
-        assert result["policy"]["decision"] == "accept"
-
     def test_repair_order_f2(self):
         """f2検出時に PRESERVE_TERM + BLOCK_REINTERPRETATION が含まれる"""
-        s = State(S=0.5, C=0.0, delta_e=0.5, quality_score=3.0, delta_e_bin=4, C_bin=1,
+        s = State(S=0.5, C=0.0, delta_e=0.5, quality_score=3.0, delta_e_bin=3, C_bin=1,
                   por_state="inactive", grv_tag="none")
         e = Evidence(question_id="t", f2_unknown=1.0,
                      propositions_hit=0, propositions_total=3, miss_ids=[0, 1, 2])
