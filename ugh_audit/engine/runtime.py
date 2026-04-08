@@ -73,9 +73,12 @@ class UGHAuditEngine:
         )
 
 
+# レガシー互換: cosine PoR しきい値 (メインパイプラインでは未使用)
 _POR_FIRE_THRESHOLD = 0.82
 
-# レガシー delta_e_bin 境界 (output_schema.yaml)
+# レガシー delta_e_bin 境界 (output_schema.yaml, 旧値)
+# 注: メインパイプラインは HA48 確定値 (0.10/0.25) に統一済み。
+# この互換層は旧 DB / 旧 API との変換用に残す。
 _LEGACY_BIN1_MAX = 0.02   # ΔE ≤ 0.02 → accept
 _LEGACY_BIN2_MAX = 0.12   # 0.02 < ΔE ≤ 0.12 → accept/rewrite (C_bin依存)
 _LEGACY_BIN3_MAX = 0.35   # 0.12 < ΔE ≤ 0.35 → rewrite

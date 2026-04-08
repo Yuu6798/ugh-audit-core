@@ -27,25 +27,20 @@ def _load_opcodes() -> Dict[str, dict]:
 
 
 def _decision(state: State) -> str:
-    """decision logic（検証済み: 20/20一致）
+    """decision logic（HA48 検証済み確定値）
 
-    if delta_e_bin == 1                    → accept
-    if delta_e_bin == 2 and C_bin >= 2     → accept
-    if delta_e_bin == 2 and C_bin == 1     → rewrite
-    if delta_e_bin == 3                    → rewrite
-    if delta_e_bin == 4                    → regenerate
+    ΔE ≤ 0.10  → accept
+    0.10 < ΔE ≤ 0.25  → rewrite
+    ΔE > 0.25  → regenerate
+    C=None (ΔE算出不可) → degraded
 
-    delta_e_bin=None（C未計算）の場合は "degraded" を返す。
+    server.py / mcp_server.py の _verdict() と同一閾値。
     """
-    if state.delta_e_bin is None:
+    if state.delta_e is None:
         return "degraded"
-    if state.delta_e_bin == 1:
+    if state.delta_e <= 0.10:
         return "accept"
-    if state.delta_e_bin == 2:
-        if state.C_bin is not None and state.C_bin >= 2:
-            return "accept"
-        return "rewrite"
-    if state.delta_e_bin == 3:
+    if state.delta_e <= 0.25:
         return "rewrite"
     return "regenerate"
 
