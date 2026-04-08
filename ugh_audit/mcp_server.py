@@ -11,6 +11,7 @@ ChatGPT Settings > Connectors から MCP URL を登録して利用する。
 """
 from __future__ import annotations
 
+import json as _json
 import sys
 import uuid
 from dataclasses import dataclass, field
@@ -307,6 +308,13 @@ def audit_answer(
             f4=evidence.f4_premise if evidence.f4_premise is not None else 0.0,
             hit_rate=hit_rate or "",
             metadata_source=metadata_source,
+            generated_meta=_json.dumps(
+                question_meta or {}, ensure_ascii=False,
+            ) if metadata_source == "llm_generated" else "",
+            hit_sources=_json.dumps(
+                evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
+                ensure_ascii=False,
+            ),
         )
 
     degraded_reason = errors if mode != "computed" else []
