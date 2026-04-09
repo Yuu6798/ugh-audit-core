@@ -241,6 +241,10 @@ class AuditRequest(BaseModel):
             "ANTHROPIC_API_KEY 環境変数が必要。"
         ),
     )
+    retry_of: Optional[int] = Field(
+        None,
+        description="再監査元の saved_id。初回監査では省略。",
+    )
 
 
 class StructuralGateResponse(BaseModel):
@@ -268,6 +272,7 @@ class AuditResponse(BaseModel):
     hit_rate: Optional[str] = Field(None, description="命題ヒット率 (例: '3/5')")
     structural_gate: Optional[StructuralGateResponse] = None
     saved_id: Optional[int] = Field(None, description="DB保存時の行ID (degraded時はnull)")
+    retry_of: Optional[int] = Field(None, description="再監査元の saved_id (初回はnull)")
     mode: str = Field(..., description="実行モード: computed / degraded / error")
     matched_id: Optional[str] = Field(None, description="対応づけた question_id")
     metadata_source: str = Field(..., description="メタデータ源: inline / golden_store / none")
@@ -302,6 +307,7 @@ class HistoryItem(BaseModel):
     metadata_source: str = "inline"
     generated_meta: str = ""
     hit_sources: str = ""
+    retry_of: Optional[int] = None
     created_at: str
 
 
@@ -450,6 +456,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
             hit_sources=_json.dumps(
                 result.get("_hit_sources", {}), ensure_ascii=False,
             ),
+            retry_of=req.retry_of,
         )
         saved_id = await loop.run_in_executor(None, save_fn)
 
@@ -463,6 +470,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         hit_rate=result["hit_rate"],
         structural_gate=StructuralGateResponse(**result["structural_gate"]),
         saved_id=saved_id,
+        retry_of=req.retry_of,
         mode=result["mode"],
         matched_id=result["matched_id"],
         metadata_source=result["metadata_source"],
@@ -499,6 +507,7 @@ def get_history(limit: int = 20) -> List[HistoryItem]:
             metadata_source=r.get("metadata_source", "inline"),
             generated_meta=r.get("generated_meta", ""),
             hit_sources=r.get("hit_sources", ""),
+            retry_of=r.get("retry_of"),
             created_at=r["created_at"],
         )
         for r in rows

@@ -181,6 +181,7 @@ def audit_answer(
     session_id: Optional[str] = None,
     question_meta: Optional[Dict] = None,
     auto_generate_meta: bool = False,
+    retry_of: Optional[int] = None,
 ) -> AuditOutput:
     """AI回答を意味監査する。
 
@@ -315,6 +316,7 @@ def audit_answer(
                 evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
                 ensure_ascii=False,
             ),
+            retry_of=retry_of,
         )
 
     degraded_reason = errors if mode != "computed" else []

@@ -69,7 +69,12 @@ experiments/
 自作自演を避けるため、meta 生成と回答生成を異なるベンダーに分離。
 改善ループで Claude が meta を磨き、GPT が回答を磨く。
 
-**検証結果 (n=30)**: degraded 排除 100%, verdict 一致率 73.3%, ΔE 相関 ρ=0.80
+**検証結果 (n=102)**: degraded 排除 100%, verdict 一致率 61.8%, ΔE 相関 ρ=0.378 (p<0.001)
+
+手動メタ = 基準値（理想的な命題）、LLM メタ = 実践値（検出パイプラインで機能する命題）として並行運用。
+
+**敵対的 meta hack 実験 (n=30)**: C 軸は突破される (96.7%) が S 軸に 50% の確率で痕跡が残る。
+詳細: `docs/orchestration_design.md`
 
 設計詳細: `docs/orchestration_design.md`
 使用方法: `experiments/README.md`
@@ -288,15 +293,25 @@ python examples/basic_audit.py
 |---------|------|--------------|
 | Golden Store | リファレンスセット | `~/.ugh_audit/golden_store.json` |
 | Audit DB | 監査ログ | `~/.ugh_audit/audit.db` |
+| Meta Cache | LLM 生成メタキャッシュ | `~/.ugh_audit/meta_cache/` |
 | HA48 統合 CSV | 48件統合アノテーション | `data/human_annotation_48/annotation_48_merged.csv` |
+
+### audit_runs テーブル追加カラム
+
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| `metadata_source` | TEXT | `inline` / `llm_generated` / `none` |
+| `generated_meta` | TEXT | LLM 生成メタの JSON（llm_generated 時のみ） |
+| `hit_sources` | TEXT | 命題ごとの判定結果 JSON（`{"0": "tfidf", "1": "miss"}`） |
 
 ### 環境変数
 
 | 変数名 | 説明 | デフォルト |
 |--------|------|-----------|
 | `UGH_AUDIT_DB` | SQLite DB ファイルパス | `~/.ugh_audit/audit.db` |
-| `ANTHROPIC_API_KEY` | Claude API キー（実験基盤用） | なし |
+| `ANTHROPIC_API_KEY` | Claude API キー（LLM meta 生成 / 実験基盤用） | なし |
 | `OPENAI_API_KEY` | OpenAI API キー（GPT/Codex 回答生成用） | なし |
+| `UGH_META_CACHE_DIR` | LLM meta キャッシュディレクトリ | `~/.ugh_audit/meta_cache/` |
 
 読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` で書き込み可能パスを指定する。
 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` は `experiments/` の実行時のみ必要。
@@ -519,3 +534,6 @@ CI通過 = lint clean + 全テストpass (275 collected, 2 skipped: cascade SBer
 - cascade テスト (`tests/test_cascade_tier2.py`, `tests/test_cascade_tier3.py`) は SBert 未インストール環境で自動 skip
 - 否定極性マーカー (`_NEGATION_POLARITY_FORMS`) は全トークン2文字以上の具体形で定義（bare 1文字トークン禁止）
 - quality_score テストは `tests/test_pipeline_a.py` (15件: 計算検証, verdict閾値, API出力フォーマット)
+- verdict 判定は全系統 HA48 確定値 (ΔE ≤ 0.10 / 0.25) に統一済み。旧 bin ベース (0.02/0.12/0.35) は廃止
+- `engine/runtime.py` の `_POR_FIRE_THRESHOLD` / `_LEGACY_BIN*` はレガシー互換層。メインパイプラインでは未使用
+- 敵対的 meta hack 実験スクリプト: `experiments/adversarial_meta_hack.py`
