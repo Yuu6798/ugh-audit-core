@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); PROMPT=$(echo \"$INPUT\" | jq -r '.prompt // empty'); if echo \"$PROMPT\" | grep -qiE '今日は(ここまで|終わり|おわり)|セッション(終了|閉じ)|また(明日|今度)|お疲れ|done for today|that.s all|wrap-up'; then echo 'SESSION_END_DETECTED: /wrap-up を自動実行してください'; fi; exit 0"
+            "command": "INPUT=$(cat); PROMPT=$(echo \"$INPUT\" | jq -r '.prompt // empty'); if echo \"$PROMPT\" | grep -qiE '今日は(ここまで|終わり|おわり)|セッション(終了|閉じ)|また(明日|今度)|お疲れ|done for today|that.s all'; then echo 'SESSION_END_DETECTED: /wrap-up を自動実行してください'; fi; exit 0"
           }
         ]
       }
