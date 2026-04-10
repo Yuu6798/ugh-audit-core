@@ -102,7 +102,8 @@ analysis/             # 検証・分析スクリプト + 成果物
 | コンポーネント | ドキュメント |
 |---|---|
 | 検出層 (演算子フレーム + Relaxed Tier1) | [`docs/detector_design.md`](docs/detector_design.md) |
-| Cascade Matcher (SBert Tier 2/3) | [`docs/cascade_design.md`](docs/cascade_design.md) |
+| Cascade Matcher (SBert Tier 2/3 + 永続キャッシュ) | [`docs/cascade_design.md`](docs/cascade_design.md) |
+| GoldenStore リファレンス検索 (bigram + SBert rerank) | [`docs/golden_store.md`](docs/golden_store.md) |
 | 計算式 (PoR / ΔE / verdict / gate) | [`docs/formulas.md`](docs/formulas.md) |
 | 意味損失関数 L_sem | [`docs/semantic_loss.md`](docs/semantic_loss.md) |
 | LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
@@ -205,6 +206,7 @@ python examples/basic_audit.py
 | Golden Store | リファレンスセット | `~/.ugh_audit/golden_store.json` |
 | Audit DB | 監査ログ | `~/.ugh_audit/audit.db` |
 | Meta Cache | LLM 生成メタキャッシュ | `~/.ugh_audit/meta_cache/` |
+| Embedding Cache | SBert 永続埋め込み (`.npz`) | `~/.ugh_audit/embedding_cache.npz` |
 | HA48 統合 CSV | 48 件統合アノテーション | `data/human_annotation_48/annotation_48_merged.csv` |
 
 ### 環境変数
@@ -215,8 +217,11 @@ python examples/basic_audit.py
 | `ANTHROPIC_API_KEY` | Claude API キー（LLM meta 生成 / 実験基盤用） | なし |
 | `OPENAI_API_KEY` | OpenAI API キー（GPT/Codex 回答生成用） | なし |
 | `UGH_META_CACHE_DIR` | LLM meta キャッシュディレクトリ | `~/.ugh_audit/meta_cache/` |
+| `UGH_AUDIT_CACHE_DIR` | 埋め込みキャッシュディレクトリ | `~/.ugh_audit/` |
+| `UGH_AUDIT_EMBED_CACHE_DISABLE` | `1/true/yes` で埋め込みキャッシュ無効化 | 無効化しない |
 
-読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` で書き込み可能パスを指定する。
+読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` / `UGH_AUDIT_CACHE_DIR=/tmp/ugh_cache`
+で書き込み可能パスを指定する。
 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` は `experiments/` の実行時のみ必要。
 
 ## Key Thresholds（コア定数）
