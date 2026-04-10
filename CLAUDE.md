@@ -456,7 +456,7 @@ from ugh_audit import (
 
 ### Branches
 
-- `main` — 安定版。直接pushしない
+- `main` — 安定版。直接pushしない（例外: `.claude/memory/` の運用ログは直接commit可）
 - `claude/*` — 作業ブランチ
 
 ### Commit Messages
