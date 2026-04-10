@@ -1,8 +1,7 @@
-"""semantic_loss.py — 意味損失関数 L_sem (Phase 1)
+"""semantic_loss.py — 意味損失関数 L_sem (Phase 1+2)
 
-Evidence から L_P, L_Q, L_X を算出する薄いラッパー。
-Phase 2 で L_R (f4), L_A (f3) を連続値化して追加。
-Phase 3 で L_G (因果構造) を追加。
+Evidence から L_P, L_Q, L_X, L_R, L_A を算出する薄いラッパー。
+Phase 3 で L_G (因果構造) を追加予定。
 
 参照: docs/semantic_loss.md
 """
@@ -23,12 +22,12 @@ except ImportError:
 
 # --- デフォルト重み (Phase 4 で HA48+ から校正予定) ---
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "L_P": 0.40,
-    "L_Q": 0.15,
+    "L_P": 0.35,
+    "L_Q": 0.10,
     "L_R": 0.15,
-    "L_A": 0.00,
+    "L_A": 0.05,
     "L_G": 0.00,
-    "L_X": 0.30,
+    "L_X": 0.35,
 }
 
 
@@ -66,6 +65,26 @@ def _compute_L_Q(evidence: Evidence) -> float:
     f3 = 0.0 → 制約を適切に処理, 1.0 → 完全に未処理。
     """
     return _clamp(evidence.f3_operator)
+
+
+def _compute_L_R(evidence: Evidence) -> Optional[float]:
+    """L_R = f4_premise (前提受容 → 参照安定性損失)
+
+    f4 = 0.0 → 前提を適切に扱った, 0.5 → 部分的受容, 1.0 → 完全受容。
+    f4 = None → 未計算 (trap_type なし等)。
+    """
+    if evidence.f4_premise is None:
+        return None
+    return _clamp(evidence.f4_premise)
+
+
+def _compute_L_A(evidence: Evidence) -> float:
+    """L_A = f1_anchor (主題逸脱 → 曖昧性増大)
+
+    f1 = 0.0 → 主題に沿った回答, 0.5 → 部分逸脱, 1.0 → 完全逸脱。
+    主題逸脱は「何について回答しているか」の曖昧性を増大させる。
+    """
+    return _clamp(evidence.f1_anchor)
 
 
 def _compute_L_X(
@@ -119,10 +138,10 @@ def compute_semantic_loss(
     propositions: Optional[List[str]] = None,
     weights: Optional[Dict[str, float]] = None,
 ) -> SemanticLoss:
-    """Evidence から意味損失関数を算出する (Phase 1)
+    """Evidence から意味損失関数を算出する (Phase 1+2)
 
-    Phase 1 算出: L_P, L_Q, L_X
-    Phase 2 追加予定: L_R (f4→連続値), L_A (f3→連続値)
+    Phase 1: L_P, L_Q, L_X
+    Phase 2: L_R (f4 → 参照安定性), L_A (f1 → 曖昧性増大)
     Phase 3 追加予定: L_G (因果構造, grv 統合)
 
     Args:
@@ -135,10 +154,10 @@ def compute_semantic_loss(
     L_P = _compute_L_P(evidence)
     L_Q = _compute_L_Q(evidence)
     L_X = _compute_L_X(evidence, propositions)
+    L_R = _compute_L_R(evidence)
+    L_A = _compute_L_A(evidence)
 
-    # Phase 2/3 stubs
-    L_R: Optional[float] = None
-    L_A: Optional[float] = None
+    # Phase 3 stub
     L_G: Optional[float] = None
 
     components = {

@@ -1,4 +1,4 @@
-"""tests/test_semantic_loss.py — 意味損失関数のテスト (Phase 1)"""
+"""tests/test_semantic_loss.py — 意味損失関数のテスト (Phase 1+2)"""
 from __future__ import annotations
 
 import sys
@@ -112,63 +112,89 @@ class TestLX:
 
 
 # =========================================================
+# L_R (参照安定性損失)
+# =========================================================
+
+class TestLR:
+    def test_no_premise_loss(self):
+        assert compute_semantic_loss(_ev(f4_premise=0.0)).L_R == pytest.approx(0.0)
+
+    def test_full_premise_acceptance(self):
+        assert compute_semantic_loss(_ev(f4_premise=1.0)).L_R == pytest.approx(1.0)
+
+    def test_partial_premise_acceptance(self):
+        assert compute_semantic_loss(_ev(f4_premise=0.5)).L_R == pytest.approx(0.5)
+
+    def test_f4_none_returns_none(self):
+        loss = compute_semantic_loss(_ev(f4_premise=None))
+        assert loss.L_R is None
+
+
+# =========================================================
+# L_A (曖昧性増大損失)
+# =========================================================
+
+class TestLA:
+    def test_no_topic_drift(self):
+        assert compute_semantic_loss(_ev(f1_anchor=0.0)).L_A == pytest.approx(0.0)
+
+    def test_full_topic_drift(self):
+        assert compute_semantic_loss(_ev(f1_anchor=1.0)).L_A == pytest.approx(1.0)
+
+    def test_partial_topic_drift(self):
+        assert compute_semantic_loss(_ev(f1_anchor=0.5)).L_A == pytest.approx(0.5)
+
+
+# =========================================================
 # L_total (重み付き合計)
 # =========================================================
 
 class TestTotal:
-    def test_only_LQ_available(self):
-        """命題なし → L_P=None, L_X=None, L_Q のみ有効"""
-        loss = compute_semantic_loss(_ev(f3_operator=0.8, propositions_total=0))
-        # L_Q=0.8 のみ → L_total = 0.8
-        assert loss.L_total == pytest.approx(0.8)
-
-    def test_LP_and_LQ_normalized(self):
-        ev = _ev(propositions_hit=2, propositions_total=4, f3_operator=0.5)
+    def test_all_flags_zero(self):
+        """全 f-flag=0, 命題全 hit → L_total=0"""
+        ev = _ev(propositions_hit=3, propositions_total=3, f3_operator=0.0)
         loss = compute_semantic_loss(ev)
-        # L_P=0.5, L_Q=0.5, L_X=None → weights L_P=0.40, L_Q=0.15
-        w_sum = 0.40 + 0.15
-        expected = (0.40 / w_sum) * 0.5 + (0.15 / w_sum) * 0.5
+        assert loss.L_total == pytest.approx(0.0)
+
+    def test_degraded_no_propositions(self):
+        """命題なし, f4=None → L_P=None, L_X=None, L_R=None; L_Q, L_A のみ"""
+        loss = compute_semantic_loss(
+            _ev(f3_operator=0.8, f1_anchor=0.4, f4_premise=None, propositions_total=0)
+        )
+        # 有効: L_Q=0.8 (w=0.10), L_A=0.4 (w=0.05)
+        w_sum = 0.10 + 0.05
+        expected = (0.10 / w_sum) * 0.8 + (0.05 / w_sum) * 0.4
         assert loss.L_total == pytest.approx(expected, abs=1e-4)
 
-    def test_all_three_components(self):
+    def test_five_components(self):
+        """L_P, L_Q, L_R, L_A 全有効 (L_X=None, L_G=None)"""
         ev = _ev(
-            propositions_hit=1,
-            propositions_total=2,
-            f3_operator=0.0,
-            hit_ids=[0],
-            miss_ids=[1],
-            hit_sources={0: "tfidf", 1: "miss"},
+            propositions_hit=2, propositions_total=4,
+            f3_operator=0.5, f4_premise=0.5, f1_anchor=1.0,
         )
-        props = ["AIは便利である", "低ΔEは良い回答を保証しない"]
-        loss = compute_semantic_loss(ev, propositions=props)
-        # L_P=0.5, L_Q=0.0, L_X=0.5
-        w_sum = 0.40 + 0.15 + 0.30
-        expected = (0.40 / w_sum) * 0.5 + (0.15 / w_sum) * 0.0 + (0.30 / w_sum) * 0.5
+        loss = compute_semantic_loss(ev)
+        # L_P=0.5, L_Q=0.5, L_R=0.5, L_A=1.0, L_X=None, L_G=None
+        w_sum = 0.35 + 0.10 + 0.15 + 0.05
+        expected = (
+            (0.35 / w_sum) * 0.5
+            + (0.10 / w_sum) * 0.5
+            + (0.15 / w_sum) * 0.5
+            + (0.05 / w_sum) * 1.0
+        )
         assert loss.L_total == pytest.approx(expected, abs=1e-4)
 
     def test_custom_weights(self):
         ev = _ev(propositions_hit=1, propositions_total=2, f3_operator=0.0)
         custom = {"L_P": 1.0, "L_Q": 0.0, "L_R": 0.0, "L_A": 0.0, "L_G": 0.0, "L_X": 0.0}
         loss = compute_semantic_loss(ev, weights=custom)
-        # L_P=0.5, L_Q=0.0, L_X=None → weight L_P=1.0, L_Q=0.0 → total=0.5
         assert loss.L_total == pytest.approx(0.5)
 
-    def test_zero_loss(self):
-        ev = _ev(propositions_hit=3, propositions_total=3, f3_operator=0.0)
-        loss = compute_semantic_loss(ev)
-        assert loss.L_total == pytest.approx(0.0)
-
 
 # =========================================================
-# Phase 2/3 stubs
+# Phase 3 stub
 # =========================================================
 
-class TestPhaseStubs:
-    def test_phase2_stubs_are_none(self):
-        loss = compute_semantic_loss(_ev())
-        assert loss.L_R is None
-        assert loss.L_A is None
-
+class TestPhaseStub:
     def test_phase3_stub_is_none(self):
         loss = compute_semantic_loss(_ev())
         assert loss.L_G is None
