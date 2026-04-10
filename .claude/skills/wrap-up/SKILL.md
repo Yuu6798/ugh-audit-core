@@ -55,7 +55,7 @@
 5. **元のブランチに戻り、作業を復元する:**
    ```bash
    git checkout -                # 元のブランチに戻る
-   [ "$(git stash list | wc -l)" -gt "$STASH_COUNT" ] && git stash pop
+   [ "$(git stash list | wc -l)" -gt "$STASH_COUNT" ] && git stash pop --index
    ```
 
 6. **CLAUDE.md の更新が必要な場合:**
