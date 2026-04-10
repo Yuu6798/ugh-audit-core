@@ -15,9 +15,11 @@
 
 3. **main ブランチに切り替える:**
    ```bash
+   ORIG_BRANCH=$(git rev-parse --abbrev-ref HEAD)
    STASH_COUNT=$(git stash list | wc -l)
    git stash -u        # 未追跡ファイル含め全作業を退避
    git checkout main
+   git pull --rebase origin main   # リモートの先行分を取り込む
    ```
 
 4. **main 上でサマリーファイルを作成・コミット・push する:**
@@ -54,7 +56,7 @@
 
 5. **元のブランチに戻り、作業を復元する:**
    ```bash
-   git checkout -                # 元のブランチに戻る
+   git checkout "$ORIG_BRANCH"   # 記録しておいた元のブランチに戻る
    [ "$(git stash list | wc -l)" -gt "$STASH_COUNT" ] && git stash pop --index
    ```
 
