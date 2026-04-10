@@ -8,9 +8,8 @@ detector.py の既存ロジックは一切変更しない。
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional
-
-import numpy as np
+from math import sqrt
+from typing import Any, Dict, List, Optional, Sequence
 
 # --- SBert optional import ---
 try:
@@ -54,7 +53,7 @@ def encode_texts(
     model: SentenceTransformer,
     texts: List[str],
     batch_size: int = 64,
-) -> np.ndarray:
+) -> List[List[float]]:
     """テキストリストを batch encoding する。
 
     Args:
@@ -63,9 +62,10 @@ def encode_texts(
         batch_size: バッチサイズ。
 
     Returns:
-        (N, D) の numpy 配列。各行が1テキストの embedding。
+        (N, D) 形状の2次元ベクトル配列。各行が1テキストの embedding。
     """
-    return model.encode(texts, batch_size=batch_size, convert_to_numpy=True)
+    vectors = model.encode(texts, batch_size=batch_size, convert_to_numpy=False)
+    return [list(v) for v in vectors]
 
 
 def split_response(response: str) -> List[str]:
@@ -205,7 +205,7 @@ def tier2_candidate(
     scores = _cosine_similarity_batch(prop_emb, seg_embs)
 
     # Sort descending
-    sorted_indices = np.argsort(scores)[::-1]
+    sorted_indices = sorted(range(len(scores)), key=lambda idx: scores[idx], reverse=True)
     top1_idx = sorted_indices[0]
     top1_score = float(scores[top1_idx])
     top1_sentence = segments[top1_idx]
@@ -230,11 +230,26 @@ def tier2_candidate(
     }
 
 
-def _cosine_similarity_batch(query: np.ndarray, targets: np.ndarray) -> np.ndarray:
+def _cosine_similarity_batch(query: Sequence[float], targets: Sequence[Sequence[float]]) -> List[float]:
     """query (D,) と targets (N, D) のコサイン類似度を計算。"""
-    query_norm = query / (np.linalg.norm(query) + 1e-10)
-    targets_norm = targets / (np.linalg.norm(targets, axis=1, keepdims=True) + 1e-10)
-    return targets_norm @ query_norm
+    q_norm = _l2_norm(query)
+    if q_norm == 0.0:
+        return [0.0 for _ in targets]
+    query_norm = [v / q_norm for v in query]
+
+    scores: List[float] = []
+    for target in targets:
+        t_norm = _l2_norm(target)
+        if t_norm == 0.0:
+            scores.append(0.0)
+            continue
+        dot = sum((tv / t_norm) * qv for tv, qv in zip(target, query_norm))
+        scores.append(dot)
+    return scores
+
+
+def _l2_norm(values: Sequence[float]) -> float:
+    return sqrt(sum(v * v for v in values)) + 1e-10
 
 
 # ============================================================

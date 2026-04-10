@@ -10,16 +10,36 @@ import os
 from pathlib import Path
 from typing import Dict, List
 
-import yaml
+try:
+    import yaml
+except ImportError:  # pragma: no cover - fallback for minimal test env
+    yaml = None
 
 from ugh_calculator import Evidence, State
 
 # --- opcodes のロード ---
 _OPCODES_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "opcodes"
+_OPCODES_FALLBACK = {
+    "PRESERVE_TERM": {"cost": 1},
+    "BLOCK_REINTERPRETATION": {"cost": 1},
+    "QUESTION_PREMISE": {"cost": 2},
+    "ADD_PROPOSITION": {"cost": 2},
+    "QUALIFY_UNIVERSAL": {"cost": 1},
+    "EXAMINE_SCOPE": {"cost": 1},
+    "EXAMINE_PREMISE": {"cost": 2},
+    "RESTORE_ANCHOR": {"cost": 1},
+    "CHALLENGE_BINARY": {"cost": 2},
+    "EXPAND_ALTERNATIVES": {"cost": 2},
+    "REMOVE_BOILERPLATE": {"cost": 1},
+    "DEEPEN_RESPONSE": {"cost": 3},
+    "STOP_REWRITE": {"cost": 0},
+}
 
 
 def _load_opcodes() -> Dict[str, dict]:
     """runtime_repair_opcodes.yaml をロードする"""
+    if yaml is None:
+        return dict(_OPCODES_FALLBACK)
     path = _OPCODES_DIR / "runtime_repair_opcodes.yaml"
     with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f)

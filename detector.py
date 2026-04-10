@@ -7,12 +7,16 @@
 from __future__ import annotations
 
 import logging
+import json
 import os
 import re
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
-import yaml
+try:
+    import yaml
+except ImportError:  # pragma: no cover - fallback path is exercised in minimal envs
+    yaml = None
 
 from ugh_calculator import Evidence, _compute_delta_e, _compute_s
 
@@ -163,13 +167,102 @@ def detect_operator(proposition: str) -> Optional[OperatorInfo]:
 
 # --- YAML辞書のロード ---
 _REGISTRY_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "registry"
+_YAML_FALLBACKS: Dict[str, dict] = {
+    "reserved_terms.yaml": {
+        "terms": [
+            {
+                "term": "UGHer",
+                "canonical": "UGHer",
+                "aliases": ["UGH", "無意識的重力仮説"],
+                "forbidden_reinterpretations": [
+                    {"surface": "User-Generated", "note": "UGHerをUser-Generated系略語に展開"},
+                    {"surface": "Univalent Goodness", "note": "UGHerを架空の概念に展開"},
+                    {"surface": "Universal Gravity", "note": "物理学の万有引力と混同"},
+                ],
+            },
+            {
+                "term": "PoR",
+                "canonical": "PoR",
+                "aliases": ["Point of Resonance", "共鳴点", "意味的共鳴度"],
+                "forbidden_reinterpretations": [
+                    {"surface": "Probability of Relevance", "note": "情報検索のPoRと混同"},
+                    {"surface": "Proof of Reserve", "note": "暗号通貨のPoRと混同"},
+                    {"surface": "Proof of Reserves", "note": "暗号通貨のPoRと混同"},
+                    {"surface": "Precision of Recall", "note": "機械学習指標と混同"},
+                    {"surface": "Pointwise Mutual", "note": "PMI系指標と混同"},
+                ],
+            },
+            {
+                "term": "ΔE",
+                "canonical": "ΔE",
+                "aliases": ["Delta E", "デルタE", "意味ズレ量", "delta_e"],
+                "forbidden_reinterpretations": [
+                    {"surface": "色差", "note": "CIE色差のΔEと混同"},
+                    {"surface": "エネルギー差", "note": "物理学のエネルギー差と混同"},
+                ],
+            },
+            {
+                "term": "grv",
+                "canonical": "grv",
+                "aliases": ["語彙重力", "Gravity", "語彙重力分布"],
+                "forbidden_reinterpretations": [
+                    {"surface": "gravitational", "note": "物理学の重力と混同"},
+                    {"surface": "TF-IDF", "note": "grvを一般的なTF-IDFと同一視"},
+                ],
+            },
+            {
+                "term": "RPE",
+                "canonical": "RPE",
+                "aliases": ["逆位相推定", "Reverse Phase Estimation"],
+                "forbidden_reinterpretations": [
+                    {"surface": "Reward Prediction Error", "note": "強化学習のRPEと混同"},
+                    {"surface": "Retinal Pigment", "note": "医学用語と混同"},
+                ],
+            },
+            {
+                "term": "SVP",
+                "canonical": "SVP",
+                "aliases": ["意味価位相", "Semantic Valence Phase"],
+                "forbidden_reinterpretations": [
+                    {"surface": "Singular Value", "note": "SVDのSVPと混同"},
+                    {"surface": "Senior Vice President", "note": "役職名と混同"},
+                ],
+            },
+            {
+                "term": "意味位相空間",
+                "canonical": "意味位相空間",
+                "aliases": ["semantic phase space"],
+                "forbidden_reinterpretations": [
+                    {"surface": "トポロジカル空間", "note": "数学のトポロジカル空間概念と混同"},
+                    {"surface": "topological space", "note": "数学の位相空間概念と混同"},
+                ],
+            },
+        ]
+    },
+    "operator_catalog.yaml": {"operators": []},
+    "premise_frames.yaml": {
+        "frames": {
+            "binary_reduction": {"detection_hint": {"question_patterns": ["〜か？", "〜か否か", "〜べきか"]}},
+            "metric_omnipotence": {"detection_hint": {"question_patterns": ["〜だけで", "〜さえ", "〜が高ければ", "〜が低ければ"]}},
+            "premise_acceptance": {"detection_hint": {"question_patterns": ["〜は〜だ", "〜ため", "〜である以上", "〜という前提", "〜として"]}},
+            "scope_deflection": {"detection_hint": {"question_patterns": ["具体的に", "特に", "特定の"]}},
+            "authority_appeal": {"detection_hint": {"question_patterns": ["〜によれば", "〜が言っている", "専門家", "研究者"]}},
+            "safety_boilerplate": {"detection_hint": {"question_patterns": []}},
+            "relativism_drift": {"detection_hint": {"question_patterns": ["〜は正しいか", "〜は間違いか"]}},
+        }
+    },
+}
 
 
 def _load_yaml(filename: str) -> dict:
     """registry/ 配下のYAMLファイルをロードする"""
     path = _REGISTRY_DIR / filename
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    if yaml is not None:
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    if filename in _YAML_FALLBACKS:
+        return json.loads(json.dumps(_YAML_FALLBACKS[filename]))
+    raise ImportError(f"PyYAML is required to load {filename}")
 
 
 def _load_reserved_terms() -> List[dict]:
