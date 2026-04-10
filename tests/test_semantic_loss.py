@@ -74,6 +74,7 @@ class TestLX:
         assert loss.L_X is None
 
     def test_miss_with_polarity_flip(self):
+        """polarity-bearing 命題が 1 件、それを miss → L_X = 1/1 = 1.0"""
         ev = _ev(
             propositions_hit=1,
             propositions_total=2,
@@ -83,10 +84,11 @@ class TestLX:
         )
         props = ["AIは便利である", "低ΔEは良い回答を保証しない"]
         loss = compute_semantic_loss(ev, propositions=props)
-        # idx=1 "保証しない" → negation family (polarity_flip) → 1 miss / 2 total
-        assert loss.L_X == pytest.approx(0.5)
+        # polarity-bearing: {1}, misses: {1} → 1/1 = 1.0
+        assert loss.L_X == pytest.approx(1.0)
 
-    def test_miss_without_polarity_flip(self):
+    def test_no_polarity_bearing_returns_none(self):
+        """polarity-bearing 命題が 0 件 → degraded (None)"""
         ev = _ev(
             propositions_hit=1,
             propositions_total=2,
@@ -96,9 +98,10 @@ class TestLX:
         )
         props = ["AIは便利である", "技術は進歩している"]
         loss = compute_semantic_loss(ev, propositions=props)
-        assert loss.L_X == pytest.approx(0.0)
+        assert loss.L_X is None
 
-    def test_all_hit_no_polarity_loss(self):
+    def test_polarity_bearing_all_hit(self):
+        """polarity-bearing 命題を全て hit → L_X = 0"""
         ev = _ev(
             propositions_hit=2,
             propositions_total=2,
@@ -108,7 +111,55 @@ class TestLX:
         )
         props = ["保証しない理由がある", "限界は存在する"]
         loss = compute_semantic_loss(ev, propositions=props)
+        # polarity-bearing: {0} ("保証しない"), misses: {} → 0/1 = 0.0
         assert loss.L_X == pytest.approx(0.0)
+
+    def test_negative_deontic_counted(self):
+        """否定 deontic (べきではない) が polarity-bearing として扱われる (P1 fix)"""
+        ev = _ev(
+            propositions_hit=0,
+            propositions_total=1,
+            hit_ids=[],
+            miss_ids=[0],
+            hit_sources={0: "miss"},
+        )
+        props = ["AIは完全に信頼すべきではない"]
+        loss = compute_semantic_loss(ev, propositions=props)
+        # "べきではない" は deontic family だが negative deontic なので
+        # polarity-bearing → 1/1 = 1.0
+        assert loss.L_X == pytest.approx(1.0)
+
+    def test_divisor_is_polarity_subset(self):
+        """divisor は命題総数ではなく polarity-bearing 部分集合 (P1 fix)
+
+        10 命題中 1 件のみ polarity-bearing で、それを miss した場合、
+        旧実装: 1/10 = 0.1 (信号希釈)
+        新実装: 1/1 = 1.0 (完全な極性失敗)
+        """
+        ev = _ev(
+            propositions_hit=9,
+            propositions_total=10,
+            hit_ids=list(range(9)),
+            miss_ids=[9],
+            hit_sources={i: "tfidf" for i in range(9)} | {9: "miss"},
+        )
+        props = [f"命題{i}" for i in range(9)] + ["これは保証しない"]
+        loss = compute_semantic_loss(ev, propositions=props)
+        assert loss.L_X == pytest.approx(1.0)
+
+    def test_partial_polarity_coverage(self):
+        """polarity-bearing 2 件中 1 件 miss → L_X = 0.5"""
+        ev = _ev(
+            propositions_hit=1,
+            propositions_total=2,
+            hit_ids=[0],
+            miss_ids=[1],
+            hit_sources={0: "tfidf", 1: "miss"},
+        )
+        # 両方 polarity-bearing
+        props = ["AIはできない", "人間を保証しない"]
+        loss = compute_semantic_loss(ev, propositions=props)
+        assert loss.L_X == pytest.approx(0.5)
 
 
 # =========================================================

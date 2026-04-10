@@ -17,11 +17,17 @@ from typing import Dict, List, Optional, Tuple
 from ugh_calculator import Evidence
 
 # --- オプショナル依存: detector (L_X 算出に使用) ---
+# fail-fast: detector モジュール自体が見つからない場合のみフォールバックし、
+# detector の transitive 依存エラー (yaml 未インストール等) は再送出する。
+# これにより L_X が沈黙して L_total が誤って良化することを防ぐ。
 try:
     from detector import detect_operator, OPERATOR_CATALOG
     _HAS_DETECTOR = True
-except ImportError:
-    _HAS_DETECTOR = False
+except ModuleNotFoundError as _err:
+    if _err.name == "detector":
+        _HAS_DETECTOR = False
+    else:
+        raise
 
 
 # --- デフォルト重み (Phase 4: HA48 校正済み) ---
@@ -106,31 +112,60 @@ def _compute_L_F(evidence: Evidence) -> float:
     return _clamp(evidence.f2_unknown)
 
 
+# 否定 deontic の検出用トークン
+# 「べきではない」等は detect_operator では deontic family (priority 1) に
+# 解決されるが、極性反転の実質を持つため L_X に含める必要がある。
+# detector.py の needs_polarity_full ロジックと整合。
+_NEG_DEONTIC_TOKENS = ("べきではない", "すべきではない")
+
+
+def _is_polarity_bearing(proposition: str) -> bool:
+    """命題が polarity-bearing (極性反転の対象) かどうかを判定する
+
+    対象:
+    1. negation 族 (effect == "polarity_flip") の演算子を含む
+    2. 否定 deontic ("べきではない" 等) を含む — detector の needs_polarity_full と同じ扱い
+    """
+    if not _HAS_DETECTOR:
+        return False
+    op = detect_operator(proposition)
+    if op is not None and OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip":
+        return True
+    return any(tok in proposition for tok in _NEG_DEONTIC_TOKENS)
+
+
 def _compute_L_X(
     evidence: Evidence,
     propositions: Optional[List[str]],
 ) -> Optional[float]:
-    """L_X = polarity_flip 命題の miss 率
+    """L_X = 極性反転損失 (polarity-bearing 命題の miss 率)
 
-    各 miss 命題に detect_operator() を適用し、
-    effect == "polarity_flip" の命題が miss された割合を返す。
-    命題テキストが未提供の場合は None。
+    L_X = |polarity-bearing ∩ miss| / |polarity-bearing|
+
+    polarity-bearing 命題 = negation 族 (polarity_flip) または否定 deontic を含む命題。
+    detector の needs_polarity_full ロジックと整合する。
+
+    命題テキストが未提供、または polarity-bearing 命題が 1 件もない場合は None (degraded)。
+    全体の命題数で割る旧実装と異なり、polarity 信号が薄められないよう
+    polarity-bearing 部分集合のみで正規化する。
     """
     if evidence.propositions_total == 0 or not propositions:
         return None
     if not _HAS_DETECTOR:
         return None
 
-    polarity_misses = 0
-    for idx in evidence.miss_ids:
-        if idx < len(propositions):
-            op = detect_operator(propositions[idx])
-            if (
-                op is not None
-                and OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip"
-            ):
-                polarity_misses += 1
-    return _clamp(polarity_misses / evidence.propositions_total)
+    # polarity-bearing 命題を先に列挙
+    polarity_indices = {
+        idx for idx in range(min(len(propositions), evidence.propositions_total))
+        if _is_polarity_bearing(propositions[idx])
+    }
+    if not polarity_indices:
+        # 極性制約が存在しない → degraded (undefined)
+        return None
+
+    miss_set = set(evidence.miss_ids)
+    polarity_misses = len(polarity_indices & miss_set)
+    return _clamp(polarity_misses / len(polarity_indices))
 
 
 def _compute_L_G(grv: Optional[float]) -> Optional[float]:

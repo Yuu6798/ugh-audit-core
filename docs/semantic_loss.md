@@ -74,11 +74,16 @@ $\mathrm{stable}(r;\, s, t, c) \in [0, 1]$ は参照 $r$ の安定度。
 #### $L_G$ — 因果構造損失
 
 $$
-L_G = \frac{\mathrm{GED}(G_s, G_t)}{\max\{1,\; |V_s| + |E_s|\}}
+L_G = \frac{\mathrm{GED}(G_s, G_t)}{\max\{1,\; |V_s| + |E_s|,\; |V_t| + |E_t|\}}
 $$
 
 因果・依存グラフの編集距離（Graph Edit Distance）。
-正規化により $[0, 1]$ に収まる。
+分母は source/target 両グラフのサイズの最大値を取り、
+target が node/edge を追加した場合も含めて $L_G \in [0, 1]$ を保証する。
+
+※ 現行実装 (Phase 3) では GED ではなく grv (`compute_grv()`) を使用しており、
+grv は定義上 $[0, 1]$ にクランプされるため、この正規化問題は生じない。
+将来 GED ベースの実装に切り替える場合に上記分母を適用する。
 
 #### $L_A$ — 曖昧性増大損失
 
@@ -92,11 +97,28 @@ $[\cdot]_+$ は正の部分関数（ReLU）、$Z_A$ は正規化定数。
 #### $L_X$ — 極性反転損失
 
 $$
-L_X = \frac{1}{|Q_s|} \sum_{q \in Q_s}
+L_X = \begin{cases}
+\dfrac{1}{|Q_s^{\text{pol}}|} \displaystyle\sum_{q \in Q_s^{\text{pol}}}
 \mathbf{1}\!\left[\mathrm{pol}(q) \neq \mathrm{pol}(\hat{q}_t)\right]
+& |Q_s^{\text{pol}}| > 0 \\[1.2em]
+\text{undefined (degraded)} & |Q_s^{\text{pol}}| = 0
+\end{cases}
 $$
 
-制約の極性が反転した割合。
+$Q_s^{\text{pol}} \subseteq Q_s$ は **polarity-bearing 制約** (極性反転の対象) の部分集合。
+具体的には以下のいずれかを含む命題:
+
+1. **negation 族演算子** (effect = `polarity_flip`): 「〜しない」「〜できない」等
+2. **否定 deontic**: 「〜べきではない」「〜すべきではない」等
+
+**empty case の扱い**: $|Q_s^{\text{pol}}| = 0$ (極性制約を持つ命題が存在しない) の場合、
+$L_X$ は未定義 (degraded) とし、$L_{\text{sem}}$ の重み付き合計では当該項を除外する。
+これにより 0/0 の除算および polarity 信号が希釈される問題を回避する。
+
+**正規化分母の選択**: 命題総数 $|P_s|$ ではなく polarity-bearing 部分集合 $|Q_s^{\text{pol}}|$
+で割る理由 — 10 命題中 1 件のみ極性制約を持つ場合に、それを miss しても
+$L_X = 0.1$ となり信号が薄まるため。部分集合で正規化することで極性エラーが
+本来の重みで $L_{\text{sem}}$ に反映される。
 
 ## 派生量
 
