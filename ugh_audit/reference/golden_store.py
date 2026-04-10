@@ -319,10 +319,18 @@ class GoldenStore:
         question: str,
         candidates: List[Tuple[float, GoldenEntry]],
     ) -> Optional[List[Tuple[float, GoldenEntry]]]:
-        """候補を SBert で再スコアする。モデル利用不可なら None を返す。"""
+        """候補を SBert で再スコアする。モデル利用不可なら None を返す。
+
+        エンコード方針（Codex review #60 r3067133071 対応）:
+        - ``question`` はユーザー入力のクエリで one-off なので ``encode_texts``
+          を直接呼び、永続キャッシュを汚染しない
+        - ``entry.question`` は GoldenStore のリファレンスで再利用性が高いので
+          ``encode_texts_cached`` 経由でキャッシュする
+        """
         try:
             from cascade_matcher import (
                 _cosine_similarity_batch,
+                encode_texts,
                 encode_texts_cached,
                 get_shared_model,
             )
@@ -334,11 +342,13 @@ class GoldenStore:
             return None
 
         try:
-            texts = [question] + [entry.question for _, entry in candidates]
+            # query は one-off → cache bypass
+            query_emb = encode_texts(model, [question])[0]
+            # entry.question は reusable → cache 経由
             # model_name は auto-infer に委ねる（モデル差し替え時のキャッシュ混線防止）
-            embeddings = encode_texts_cached(model, texts)
-            query_emb = embeddings[0]
-            target_embs = embeddings[1:]
+            target_embs = encode_texts_cached(
+                model, [entry.question for _, entry in candidates]
+            )
             scores = _cosine_similarity_batch(query_emb, target_embs)
         except Exception as e:  # noqa: BLE001
             _logger.warning("GoldenStore SBert rerank failed: %s", e)

@@ -58,6 +58,16 @@ jaccard(q, e) = |bigrams(q) ∩ bigrams(e)| / |bigrams(q) ∪ bigrams(e)|
 SBert インスタンスを使って各候補の `entry.question` と query の cosine
 similarity を計算し、候補を再ランキングする。
 
+**エンコードのキャッシュ方針** (Codex review #60 r3067133071 対応):
+
+- `question` (ユーザークエリ): one-off なので `encode_texts()` で直接
+  エンコードし、永続キャッシュを汚染しない
+- `entry.question` (リファレンス): 再利用性が高いため
+  `encode_texts_cached()` 経由でキャッシュする
+
+この分離により、多様なクエリに対して呼ばれても cache サイズは
+GoldenStore のエントリ数で頭打ちとなる。
+
 再ランキング後、以下の gap 条件で top1 を採用するかを決める:
 
 | 条件 | 閾値 | 由来 |

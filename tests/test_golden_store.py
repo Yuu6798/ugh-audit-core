@@ -80,6 +80,9 @@ def scripted_rerank(monkeypatch):
 
     caller は `set_vectors({text: np.ndarray, ...})` を呼んで
     「この質問テキスト → このベクトル」という固定マッピングを登録する。
+
+    `encode_texts`（query 用、cache bypass）と `encode_texts_cached`
+    （entry.question 用、cache 経由）の両方をスタブする。
     """
     vector_map: dict[str, np.ndarray] = {}
 
@@ -92,7 +95,7 @@ def scripted_rerank(monkeypatch):
     def _fake_get_shared_model():
         return fake_model
 
-    def _fake_encode_texts_cached(model, texts, model_name=None, batch_size=64):
+    def _fake_lookup(texts):
         out = []
         for t in texts:
             if t not in vector_map:
@@ -100,7 +103,14 @@ def scripted_rerank(monkeypatch):
             out.append(vector_map[t])
         return np.stack(out).astype(np.float32)
 
+    def _fake_encode_texts(model, texts, batch_size=64):
+        return _fake_lookup(texts)
+
+    def _fake_encode_texts_cached(model, texts, model_name=None, batch_size=64):
+        return _fake_lookup(texts)
+
     monkeypatch.setattr(cascade_matcher, "get_shared_model", _fake_get_shared_model)
+    monkeypatch.setattr(cascade_matcher, "encode_texts", _fake_encode_texts)
     monkeypatch.setattr(
         cascade_matcher, "encode_texts_cached", _fake_encode_texts_cached
     )
@@ -290,3 +300,98 @@ def test_bigram_candidates_respects_top_k(tmp_path):
     # スコア降順で並んでいる
     scores = [c[0] for c in candidates]
     assert scores == sorted(scores, reverse=True)
+
+
+# ============================================================
+# Codex review r3067133071 対応:
+# _sbert_rerank は entry.question のみキャッシュし、query は bypass
+# ============================================================
+
+
+class _RerankFakeModel:
+    """cascade_matcher の _infer_model_id から identity を拾える最小 fake。"""
+
+    def __init__(self, identity: str) -> None:
+        self.calls: list[list[str]] = []
+
+        class _Config:
+            _name_or_path = identity
+
+        class _AutoModel:
+            config = _Config()
+
+        class _FirstModule:
+            auto_model = _AutoModel()
+
+        self._first = _FirstModule()
+
+    def _first_module(self):
+        return self._first
+
+    def encode(self, texts, batch_size=64, convert_to_numpy=True):
+        self.calls.append(list(texts))
+        # 各テキストを決定的な 8 次元ベクトルに写像
+        out = np.zeros((len(texts), 8), dtype=np.float32)
+        for i, t in enumerate(texts):
+            rng = np.random.default_rng(abs(hash(t)) % (2**31))
+            out[i] = rng.standard_normal(8).astype(np.float32)
+        return out
+
+
+def test_sbert_rerank_does_not_cache_user_query(tmp_path, monkeypatch):
+    """find_reference が呼ばれても、ユーザークエリ自体は cache に入らない。
+
+    entry.question（リファレンス）は cache に入る。
+    Codex review r3067133071 の回帰テスト。
+    """
+    import cascade_matcher
+
+    # キャッシュを隔離
+    cache_path = tmp_path / "embedding_cache.npz"
+    monkeypatch.setattr(cascade_matcher, "_EMBED_CACHE_PATH", cache_path)
+    monkeypatch.setattr(cascade_matcher, "_CACHE_DISABLED", False)
+    cascade_matcher.clear_embedding_cache()
+
+    # 本物の SBert ではなく fake をシングルトンとして差し込む
+    fake = _RerankFakeModel(identity="rerank-test-model")
+    monkeypatch.setattr(cascade_matcher, "get_shared_model", lambda: fake)
+
+    store = _empty_store(tmp_path)
+    store.add("a", GoldenEntry(
+        question="PoRとは何か",
+        reference="ref_A",
+        source="test",
+    ))
+    store.add("b", GoldenEntry(
+        question="PoRの定義",
+        reference="ref_B",
+        source="test",
+    ))
+
+    unique_query = "PoRなる何か"
+    # 2 件候補が取れて Stage 3 が走るクエリ
+    store.find_reference(unique_query)
+
+    # query 自体は cache に入っていない
+    query_key = cascade_matcher._make_cache_key(
+        unique_query, "rerank-test-model"
+    )
+    assert query_key not in cascade_matcher._embedding_cache
+
+    # entry.question は cache に入っている
+    entry_a_key = cascade_matcher._make_cache_key(
+        "PoRとは何か", "rerank-test-model"
+    )
+    entry_b_key = cascade_matcher._make_cache_key(
+        "PoRの定義", "rerank-test-model"
+    )
+    assert entry_a_key in cascade_matcher._embedding_cache
+    assert entry_b_key in cascade_matcher._embedding_cache
+
+    # 別のユニーククエリで再呼び出ししても cache サイズは増えない
+    # （entry は既に cache hit、query は bypass）
+    initial_cache_size = len(cascade_matcher._embedding_cache)
+    store.find_reference("PoRあれこれ疑問")
+    assert len(cascade_matcher._embedding_cache) == initial_cache_size
+
+    cascade_matcher.clear_embedding_cache()
