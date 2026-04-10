@@ -16,6 +16,7 @@
 3. **main ブランチに切り替える:**
    ```bash
    ORIG_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+   [ "$ORIG_BRANCH" = "HEAD" ] && ORIG_BRANCH=$(git rev-parse HEAD)  # detached HEAD 対応
    STASH_COUNT=$(git stash list | wc -l)
    git stash -u        # 未追跡ファイル含め全作業を退避
    git checkout main
