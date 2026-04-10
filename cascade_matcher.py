@@ -7,7 +7,12 @@ detector.py の既存ロジックは一切変更しない。
 """
 from __future__ import annotations
 
+import atexit
+import hashlib
+import logging
+import os
 import re
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -19,6 +24,8 @@ try:
 except ImportError:
     _HAS_SBERT = False
 
+_logger = logging.getLogger(__name__)
+
 # --- パラメータ ---
 THETA_SBERT: float = 0.50   # cosine similarity 閾値（dev_cascade_20 で校正済み）
 DELTA_GAP: float = 0.04     # top1 - top2 ギャップ閾値（dev_cascade_20 で校正済み）
@@ -28,6 +35,131 @@ MODEL_NAME: str = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # 括弧保護用プレースホルダ
 _PAREN_PLACEHOLDER = "\x00PERIOD\x00"
+
+# ============================================================
+# 永続埋め込みキャッシュ
+# ============================================================
+#
+# 同一テキスト・同一モデルの embedding 再計算を避けるための永続キャッシュ。
+# HA48 反復評価や GoldenStore 再スコアのように同じリファレンスを繰り返し
+# エンコードするワークロードで体感的な高速化が見込める。
+#
+# 設計方針:
+#   - キーは sha256(model_name || '\x00' || text) の先頭 24hex 文字
+#     （96bit、衝突確率は本プロジェクト規模では実質ゼロ）
+#   - .npz 形式で永続化。キーは単一 hex 文字列で np.savez の制約を満たす
+#   - プロセス終了時に atexit で save（書き込み頻度を抑える）
+#   - UGH_AUDIT_EMBED_CACHE_DISABLE=1 で無効化可能
+#   - UGH_AUDIT_CACHE_DIR 環境変数でディレクトリ変更可能
+
+_DEFAULT_CACHE_DIR = Path(
+    os.environ.get("UGH_AUDIT_CACHE_DIR", str(Path.home() / ".ugh_audit"))
+)
+_EMBED_CACHE_PATH = _DEFAULT_CACHE_DIR / "embedding_cache.npz"
+_CACHE_DISABLED = os.environ.get("UGH_AUDIT_EMBED_CACHE_DISABLE", "").lower() in (
+    "1", "true", "yes", "on"
+)
+
+_embedding_cache: Dict[str, np.ndarray] = {}
+_cache_loaded: bool = False
+_cache_dirty: bool = False
+
+
+def _make_cache_key(text: str, model_name: str) -> str:
+    """テキスト + モデル名から衝突確率の低いキャッシュキーを生成する。"""
+    combined = f"{model_name}\x00{text}".encode("utf-8")
+    return hashlib.sha256(combined).hexdigest()[:24]
+
+
+def _load_embedding_cache() -> None:
+    """ディスク上の永続キャッシュを初回アクセス時に読み込む。"""
+    global _cache_loaded, _embedding_cache
+    if _cache_loaded or _CACHE_DISABLED:
+        _cache_loaded = True
+        return
+    _cache_loaded = True
+    try:
+        if _EMBED_CACHE_PATH.exists():
+            with np.load(_EMBED_CACHE_PATH) as npz:
+                _embedding_cache = {k: npz[k] for k in npz.files}
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("embedding cache load failed (starting empty): %s", e)
+        _embedding_cache = {}
+
+
+def _save_embedding_cache() -> None:
+    """ダーティな永続キャッシュをディスクへ書き出す（atomic write）。"""
+    global _cache_dirty
+    if _CACHE_DISABLED or not _cache_dirty or not _embedding_cache:
+        return
+    try:
+        _EMBED_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = _EMBED_CACHE_PATH.with_name(_EMBED_CACHE_PATH.name + ".tmp")
+        # np.savez は file-like に対しては拡張子を追加しないため、
+        # 開いたバイナリハンドルを渡すことで衝突の無い atomic write を実現する。
+        with open(tmp_path, "wb") as fh:
+            np.savez(fh, **_embedding_cache)
+        tmp_path.replace(_EMBED_CACHE_PATH)
+        _cache_dirty = False
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("embedding cache save failed: %s", e)
+
+
+def clear_embedding_cache() -> None:
+    """メモリ上のキャッシュをクリアする（テスト用）。ディスクは触らない。"""
+    global _embedding_cache, _cache_loaded, _cache_dirty
+    _embedding_cache = {}
+    _cache_loaded = False
+    _cache_dirty = False
+
+
+def flush_embedding_cache() -> None:
+    """現時点のキャッシュを即座にディスクへ永続化する。"""
+    global _cache_dirty
+    _cache_dirty = True
+    _save_embedding_cache()
+
+
+def embedding_cache_stats() -> Dict[str, int]:
+    """キャッシュの状態を返す（テスト / 診断用）。"""
+    return {
+        "entries": len(_embedding_cache),
+        "loaded": int(_cache_loaded),
+        "dirty": int(_cache_dirty),
+        "disabled": int(_CACHE_DISABLED),
+    }
+
+
+atexit.register(_save_embedding_cache)
+
+
+# ============================================================
+# 共有モデルシングルトン
+# ============================================================
+
+_shared_model: Optional["SentenceTransformer"] = None
+_shared_load_attempted: bool = False
+
+
+def get_shared_model() -> Optional["SentenceTransformer"]:
+    """プロセス内で共有される SBert モデルを返す。
+
+    detector.py, golden_store.py など複数箇所から呼ばれる想定。
+    初回ロードに失敗した場合は以降 None を返し再試行しない。
+    sentence-transformers 未導入時も None を返す。
+    """
+    global _shared_model, _shared_load_attempted
+    if _shared_model is not None:
+        return _shared_model
+    if _shared_load_attempted or not _HAS_SBERT:
+        return None
+    _shared_load_attempted = True
+    try:
+        _shared_model = load_model()
+        return _shared_model
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("shared SBert model load failed: %s", e)
+        return None
 
 
 def load_model(model_name: str = MODEL_NAME) -> SentenceTransformer:
@@ -55,7 +187,7 @@ def encode_texts(
     texts: List[str],
     batch_size: int = 64,
 ) -> np.ndarray:
-    """テキストリストを batch encoding する。
+    """テキストリストを batch encoding する（キャッシュ非経由）。
 
     Args:
         model: SentenceTransformer インスタンス。
@@ -66,6 +198,52 @@ def encode_texts(
         (N, D) の numpy 配列。各行が1テキストの embedding。
     """
     return model.encode(texts, batch_size=batch_size, convert_to_numpy=True)
+
+
+def encode_texts_cached(
+    model: SentenceTransformer,
+    texts: List[str],
+    model_name: str = MODEL_NAME,
+    batch_size: int = 64,
+) -> np.ndarray:
+    """永続キャッシュを経由して encode する。
+
+    キャッシュに存在するテキストはディスク / メモリから取得し、未キャッシュ
+    のものだけを 1 バッチでモデルに投げる。戻り値の順序は `texts` と一致する。
+
+    Args:
+        model: SentenceTransformer インスタンス。
+        texts: エンコード対象のテキストリスト。
+        model_name: キャッシュキーに埋め込むモデル識別子。
+        batch_size: 未キャッシュ分に対するバッチサイズ。
+
+    Returns:
+        (N, D) の numpy 配列。
+    """
+    if not texts:
+        return np.zeros((0, 0), dtype=np.float32)
+
+    if _CACHE_DISABLED:
+        return encode_texts(model, texts, batch_size=batch_size)
+
+    _load_embedding_cache()
+
+    keys = [_make_cache_key(t, model_name) for t in texts]
+    missing_indices: List[int] = []
+    missing_texts: List[str] = []
+    for i, (k, t) in enumerate(zip(keys, texts)):
+        if k not in _embedding_cache:
+            missing_indices.append(i)
+            missing_texts.append(t)
+
+    if missing_texts:
+        new_vecs = encode_texts(model, missing_texts, batch_size=batch_size)
+        global _cache_dirty
+        for idx, vec in zip(missing_indices, new_vecs):
+            _embedding_cache[keys[idx]] = np.asarray(vec)
+        _cache_dirty = True
+
+    return np.stack([_embedding_cache[k] for k in keys])
 
 
 def split_response(response: str) -> List[str]:
@@ -194,9 +372,9 @@ def tier2_candidate(
             "pass_tier2": False,
         }
 
-    # Encode proposition + all segments in one batch
+    # Encode proposition + all segments in one batch (永続キャッシュ経由)
     all_texts = [proposition] + segments
-    embeddings = encode_texts(model, all_texts)
+    embeddings = encode_texts_cached(model, all_texts)
 
     prop_emb = embeddings[0]  # (D,)
     seg_embs = embeddings[1:]  # (N, D)
