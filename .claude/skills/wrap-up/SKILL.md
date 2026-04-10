@@ -46,13 +46,14 @@
    - 作業ブランチにいる場合は `main` に checkout してから commit する
    - 手順:
      ```bash
+     STASH_COUNT=$(git stash list | wc -l)
      git stash          # 未コミットの作業があれば退避
      git checkout main
      git add .claude/memory/
      git commit -m "memory: セッションサマリー YYYY-MM-DD"
      git push origin main
      git checkout -                # 元のブランチに戻る
-     git stash list | grep -q . && git stash pop  # stash があれば復元
+     [ "$(git stash list | wc -l)" -gt "$STASH_COUNT" ] && git stash pop  # このワークフローで作成した stash のみ復元
      ```
 
 6. **結果をユーザーに報告する:**
