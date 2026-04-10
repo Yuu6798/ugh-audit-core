@@ -315,6 +315,46 @@ dict の最小構成としている。
 | **保存先** | `~/.ugh_audit/embedding_cache.npz` |
 | **衝突確率** | 24 hex = 96 bit、本プロジェクト規模では実質ゼロ |
 
+### キャッシュ対象の選別（Codex review r3067115341 対応）
+
+永続キャッシュに入れるのは **再利用性の高いテキストのみ**。具体的には:
+
+| テキスト種別 | キャッシュ経由 | 理由 |
+|---|---|---|
+| リファレンス命題 (proposition) | ✅ | HA48 反復評価で同一命題が繰り返し使われる |
+| GoldenStore の entry.question | ✅ | reference 検索で繰り返し照会される |
+| **AI回答の response segments** | ❌ | AI回答ごとに一意で二度と使われない |
+| **GoldenStore の query (ユーザー質問)** | ❌ | 多くの場合 one-off クエリ |
+
+`tier2_candidate` では proposition のみ `encode_texts_cached` 経由で、
+segments は `encode_texts` 直接呼び出しで処理する:
+
+```python
+prop_emb = encode_texts_cached(model, [proposition])[0]  # ✅ cached
+seg_embs = encode_texts(model, segments)                 # ❌ bypass
+```
+
+これを守らないと、1 回の HA48 評価 (~48 response × ~10 segments) で
+~480 個の使い捨てエントリが cache に残り、継続実行でキャッシュが単調増加、
+`.npz` の full-file load/rewrite コストが累積的に悪化する。
+
+### 容量上限（hard cap）
+
+defense-in-depth として、`_MAX_CACHE_ENTRIES`（デフォルト 10000）を超えた
+場合、新規エントリは返却はするがメモリ/ディスクには永続化しない。
+LRU ではなく単純な hard cap で、`_logger.warning` を出す。
+
+`UGH_AUDIT_EMBED_CACHE_MAX` 環境変数で調整可能:
+
+```bash
+UGH_AUDIT_EMBED_CACHE_MAX=50000 pytest ...   # 上限緩和
+UGH_AUDIT_EMBED_CACHE_MAX=1000 python ...    # 上限厳格化
+```
+
+本来は「キャッシュ対象の選別」で one-off テキストを排除しているため
+cap に達することはないはずだが、将来の追加呼び出し箇所で間違って
+one-off テキストを渡された場合の保険。
+
 ### モデル識別子の auto-inference
 
 `encode_texts_cached(model, texts, model_name=None)` の `model_name=None`
@@ -349,6 +389,7 @@ dict の最小構成としている。
 |---|---|---|
 | `UGH_AUDIT_EMBED_CACHE_DISABLE` | `1/true/yes` で完全無効化（毎回 encode） | 無効化しない |
 | `UGH_AUDIT_CACHE_DIR` | キャッシュディレクトリ変更 | `~/.ugh_audit/` |
+| `UGH_AUDIT_EMBED_CACHE_MAX` | 容量上限（hard cap） | 10000 |
 
 無効化すると `encode_texts()` に直接フォールバックし、キャッシュファイル
 の読み書きは一切行わない。CI や読み取り専用環境で使う。
@@ -369,7 +410,7 @@ from cascade_matcher import (
 
 ### テストカバレッジ
 
-`tests/test_embedding_cache.py`（15 件）で以下を検証:
+`tests/test_embedding_cache.py`（20 件）で以下を検証:
 
 | テスト | 検証内容 |
 |---|---|
@@ -386,8 +427,13 @@ from cascade_matcher import (
 | `test_infer_model_id_from_config_name_or_path` | 属性抽出の正常系 |
 | `test_infer_model_id_fallback_to_class_name` | 未解決時 MODEL_NAME に落ちない |
 | `test_encode_texts_cached_auto_infers_model_id` | auto-inference |
-| `test_different_models_do_not_share_cache_via_tier2_candidate` | Codex 指摘の回帰テスト |
+| `test_different_models_do_not_share_cache_via_tier2_candidate` | Codex r3067060572 の回帰テスト |
 | `test_explicit_model_name_overrides_inference` | 明示指定による上書き |
+| `test_cache_respects_capacity_cap` | cap 超過時はベクトルは返すが永続化しない |
+| `test_capacity_cap_subsequent_call_still_returns_uncached_vectors` | cap 超過分は次回も miss 扱い |
+| `test_tier2_candidate_only_caches_proposition` | segments が cache に入らない |
+| `test_tier2_candidate_reuses_cached_proposition_across_responses` | prop は hit、segs だけ毎回 encode |
+| `test_tier2_candidate_segments_do_not_fill_cache_over_runs` | 複数 response で cache サイズが prop 数に収束 |
 
 実 SBert モデルを使わない fake encoder で完結するため、SBert 未導入の CI
 環境でも全件実行される。

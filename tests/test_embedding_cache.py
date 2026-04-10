@@ -270,3 +270,116 @@ def test_explicit_model_name_overrides_inference(isolated_cache):
 
     assert override_key in cascade_matcher._embedding_cache
     assert inferred_key not in cascade_matcher._embedding_cache
+
+
+# ============================================================
+# 容量上限 (Codex review r3067115341 対応)
+# ============================================================
+
+
+def test_cache_respects_capacity_cap(isolated_cache, monkeypatch):
+    """_MAX_CACHE_ENTRIES を超えたら新規エントリを永続化しない。
+
+    ただしベクトル自体は返却されるため呼び出し側の挙動は変わらない。
+    """
+    monkeypatch.setattr(cascade_matcher, "_MAX_CACHE_ENTRIES", 3)
+    fake = _FakeModel(identity="m")
+
+    v = cascade_matcher.encode_texts_cached(
+        fake, ["t1", "t2", "t3", "t4", "t5"], model_name="m"
+    )
+
+    # 戻り値には 5 件すべてのベクトルが含まれる
+    assert v.shape == (5, 8)
+    # だが cache には 3 件（上限）しか入らない
+    assert len(cascade_matcher._embedding_cache) == 3
+
+
+def test_capacity_cap_subsequent_call_still_returns_uncached_vectors(
+    isolated_cache, monkeypatch
+):
+    """cap 超過後も同テキストは毎回 encode される（cache miss 扱い）。"""
+    monkeypatch.setattr(cascade_matcher, "_MAX_CACHE_ENTRIES", 1)
+    fake = _FakeModel(identity="m")
+
+    # 1 回目: t1 のみ cache に入る、t2 は cap 超過で持続化されない
+    v1 = cascade_matcher.encode_texts_cached(fake, ["t1", "t2"], model_name="m")
+    assert len(cascade_matcher._embedding_cache) == 1
+    first_calls = len(fake.calls)
+
+    # 2 回目: t2 は cache ミス → 再 encode される
+    v2 = cascade_matcher.encode_texts_cached(fake, ["t1", "t2"], model_name="m")
+    assert len(fake.calls) == first_calls + 1  # t2 だけ再 encode
+    # t1 は hit するので再 encode されない
+    assert fake.calls[-1] == ["t2"]
+
+    # ベクトルは一貫（同じテキスト → 同じベクトル）
+    np.testing.assert_allclose(v1[0], v2[0])
+    np.testing.assert_allclose(v1[1], v2[1])
+
+
+# ============================================================
+# tier2_candidate: proposition のみキャッシュ、segments は bypass
+# (Codex review r3067115341 対応)
+# ============================================================
+
+
+def test_tier2_candidate_only_caches_proposition(isolated_cache):
+    """tier2_candidate はリファレンス命題のみキャッシュし、
+    response セグメントはキャッシュしない。
+
+    これにより AI回答ごとに一意な segment 群でキャッシュが単調増加するのを防ぐ。
+    """
+    fake = _FakeModel(identity="cached-test-model")
+    proposition = "リファレンス命題A"
+    response = "セグメント1です。セグメント2です。セグメント3です。"
+
+    cascade_matcher.tier2_candidate(proposition, response, fake)
+
+    # cache には proposition 1 エントリのみ
+    assert len(cascade_matcher._embedding_cache) == 1
+    prop_key = cascade_matcher._make_cache_key(proposition, "cached-test-model")
+    assert prop_key in cascade_matcher._embedding_cache
+
+    # セグメントは cache に入っていない
+    for seg in ["セグメント1です", "セグメント2です", "セグメント3です"]:
+        seg_key = cascade_matcher._make_cache_key(seg, "cached-test-model")
+        assert seg_key not in cascade_matcher._embedding_cache
+
+
+def test_tier2_candidate_reuses_cached_proposition_across_responses(isolated_cache):
+    """同じ proposition で別 response を評価すると、prop は cache hit で
+    再 encode されず、セグメントのみ毎回 encode される。"""
+    fake = _FakeModel(identity="cached-test-model")
+    proposition = "共通リファレンス命題"
+
+    cascade_matcher.tier2_candidate(proposition, "回答A1です。回答A2です。", fake)
+    # 初回: prop encode (1 call) + segs encode (1 call) = 2 calls
+    first_calls_count = len(fake.calls)
+    assert first_calls_count == 2
+
+    cascade_matcher.tier2_candidate(proposition, "回答B1です。回答B2です。", fake)
+    # 2 回目: prop は hit でスキップ、segs だけ encode = +1 call
+    assert len(fake.calls) == first_calls_count + 1
+
+    # 最後の call には proposition が含まれていない（segments のみ）
+    last_call = fake.calls[-1]
+    assert proposition not in last_call
+    assert all("回答B" in t for t in last_call)
+
+
+def test_tier2_candidate_segments_do_not_fill_cache_over_runs(isolated_cache):
+    """複数回の tier2_candidate 呼び出しで cache サイズは
+    proposition 数と同数に収束し、セグメント数では増えない。"""
+    fake = _FakeModel(identity="cached-test-model")
+
+    responses = [
+        "応答Aの第一文。応答Aの第二文。応答Aの第三文。",
+        "応答Bの第一文。応答Bの第二文。応答Bの第三文。",
+        "応答Cの第一文。応答Cの第二文。応答Cの第三文。",
+    ]
+    for resp in responses:
+        cascade_matcher.tier2_candidate("命題X", resp, fake)
+
+    # 命題は 1 つだけなので cache サイズも 1
+    assert len(cascade_matcher._embedding_cache) == 1

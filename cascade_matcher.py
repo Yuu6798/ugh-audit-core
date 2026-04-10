@@ -60,6 +60,16 @@ _CACHE_DISABLED = os.environ.get("UGH_AUDIT_EMBED_CACHE_DISABLE", "").lower() in
     "1", "true", "yes", "on"
 )
 
+# 容量上限（defense-in-depth）。runaway growth を防ぐため、上限に達したら
+# 新規エントリは返却はするがディスクには永続化しない（LRU ではなく単純な
+# hard cap）。_MAX_CACHE_ENTRIES 環境変数で調整可能。
+try:
+    _MAX_CACHE_ENTRIES: int = int(
+        os.environ.get("UGH_AUDIT_EMBED_CACHE_MAX", "10000")
+    )
+except ValueError:
+    _MAX_CACHE_ENTRIES = 10000
+
 _embedding_cache: Dict[str, np.ndarray] = {}
 _cache_loaded: bool = False
 _cache_dirty: bool = False
@@ -268,6 +278,16 @@ def encode_texts_cached(
     キャッシュに存在するテキストはディスク / メモリから取得し、未キャッシュ
     のものだけを 1 バッチでモデルに投げる。戻り値の順序は `texts` と一致する。
 
+    **使い分け指針**: この関数は **再利用性の高いテキスト**
+    （リファレンス命題、GoldenStore の question など）にのみ使うこと。
+    AI回答セグメントなど一回限りのテキストを渡すとキャッシュが単調増加し、
+    `.npz` 全体ロード / 書き出しのコストが累積的に悪化する
+    （Codex review #60 r3067115341 の指摘事項）。
+    一回限りテキストは `encode_texts()` を直接呼ぶこと。
+
+    容量上限 `_MAX_CACHE_ENTRIES` を超えた場合、未キャッシュ分のベクトルは
+    返却はするがメモリ / ディスクには永続化しない（hard cap、LRU なし）。
+
     Args:
         model: SentenceTransformer インスタンス。
         texts: エンコード対象のテキストリスト。
@@ -298,14 +318,41 @@ def encode_texts_cached(
             missing_indices.append(i)
             missing_texts.append(t)
 
+    # 未キャッシュ分を一括 encode し、idx → vec の対応を作る
+    new_vec_by_idx: Dict[int, np.ndarray] = {}
     if missing_texts:
         new_vecs = encode_texts(model, missing_texts, batch_size=batch_size)
-        global _cache_dirty
         for idx, vec in zip(missing_indices, new_vecs):
-            _embedding_cache[keys[idx]] = np.asarray(vec)
-        _cache_dirty = True
+            new_vec_by_idx[idx] = np.asarray(vec)
 
-    return np.stack([_embedding_cache[k] for k in keys])
+    # 容量上限に達するまでのみ永続化する（hard cap）
+    global _cache_dirty
+    promoted = 0
+    skipped = 0
+    for idx, vec in new_vec_by_idx.items():
+        if len(_embedding_cache) >= _MAX_CACHE_ENTRIES:
+            skipped += 1
+            continue
+        _embedding_cache[keys[idx]] = vec
+        promoted += 1
+    if promoted > 0:
+        _cache_dirty = True
+    if skipped > 0:
+        _logger.warning(
+            "embedding cache at capacity %d; %d new entries not persisted "
+            "(consider pruning cache or raising UGH_AUDIT_EMBED_CACHE_MAX)",
+            _MAX_CACHE_ENTRIES, skipped,
+        )
+
+    # 結果アセンブル: キャッシュに入った分は cache から、
+    # cap で弾かれた分は new_vec_by_idx から取る
+    result: List[np.ndarray] = []
+    for i, k in enumerate(keys):
+        if k in _embedding_cache:
+            result.append(_embedding_cache[k])
+        else:
+            result.append(new_vec_by_idx[i])
+    return np.stack(result)
 
 
 def split_response(response: str) -> List[str]:
@@ -434,12 +481,13 @@ def tier2_candidate(
             "pass_tier2": False,
         }
 
-    # Encode proposition + all segments in one batch (永続キャッシュ経由)
-    all_texts = [proposition] + segments
-    embeddings = encode_texts_cached(model, all_texts)
-
-    prop_emb = embeddings[0]  # (D,)
-    seg_embs = embeddings[1:]  # (N, D)
+    # Proposition は HA48 繰り返し評価などで再利用されるため永続キャッシュ経由。
+    # 一方で response segments は AI回答ごとに一意で二度と使われないため、
+    # キャッシュに入れると単調増加して .npz の load/save コストが悪化する
+    # （Codex review #60 r3067115341）。そのため segments は encode_texts で
+    # 直接エンコードし、キャッシュを経由しない。
+    prop_emb = encode_texts_cached(model, [proposition])[0]  # (D,)
+    seg_embs = encode_texts(model, segments)  # (N, D)
 
     # Cosine similarity
     scores = _cosine_similarity_batch(prop_emb, seg_embs)

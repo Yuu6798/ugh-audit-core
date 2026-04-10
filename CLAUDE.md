@@ -219,6 +219,7 @@ python examples/basic_audit.py
 | `UGH_META_CACHE_DIR` | LLM meta キャッシュディレクトリ | `~/.ugh_audit/meta_cache/` |
 | `UGH_AUDIT_CACHE_DIR` | 埋め込みキャッシュディレクトリ | `~/.ugh_audit/` |
 | `UGH_AUDIT_EMBED_CACHE_DISABLE` | `1/true/yes` で埋め込みキャッシュ無効化 | 無効化しない |
+| `UGH_AUDIT_EMBED_CACHE_MAX` | 埋め込みキャッシュのエントリ上限 (hard cap) | 10000 |
 
 読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` / `UGH_AUDIT_CACHE_DIR=/tmp/ugh_cache`
 で書き込み可能パスを指定する。
