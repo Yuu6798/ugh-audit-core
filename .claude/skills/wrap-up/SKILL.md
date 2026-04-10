@@ -47,7 +47,7 @@
    - 手順:
      ```bash
      STASH_COUNT=$(git stash list | wc -l)
-     git stash          # 未コミットの作業があれば退避
+     git stash -u        # 未追跡ファイル含め全作業を退避
      git checkout main
      git add .claude/memory/
      git commit -m "memory: セッションサマリー YYYY-MM-DD"
