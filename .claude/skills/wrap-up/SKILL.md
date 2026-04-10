@@ -11,7 +11,16 @@
    - 未解決の課題・次回への引き継ぎ事項
    - CLAUDE.md への反映が必要な変更点
 
-2. **サマリーファイルを作成する:**
+2. **サマリー内容をメモリに保持する（まだファイルには書かない）**
+
+3. **main ブランチに切り替える:**
+   ```bash
+   STASH_COUNT=$(git stash list | wc -l)
+   git stash -u        # 未追跡ファイル含め全作業を退避
+   git checkout main
+   ```
+
+4. **main 上でサマリーファイルを作成・コミット・push する:**
    - パス: `.claude/memory/YYYY-MM-DD.md`（同日に複数回実行する場合は `YYYY-MM-DD-2.md`）
    - フォーマット:
 
@@ -34,27 +43,23 @@
    - （CLAUDE.md に追記すべき内容があれば記載）
    ```
 
-3. **メタインデックスを更新する:**
    - `.claude/memory/_index.md` に1行サマリーを追記する
    - フォーマット: `- YYYY-MM-DD: （そのセッションの1行要約）`
 
-4. **CLAUDE.md の更新が必要な場合:**
+   ```bash
+   git add .claude/memory/
+   git commit -m "memory: セッションサマリー YYYY-MM-DD"
+   git push origin main
+   ```
+
+5. **元のブランチに戻り、作業を復元する:**
+   ```bash
+   git checkout -                # 元のブランチに戻る
+   [ "$(git stash list | wc -l)" -gt "$STASH_COUNT" ] && git stash pop
+   ```
+
+6. **CLAUDE.md の更新が必要な場合:**
    - サマリーの「CLAUDE.md 更新候補」セクションに内容がある場合、ユーザーに確認の上 CLAUDE.md を更新する
 
-5. **main ブランチに直接 commit & push する:**
-   - memory ファイルは運用ログのためレビュー不要
-   - 作業ブランチにいる場合は `main` に checkout してから commit する
-   - 手順:
-     ```bash
-     STASH_COUNT=$(git stash list | wc -l)
-     git stash -u        # 未追跡ファイル含め全作業を退避
-     git checkout main
-     git add .claude/memory/
-     git commit -m "memory: セッションサマリー YYYY-MM-DD"
-     git push origin main
-     git checkout -                # 元のブランチに戻る
-     [ "$(git stash list | wc -l)" -gt "$STASH_COUNT" ] && git stash pop  # このワークフローで作成した stash のみ復元
-     ```
-
-6. **結果をユーザーに報告する:**
+7. **結果をユーザーに報告する:**
    - 保存したファイルパスと内容の要約を表示する
