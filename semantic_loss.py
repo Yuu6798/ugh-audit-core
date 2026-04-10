@@ -1,9 +1,13 @@
-"""semantic_loss.py — 意味損失関数 L_sem (Phase 1-3)
+"""semantic_loss.py — 意味損失関数 L_sem (Phase 1-4)
 
-Evidence から L_P, L_Q, L_X, L_R, L_A を算出し、
+Evidence から L_P, L_Q, L_X, L_R, L_A, L_F を算出し、
 オプショナルな grv 値から L_G を導出する。
 
-参照: docs/semantic_loss.md
+デフォルト重みは HA48 (n=48) で Spearman ρ 最大化により校正済み。
+- 現行 ΔE: ρ = -0.5195
+- L_sem (HA48 最適化): ρ = -0.5563
+
+参照: docs/semantic_loss.md, analysis/optimize_semantic_loss_weights.py
 """
 from __future__ import annotations
 
@@ -20,14 +24,18 @@ except ImportError:
     _HAS_DETECTOR = False
 
 
-# --- デフォルト重み (Phase 4 で HA48+ から校正予定) ---
+# --- デフォルト重み (Phase 4: HA48 校正済み) ---
+# HA48 最適化結果 (f2 込み): L_P=0.375, L_R=0.125, L_F=0.50 (ρ=-0.5563)
+# 最適化で L_Q=0, L_A=0 となったが、理論的完全性のため小さな重みを残す。
+# L_G, L_X は HA48 データに含まれないため理論ベースの重みを維持。
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "L_P": 0.30,
-    "L_Q": 0.10,
-    "L_R": 0.10,
-    "L_A": 0.05,
-    "L_G": 0.10,
-    "L_X": 0.35,
+    "L_P": 0.25,   # 命題損失 (HA48 最適化 → コア重み)
+    "L_Q": 0.02,   # 制約損失 (HA48 で信号弱、理論的保持)
+    "L_R": 0.08,   # 参照安定性 (HA48 最適化)
+    "L_A": 0.02,   # 曖昧性増大 (HA48 で信号なし、理論的保持)
+    "L_G": 0.13,   # 因果構造 (HA48 外、理論ベース)
+    "L_F": 0.35,   # 用語捏造 (HA48 で最強信号)
+    "L_X": 0.15,   # 極性反転 (HA48 外、理論ベース)
 }
 
 
@@ -37,10 +45,11 @@ class SemanticLoss:
 
     L_P: Optional[float]          # 命題損失 [0,1]
     L_Q: float                    # 制約損失 [0,1]
-    L_X: Optional[float]          # 極性反転損失 [0,1]
-    L_R: Optional[float]          # 参照安定性損失 — Phase 2
-    L_A: Optional[float]          # 曖昧性増大損失 — Phase 2
+    L_R: Optional[float]          # 参照安定性損失 [0,1]
+    L_A: float                    # 曖昧性増大損失 [0,1]
     L_G: Optional[float]          # 因果構造損失 [0,1] (grv 統合)
+    L_F: float                    # 用語捏造損失 [0,1] (f2 由来, Phase 4)
+    L_X: Optional[float]          # 極性反転損失 [0,1]
     L_total: Optional[float]      # 利用可能な項の重み付き合計 [0,1]
     weights_used: Dict[str, float] = field(default_factory=dict)
 
@@ -85,6 +94,16 @@ def _compute_L_A(evidence: Evidence) -> float:
     主題逸脱は「何について回答しているか」の曖昧性を増大させる。
     """
     return _clamp(evidence.f1_anchor)
+
+
+def _compute_L_F(evidence: Evidence) -> float:
+    """L_F = f2_unknown (用語捏造損失)
+
+    f2 = 0.0 → 捏造なし, 0.5 → 部分的, 1.0 → 完全な用語捏造。
+    Phase 4 の HA48 校正で最強の単独予測子と判明 (ρ=-0.3853)。
+    L_P (命題欠落) とは独立した「偽命題の混入」を捉える。
+    """
+    return _clamp(evidence.f2_unknown)
 
 
 def _compute_L_X(
@@ -154,11 +173,12 @@ def compute_semantic_loss(
     grv: Optional[float] = None,
     weights: Optional[Dict[str, float]] = None,
 ) -> SemanticLoss:
-    """Evidence から意味損失関数を算出する (Phase 1-3)
+    """Evidence から意味損失関数を算出する (Phase 1-4)
 
     Phase 1: L_P, L_Q, L_X
     Phase 2: L_R (f4 → 参照安定性), L_A (f1 → 曖昧性増大)
     Phase 3: L_G (grv → 因果構造損失)
+    Phase 4: L_F (f2 → 用語捏造損失), 重み HA48 校正
 
     Args:
         evidence: 検出層の出力
@@ -170,24 +190,26 @@ def compute_semantic_loss(
 
     L_P = _compute_L_P(evidence)
     L_Q = _compute_L_Q(evidence)
-    L_X = _compute_L_X(evidence, propositions)
     L_R = _compute_L_R(evidence)
     L_A = _compute_L_A(evidence)
     L_G = _compute_L_G(grv)
+    L_F = _compute_L_F(evidence)
+    L_X = _compute_L_X(evidence, propositions)
 
     components = {
-        "L_P": L_P, "L_Q": L_Q, "L_X": L_X,
-        "L_R": L_R, "L_A": L_A, "L_G": L_G,
+        "L_P": L_P, "L_Q": L_Q, "L_R": L_R,
+        "L_A": L_A, "L_G": L_G, "L_F": L_F, "L_X": L_X,
     }
     L_total, weights_used = _weighted_total(components, w)
 
     return SemanticLoss(
         L_P=L_P,
         L_Q=L_Q,
-        L_X=L_X,
         L_R=L_R,
         L_A=L_A,
         L_G=L_G,
+        L_F=L_F,
+        L_X=L_X,
         L_total=L_total,
         weights_used=weights_used,
     )
