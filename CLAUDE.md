@@ -38,6 +38,47 @@ Agent({ model: "sonnet", isolation: "worktree", prompt: "..." })
 Agent({ subagent_type: "Explore", prompt: "..." })
 ```
 
+## Session Memory（永続記憶ワークフロー）
+
+セッション間の記憶喪失を防ぐため、`.claude/memory/` にセッションサマリーを蓄積する。
+
+### 起動時ルール
+
+1. セッション開始時に `.claude/memory/_index.md` を読み、過去の決定事項・コンテキストを把握する
+2. 直近3件のサマリーファイルは必要に応じて詳細を参照する
+3. 過去の設計判断に関する質問には、サマリーを確認してから回答する
+
+### 終了時ルール（自動トリガー）
+
+ユーザーがセッション終了を示す発言をしたら、**確認なしで即座に `/wrap-up` を実行する**。
+
+**トリガーフレーズ**（文脈付きの終了意図を検出。汎用トークン単体では発火しない）:
+- 「今日はここまで」「今日は終わり」「今日はおわり」
+- 「セッション終了」「セッション閉じて」
+- 「また明日」「また今度」「お疲れ様」「お疲れさま」
+- 「done for today」「that's all」
+- 手動: `/wrap-up`
+
+**実行内容:**
+- 会話の振り返りサマリーを `.claude/memory/YYYY-MM-DD.md` に保存
+- `_index.md` に1行サマリーを追記
+- CLAUDE.md への更新候補があればユーザーに提案
+- `/wrap-up` は手動実行も可能（途中でサマリーを取りたい場合など）
+
+### ディレクトリ構成
+
+```
+.claude/
+├── settings.json              # フック設定
+├── skills/
+│   └── wrap-up/
+│       └── SKILL.md           # /wrap-up スキル定義
+└── memory/
+    ├── _index.md              # メタインデックス（全セッション1行要約）
+    ├── YYYY-MM-DD.md          # 日次セッションサマリー
+    └── archive/               # 月次統合（Phase 2）
+```
+
 ## Architecture
 
 ```
@@ -415,7 +456,7 @@ from ugh_audit import (
 
 ### Branches
 
-- `main` — 安定版。直接pushしない
+- `main` — 安定版。直接pushしない（例外: `.claude/memory/` の運用ログは直接commit可）
 - `claude/*` — 作業ブランチ
 
 ### Commit Messages
