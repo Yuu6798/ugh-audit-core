@@ -129,6 +129,30 @@ class TestLX:
         # polarity-bearing → 1/1 = 1.0
         assert loss.L_X == pytest.approx(1.0)
 
+    @pytest.mark.parametrize("variant", [
+        "べきではない",
+        "すべきではない",
+        "べきでない",
+        "すべきでない",
+        "べきじゃない",
+        "すべきじゃない",
+    ])
+    def test_all_negative_deontic_variants(self, variant):
+        """全 6 バリアントが polarity-bearing として検出される (P2 fix)
+
+        detector.py の neg_deontic タプル (check_propositions 内) と同期。
+        """
+        ev = _ev(
+            propositions_hit=0,
+            propositions_total=1,
+            hit_ids=[],
+            miss_ids=[0],
+            hit_sources={0: "miss"},
+        )
+        props = [f"AIを完全に信頼{variant}"]
+        loss = compute_semantic_loss(ev, propositions=props)
+        assert loss.L_X == pytest.approx(1.0), f"variant '{variant}' not detected"
+
     def test_divisor_is_polarity_subset(self):
         """divisor は命題総数ではなく polarity-bearing 部分集合 (P1 fix)
 

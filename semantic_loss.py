@@ -115,8 +115,17 @@ def _compute_L_F(evidence: Evidence) -> float:
 # 否定 deontic の検出用トークン
 # 「べきではない」等は detect_operator では deontic family (priority 1) に
 # 解決されるが、極性反転の実質を持つため L_X に含める必要がある。
-# detector.py の needs_polarity_full ロジックと整合。
-_NEG_DEONTIC_TOKENS = ("べきではない", "すべきではない")
+# detector.py の check_propositions() 内の neg_deontic タプルと完全一致させ、
+# needs_polarity_full ロジックとの整合を保証する。
+# 将来 detector.py 側に変更があった場合は本定義も同期すること。
+_NEG_DEONTIC_TOKENS = (
+    "べきではない",
+    "すべきではない",
+    "べきでない",
+    "すべきでない",
+    "べきじゃない",
+    "すべきじゃない",
+)
 
 
 def _is_polarity_bearing(proposition: str) -> bool:

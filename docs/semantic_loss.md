@@ -30,13 +30,17 @@ $$
 
 $$
 L_{\text{sem}}(s, t \mid c)
-= \alpha L_P + \beta L_Q + \gamma L_R + \delta L_G + \epsilon L_A + \zeta L_X
+= \alpha L_P + \beta L_Q + \gamma L_R + \delta L_G + \epsilon L_A + \zeta L_X + \eta L_F
 $$
 
 $$
-\alpha, \beta, \gamma, \delta, \epsilon, \zeta \geq 0, \qquad
-\alpha + \beta + \gamma + \delta + \epsilon + \zeta = 1
+\alpha, \beta, \gamma, \delta, \epsilon, \zeta, \eta \geq 0, \qquad
+\alpha + \beta + \gamma + \delta + \epsilon + \zeta + \eta = 1
 $$
+
+※ $L_F$ (用語捏造損失) は Phase 4 で追加された 7 番目の項。
+HA48 校正で最強の単独予測子となったため一級成分として定義に組み込む。
+詳細は後述の「Phase 4 校正結果」および `$L_F$` の定義を参照。
 
 ### 各項の定義
 
@@ -119,6 +123,25 @@ $L_X$ は未定義 (degraded) とし、$L_{\text{sem}}$ の重み付き合計で
 で割る理由 — 10 命題中 1 件のみ極性制約を持つ場合に、それを miss しても
 $L_X = 0.1$ となり信号が薄まるため。部分集合で正規化することで極性エラーが
 本来の重みで $L_{\text{sem}}$ に反映される。
+
+#### $L_F$ — 用語捏造損失 (Phase 4 追加)
+
+$$
+L_F = \mathrm{fabrication}(t \mid c) \in [0, 1]
+$$
+
+変換後テキスト $t$ が文脈 $c$ の下で捏造した概念・用語の割合。
+元文 $s$ に存在せず、かつ参照集合 $R_s$ に含まれない用語・概念が導入された度合い。
+
+**$L_P$ との直交性**: $L_P$ は命題の **欠落** を測るのに対し、$L_F$ は偽命題の **混入** を測る。
+両者は独立の誤差軸であり、線形加算で二重計上にはならない。
+
+- $L_P \uparrow$: 元文の命題が target に保存されていない
+- $L_F \uparrow$: target が元文にない命題を追加している
+
+**現行実装**: `evidence.f2_unknown` (0.0 / 0.5 / 1.0) を直接使用。
+HA48 校正で最強の単独予測子 (ρ = -0.3853) となり、Phase 4 で独立項として追加。
+旧実装では S 軸に押し込められていた f2 (weight=25) を分離した形。
 
 ## 派生量
 
