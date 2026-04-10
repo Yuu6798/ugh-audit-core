@@ -13,23 +13,50 @@ import pytest
 import cascade_matcher
 
 
+class _FakeConfig:
+    def __init__(self, name: str) -> None:
+        self._name_or_path = name
+
+
+class _FakeAutoModel:
+    def __init__(self, name: str) -> None:
+        self.config = _FakeConfig(name)
+
+
+class _FakeFirstModule:
+    def __init__(self, name: str) -> None:
+        self.auto_model = _FakeAutoModel(name)
+
+
 class _FakeModel:
     """SBert 互換の最小 fake encoder。
 
     各テキストを文字列ハッシュから決定的に 8 次元ベクトル化し、
     呼び出し履歴で実際にエンコードが走ったテキストを追跡する。
+    `identity` を渡すと `_infer_model_id` がそれを検出できるよう
+    最小限の属性構造を持つ（_first_module().auto_model.config._name_or_path）。
     """
 
-    def __init__(self) -> None:
+    def __init__(self, identity: str | None = None) -> None:
         self.calls: list[list[str]] = []
+        self._identity = identity
+        self._fake_first_module = (
+            _FakeFirstModule(identity) if identity is not None else None
+        )
+
+    def _first_module(self):
+        if self._fake_first_module is None:
+            raise AttributeError("no first module")
+        return self._fake_first_module
 
     def encode(self, texts, batch_size=64, convert_to_numpy=True):
         self.calls.append(list(texts))
         rng = np.random.default_rng(42)
         base = rng.standard_normal((len(texts), 8)).astype(np.float32)
-        # テキスト依存性を持たせる（同一テキスト→同一ベクトル）
+        # テキスト依存性 + モデル識別性を持たせる（= 別モデルは別ベクトル）
+        model_seed = abs(hash(self._identity or type(self).__name__))
         for i, t in enumerate(texts):
-            seed = abs(hash(t)) % (2**31)
+            seed = (abs(hash(t)) ^ model_seed) % (2**31)
             r = np.random.default_rng(seed)
             base[i] = r.standard_normal(8).astype(np.float32)
         return base
@@ -169,3 +196,77 @@ def test_corrupted_cache_file_recovers(isolated_cache):
     v = cascade_matcher.encode_texts_cached(fake, ["recover"], model_name="m")
     assert v.shape == (1, 8)
     assert len(fake.calls) == 1
+
+
+# ============================================================
+# モデル識別子の auto-inference（Codex review r3067060572 対応）
+# ============================================================
+
+
+def test_infer_model_id_from_config_name_or_path():
+    """SBert config._name_or_path から識別子を抽出できる。"""
+    fake = _FakeModel(identity="paraphrase-multilingual-MiniLM-L12-v2")
+    assert cascade_matcher._infer_model_id(fake) == (
+        "paraphrase-multilingual-MiniLM-L12-v2"
+    )
+
+
+def test_infer_model_id_fallback_to_class_name():
+    """属性が取れないモデルはクラス名ベースの識別子にフォールバックする。
+
+    デフォルト MODEL_NAME にフォールバックすると別モデルの埋め込みが
+    silent に共存して誤 cosine スコアを生むため、明示的に unknown を返す。
+    """
+    fake = _FakeModel(identity=None)  # _first_module が AttributeError を投げる
+    inferred = cascade_matcher._infer_model_id(fake)
+    assert inferred.startswith("unknown-model:")
+    assert "MiniLM" not in inferred
+    assert inferred != cascade_matcher.MODEL_NAME
+
+
+def test_encode_texts_cached_auto_infers_model_id(isolated_cache):
+    """model_name=None 時に auto-inference が有効化される。"""
+    fake = _FakeModel(identity="model-alpha")
+
+    cascade_matcher.encode_texts_cached(fake, ["hello"])  # model_name 省略
+    # 推論された ID ("model-alpha") でキャッシュキーが作られているはず
+    expected_key = cascade_matcher._make_cache_key("hello", "model-alpha")
+    assert expected_key in cascade_matcher._embedding_cache
+
+
+def test_different_models_do_not_share_cache_via_tier2_candidate(isolated_cache):
+    """同一テキストでも別モデルなら別キャッシュエントリ（Codex 指摘の再現テスト）。
+
+    修正前: tier2_candidate → encode_texts_cached(model, texts) が常に
+    default MODEL_NAME で keying していたため、2 つ目のモデルでエンコード
+    した結果が 1 つ目のモデルのキャッシュから silent に再利用されていた。
+
+    修正後: モデルごとに identity が推論され、別キーになる。
+    """
+    fake_a = _FakeModel(identity="model-alpha")
+    fake_b = _FakeModel(identity="model-beta")
+
+    v_a = cascade_matcher.encode_texts_cached(fake_a, ["共通テキスト"])
+    v_b = cascade_matcher.encode_texts_cached(fake_b, ["共通テキスト"])
+
+    # 両方とも encode が走る（silent hit が起きない）
+    assert len(fake_a.calls) == 1
+    assert len(fake_b.calls) == 1
+
+    # 生成されたベクトルは別物（同じ値が silent に返っていない）
+    assert not np.allclose(v_a, v_b)
+
+    # キャッシュには 2 エントリが入る
+    assert len(cascade_matcher._embedding_cache) == 2
+
+
+def test_explicit_model_name_overrides_inference(isolated_cache):
+    """明示的な model_name は auto-inference を上書きする。"""
+    fake = _FakeModel(identity="real-model")
+
+    cascade_matcher.encode_texts_cached(fake, ["x"], model_name="override")
+    override_key = cascade_matcher._make_cache_key("x", "override")
+    inferred_key = cascade_matcher._make_cache_key("x", "real-model")
+
+    assert override_key in cascade_matcher._embedding_cache
+    assert inferred_key not in cascade_matcher._embedding_cache

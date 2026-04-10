@@ -322,7 +322,6 @@ class GoldenStore:
         """候補を SBert で再スコアする。モデル利用不可なら None を返す。"""
         try:
             from cascade_matcher import (
-                MODEL_NAME,
                 _cosine_similarity_batch,
                 encode_texts_cached,
                 get_shared_model,
@@ -336,7 +335,8 @@ class GoldenStore:
 
         try:
             texts = [question] + [entry.question for _, entry in candidates]
-            embeddings = encode_texts_cached(model, texts, model_name=MODEL_NAME)
+            # model_name は auto-infer に委ねる（モデル差し替え時のキャッシュ混線防止）
+            embeddings = encode_texts_cached(model, texts)
             query_emb = embeddings[0]
             target_embs = embeddings[1:]
             scores = _cosine_similarity_batch(query_emb, target_embs)

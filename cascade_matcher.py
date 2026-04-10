@@ -200,10 +200,67 @@ def encode_texts(
     return model.encode(texts, batch_size=batch_size, convert_to_numpy=True)
 
 
+def _infer_model_id(model) -> str:
+    """SentenceTransformer インスタンスから stable な識別子を best-effort で抽出する。
+
+    複数の属性パスを順番に試し、どれも取れなければクラス名ベースの
+    フォールバック識別子を返す。デフォルト `MODEL_NAME` にフォールバック
+    しないのは、別モデルを渡した呼び出しが silent にキャッシュ衝突する
+    のを防ぐため（Codex review r3067060572 の指摘事項）。
+
+    Args:
+        model: SentenceTransformer インスタンス。
+
+    Returns:
+        モデル識別子文字列。未解決時は `"unknown-model:<ClassName>"` 形式。
+    """
+    # 方法 1: 下位 transformer の HF config._name_or_path
+    try:
+        first_module = model._first_module()
+        auto_model = getattr(first_module, "auto_model", None)
+        if auto_model is not None:
+            config = getattr(auto_model, "config", None)
+            if config is not None:
+                name = (
+                    getattr(config, "_name_or_path", None)
+                    or getattr(config, "name_or_path", None)
+                )
+                if name:
+                    return str(name)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 方法 2: model_card_data.base_model（新しめの sentence-transformers）
+    try:
+        card = getattr(model, "model_card_data", None)
+        if card is not None:
+            name = getattr(card, "base_model", None)
+            if name:
+                return str(name)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 方法 3: tokenizer.name_or_path
+    try:
+        first_module = model._first_module()
+        tokenizer = getattr(first_module, "tokenizer", None) or getattr(
+            model, "tokenizer", None
+        )
+        if tokenizer is not None:
+            name = getattr(tokenizer, "name_or_path", None)
+            if name:
+                return str(name)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 最終フォールバック: クラス名（default MODEL_NAME には落とさない）
+    return f"unknown-model:{type(model).__name__}"
+
+
 def encode_texts_cached(
     model: SentenceTransformer,
     texts: List[str],
-    model_name: str = MODEL_NAME,
+    model_name: Optional[str] = None,
     batch_size: int = 64,
 ) -> np.ndarray:
     """永続キャッシュを経由して encode する。
@@ -215,6 +272,8 @@ def encode_texts_cached(
         model: SentenceTransformer インスタンス。
         texts: エンコード対象のテキストリスト。
         model_name: キャッシュキーに埋め込むモデル識別子。
+            None の場合 `_infer_model_id(model)` で実インスタンスから自動推論する
+            （異なるモデル間のキャッシュ混線を防ぐため）。明示指定すれば推論を上書き。
         batch_size: 未キャッシュ分に対するバッチサイズ。
 
     Returns:
@@ -227,6 +286,9 @@ def encode_texts_cached(
         return encode_texts(model, texts, batch_size=batch_size)
 
     _load_embedding_cache()
+
+    if model_name is None:
+        model_name = _infer_model_id(model)
 
     keys = [_make_cache_key(t, model_name) for t in texts]
     missing_indices: List[int] = []
