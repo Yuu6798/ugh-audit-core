@@ -52,7 +52,7 @@
      git commit -m "memory: セッションサマリー YYYY-MM-DD"
      git push origin main
      git checkout -                # 元のブランチに戻る
-     git stash pop      # 退避した作業を復元
+     git stash list | grep -q . && git stash pop  # stash があれば復元
      ```
 
 6. **結果をユーザーに報告する:**
