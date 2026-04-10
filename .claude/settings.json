@@ -2,8 +2,8 @@
   "hooks": {
     "user_prompt_submit": [
       {
-        "matcher": "",
-        "command": "echo '📌 Memory hint: 過去の記憶は .claude/memory/_index.md を参照。セッション終了時は /wrap-up を実行。'"
+        "matcher": "終わり|おわり|閉じる|終了|落ちる|離れる|また明日|また今度|お疲れ|以上|close|done for today|that's all|bye",
+        "command": "echo 'SESSION_END_DETECTED: /wrap-up を自動実行してください'"
       }
     ]
   }
