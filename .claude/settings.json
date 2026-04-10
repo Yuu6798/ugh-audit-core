@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "user_prompt_submit": [
+      {
+        "matcher": "",
+        "command": "echo '📌 Memory hint: 過去の記憶は .claude/memory/_index.md を参照。セッション終了時は /wrap-up を実行。'"
+      }
+    ]
+  }
+}

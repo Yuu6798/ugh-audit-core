@@ -38,6 +38,37 @@ Agent({ model: "sonnet", isolation: "worktree", prompt: "..." })
 Agent({ subagent_type: "Explore", prompt: "..." })
 ```
 
+## Session Memory（永続記憶ワークフロー）
+
+セッション間の記憶喪失を防ぐため、`.claude/memory/` にセッションサマリーを蓄積する。
+
+### 起動時ルール
+
+1. セッション開始時に `.claude/memory/_index.md` を読み、過去の決定事項・コンテキストを把握する
+2. 直近3件のサマリーファイルは必要に応じて詳細を参照する
+3. 過去の設計判断に関する質問には、サマリーを確認してから回答する
+
+### 終了時ルール
+
+セッション終了時にユーザーが `/wrap-up` を実行すると、以下が自動で行われる:
+- 会話の振り返りサマリーを `.claude/memory/YYYY-MM-DD.md` に保存
+- `_index.md` に1行サマリーを追記
+- CLAUDE.md への更新候補があればユーザーに提案
+
+### ディレクトリ構成
+
+```
+.claude/
+├── settings.json              # フック設定
+├── skills/
+│   └── wrap-up/
+│       └── SKILL.md           # /wrap-up スキル定義
+└── memory/
+    ├── _index.md              # メタインデックス（全セッション1行要約）
+    ├── YYYY-MM-DD.md          # 日次セッションサマリー
+    └── archive/               # 月次統合（Phase 2）
+```
+
 ## Architecture
 
 ```
