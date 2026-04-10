@@ -154,19 +154,36 @@ def invalidate_embedding_cache(reason: str = "") -> None:
     キャッシュ全体を破棄すべき場面で呼ぶ。呼び出し元で graceful に
     re-encode する前提の公開 API。
 
+    プロセス起動直後（lazy load 前）で disk に stale .npz が残っている
+    ケースでも機能するよう、まず `_load_embedding_cache()` で disk 状態を
+    メモリに読み込んでから破棄する（Codex review r3067177175 対応）。
+    これにより「モデル更新後に手動で invalidate を呼ぶ」という推奨リカバリ
+    フローが、起動時点で実際に disk ファイルを purge するようになる。
+
     Args:
         reason: ログに残す破棄理由（任意）。
     """
     global _embedding_cache, _cache_dirty, _cache_embed_dim
+
+    # disk 上のキャッシュを先に読み込む。これにより起動直後（メモリ空）の
+    # invalidate 呼び出しが no-op にならない。
+    _load_embedding_cache()
+
     n_cleared = len(_embedding_cache)
-    if n_cleared == 0 and _cache_embed_dim is None:
+    # _load_embedding_cache() が破損ファイルで失敗した場合もあり得るので、
+    # disk ファイル自体の存在も no-op 判定に入れる
+    file_exists = (not _CACHE_DISABLED) and _EMBED_CACHE_PATH.exists()
+
+    if n_cleared == 0 and _cache_embed_dim is None and not file_exists:
         return
+
     _embedding_cache = {}
     _cache_embed_dim = None
     _cache_dirty = True
     _logger.warning(
-        "embedding cache invalidated: %d entries cleared%s",
+        "embedding cache invalidated: %d entries cleared%s%s",
         n_cleared,
+        " (disk file present)" if file_exists and n_cleared == 0 else "",
         f" ({reason})" if reason else "",
     )
 

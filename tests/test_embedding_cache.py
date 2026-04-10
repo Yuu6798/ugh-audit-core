@@ -471,6 +471,49 @@ def test_invalidate_empty_cache_deletes_stale_file_on_save(isolated_cache):
     assert cascade_matcher._cache_dirty is False
 
 
+def test_invalidate_at_startup_purges_stale_disk_file(isolated_cache):
+    """プロセス起動直後（lazy load 前）に invalidate を呼んでも、
+    disk 上の stale .npz が次の save で削除される。
+    Codex review r3067177175 の回帰テスト。
+    """
+    # Phase 1: 古い disk state を用意（前回実行時の残骸）
+    fake = _FakeModel(identity="m")
+    cascade_matcher.encode_texts_cached(fake, ["stale_a", "stale_b"], model_name="m")
+    cascade_matcher.flush_embedding_cache()
+    assert isolated_cache.exists()
+
+    # Phase 2: プロセス再起動を模倣: メモリ状態を完全リセット
+    cascade_matcher.clear_embedding_cache()
+    assert len(cascade_matcher._embedding_cache) == 0
+    assert cascade_matcher._cache_embed_dim is None
+    assert cascade_matcher._cache_loaded is False
+    # disk file は残っている（startup の状態）
+    assert isolated_cache.exists()
+
+    # Phase 3: 起動直後の手動 invalidate
+    # 旧実装では n_cleared=0 && _cache_embed_dim=None で early return して
+    # no-op だったが、修正後は disk をロードしてから purge されるべき
+    cascade_matcher.invalidate_embedding_cache(reason="post-model-update")
+    assert cascade_matcher._cache_dirty is True
+
+    # Phase 4: save → disk file が削除される
+    cascade_matcher._save_embedding_cache()
+    assert not isolated_cache.exists()
+
+
+def test_invalidate_is_noop_when_truly_empty(isolated_cache):
+    """disk にもメモリにも何もない状態での invalidate は副作用なく no-op。"""
+    # 初期状態: 何もない
+    cascade_matcher.clear_embedding_cache()
+    assert not isolated_cache.exists()
+
+    cascade_matcher.invalidate_embedding_cache(reason="nothing-to-purge")
+
+    # dirty フラグは立たない（書き込みすることがない）
+    assert cascade_matcher._cache_dirty is False
+    assert not isolated_cache.exists()
+
+
 def test_invalidate_then_repopulate_overwrites_stale_file(isolated_cache):
     """invalidate 後に別のエントリを入れた場合、disk の .npz が新しい
     エントリのみで上書きされ、古いエントリは含まれない。"""
