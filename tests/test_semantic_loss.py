@@ -1,4 +1,4 @@
-"""tests/test_semantic_loss.py — 意味損失関数のテスト (Phase 1+2)"""
+"""tests/test_semantic_loss.py — 意味損失関数のテスト (Phase 1-3)"""
 from __future__ import annotations
 
 import sys
@@ -166,7 +166,7 @@ class TestTotal:
         expected = (0.10 / w_sum) * 0.8 + (0.05 / w_sum) * 0.4
         assert loss.L_total == pytest.approx(expected, abs=1e-4)
 
-    def test_five_components(self):
+    def test_five_components_without_grv(self):
         """L_P, L_Q, L_R, L_A 全有効 (L_X=None, L_G=None)"""
         ev = _ev(
             propositions_hit=2, propositions_total=4,
@@ -174,12 +174,30 @@ class TestTotal:
         )
         loss = compute_semantic_loss(ev)
         # L_P=0.5, L_Q=0.5, L_R=0.5, L_A=1.0, L_X=None, L_G=None
-        w_sum = 0.35 + 0.10 + 0.15 + 0.05
+        w_sum = 0.30 + 0.10 + 0.10 + 0.05
         expected = (
-            (0.35 / w_sum) * 0.5
+            (0.30 / w_sum) * 0.5
             + (0.10 / w_sum) * 0.5
-            + (0.15 / w_sum) * 0.5
+            + (0.10 / w_sum) * 0.5
             + (0.05 / w_sum) * 1.0
+        )
+        assert loss.L_total == pytest.approx(expected, abs=1e-4)
+
+    def test_six_components_with_grv(self):
+        """L_P, L_Q, L_R, L_A, L_G 全有効 (L_X=None)"""
+        ev = _ev(
+            propositions_hit=2, propositions_total=4,
+            f3_operator=0.5, f4_premise=0.5, f1_anchor=0.0,
+        )
+        loss = compute_semantic_loss(ev, grv=0.4)
+        # L_P=0.5, L_Q=0.5, L_R=0.5, L_A=0.0, L_G=0.4
+        w_sum = 0.30 + 0.10 + 0.10 + 0.05 + 0.10
+        expected = (
+            (0.30 / w_sum) * 0.5
+            + (0.10 / w_sum) * 0.5
+            + (0.10 / w_sum) * 0.5
+            + (0.05 / w_sum) * 0.0
+            + (0.10 / w_sum) * 0.4
         )
         assert loss.L_total == pytest.approx(expected, abs=1e-4)
 
@@ -191,13 +209,34 @@ class TestTotal:
 
 
 # =========================================================
-# Phase 3 stub
+# L_G (因果構造損失 / grv)
 # =========================================================
 
-class TestPhaseStub:
-    def test_phase3_stub_is_none(self):
+class TestLG:
+    def test_grv_not_provided_returns_none(self):
         loss = compute_semantic_loss(_ev())
         assert loss.L_G is None
+
+    def test_grv_zero(self):
+        loss = compute_semantic_loss(_ev(), grv=0.0)
+        assert loss.L_G == pytest.approx(0.0)
+
+    def test_grv_one(self):
+        loss = compute_semantic_loss(_ev(), grv=1.0)
+        assert loss.L_G == pytest.approx(1.0)
+
+    def test_grv_mid(self):
+        loss = compute_semantic_loss(_ev(), grv=0.3)
+        assert loss.L_G == pytest.approx(0.3)
+
+    def test_grv_contributes_to_total(self):
+        """grv 提供時は L_G が L_total に寄与する"""
+        ev = _ev(propositions_hit=3, propositions_total=3, f3_operator=0.0)
+        loss_without = compute_semantic_loss(ev)
+        loss_with = compute_semantic_loss(ev, grv=0.5)
+        assert loss_without.L_G is None
+        assert loss_with.L_G == pytest.approx(0.5)
+        assert loss_with.L_total > loss_without.L_total
 
 
 # =========================================================

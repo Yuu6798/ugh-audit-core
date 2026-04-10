@@ -1,7 +1,7 @@
-"""semantic_loss.py — 意味損失関数 L_sem (Phase 1+2)
+"""semantic_loss.py — 意味損失関数 L_sem (Phase 1-3)
 
-Evidence から L_P, L_Q, L_X, L_R, L_A を算出する薄いラッパー。
-Phase 3 で L_G (因果構造) を追加予定。
+Evidence から L_P, L_Q, L_X, L_R, L_A を算出し、
+オプショナルな grv 値から L_G を導出する。
 
 参照: docs/semantic_loss.md
 """
@@ -22,11 +22,11 @@ except ImportError:
 
 # --- デフォルト重み (Phase 4 で HA48+ から校正予定) ---
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "L_P": 0.35,
+    "L_P": 0.30,
     "L_Q": 0.10,
-    "L_R": 0.15,
+    "L_R": 0.10,
     "L_A": 0.05,
-    "L_G": 0.00,
+    "L_G": 0.10,
     "L_X": 0.35,
 }
 
@@ -40,7 +40,7 @@ class SemanticLoss:
     L_X: Optional[float]          # 極性反転損失 [0,1]
     L_R: Optional[float]          # 参照安定性損失 — Phase 2
     L_A: Optional[float]          # 曖昧性増大損失 — Phase 2
-    L_G: Optional[float]          # 因果構造損失 — Phase 3
+    L_G: Optional[float]          # 因果構造損失 [0,1] (grv 統合)
     L_total: Optional[float]      # 利用可能な項の重み付き合計 [0,1]
     weights_used: Dict[str, float] = field(default_factory=dict)
 
@@ -114,6 +114,21 @@ def _compute_L_X(
     return _clamp(polarity_misses / evidence.propositions_total)
 
 
+def _compute_L_G(grv: Optional[float]) -> Optional[float]:
+    """L_G = grv (語彙重力 → 因果構造損失)
+
+    engine の compute_grv() が算出した grv 値を直接使用する。
+    grv = 0.0 → 構造的に安定, 1.0 → 構造的逸脱。
+    grv 未提供時は None。
+
+    engine の grv 計算式:
+        grv = clamp(beta * (1 - entropy_ratio) + (1 - beta) * (1 - centroid_cosine))
+    """
+    if grv is None:
+        return None
+    return _clamp(grv)
+
+
 def _weighted_total(
     components: Dict[str, Optional[float]],
     weights: Dict[str, float],
@@ -136,17 +151,19 @@ def compute_semantic_loss(
     evidence: Evidence,
     *,
     propositions: Optional[List[str]] = None,
+    grv: Optional[float] = None,
     weights: Optional[Dict[str, float]] = None,
 ) -> SemanticLoss:
-    """Evidence から意味損失関数を算出する (Phase 1+2)
+    """Evidence から意味損失関数を算出する (Phase 1-3)
 
     Phase 1: L_P, L_Q, L_X
     Phase 2: L_R (f4 → 参照安定性), L_A (f1 → 曖昧性増大)
-    Phase 3 追加予定: L_G (因果構造, grv 統合)
+    Phase 3: L_G (grv → 因果構造損失)
 
     Args:
         evidence: 検出層の出力
         propositions: 命題テキストのリスト (L_X 算出に必要)
+        grv: engine の compute_grv() が算出した語彙重力値 [0,1] (L_G 算出に必要)
         weights: 各項の重み (未指定時は DEFAULT_WEIGHTS)
     """
     w = weights if weights is not None else DEFAULT_WEIGHTS
@@ -156,9 +173,7 @@ def compute_semantic_loss(
     L_X = _compute_L_X(evidence, propositions)
     L_R = _compute_L_R(evidence)
     L_A = _compute_L_A(evidence)
-
-    # Phase 3 stub
-    L_G: Optional[float] = None
+    L_G = _compute_L_G(grv)
 
     components = {
         "L_P": L_P, "L_Q": L_Q, "L_X": L_X,
