@@ -110,12 +110,23 @@ def _load_embedding_cache() -> None:
 
 
 def _save_embedding_cache() -> None:
-    """ダーティな永続キャッシュをディスクへ書き出す（atomic write）。"""
+    """ダーティな永続キャッシュをディスクへ書き出す（atomic write）。
+
+    空状態で dirty の場合（invalidation 後など）は、ディスク上の .npz を
+    削除することで stale state の持ち越しを防ぐ（Codex review r3067162768）。
+    """
     global _cache_dirty
-    if _CACHE_DISABLED or not _cache_dirty or not _embedding_cache:
+    if _CACHE_DISABLED or not _cache_dirty:
         return
     try:
         _EMBED_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if not _embedding_cache:
+            # 空状態の persist: 古い .npz を unlink することで次回起動時に
+            # stale なベクトルが再ロードされないようにする
+            if _EMBED_CACHE_PATH.exists():
+                _EMBED_CACHE_PATH.unlink()
+            _cache_dirty = False
+            return
         tmp_path = _EMBED_CACHE_PATH.with_name(_EMBED_CACHE_PATH.name + ".tmp")
         # np.savez は file-like に対しては拡張子を追加しないため、
         # 開いたバイナリハンドルを渡すことで衝突の無い atomic write を実現する。
@@ -336,6 +347,8 @@ def encode_texts_cached(
     Returns:
         (N, D) の numpy 配列。
     """
+    global _cache_dirty, _cache_embed_dim
+
     if not texts:
         return np.zeros((0, 0), dtype=np.float32)
 
@@ -359,11 +372,36 @@ def encode_texts_cached(
     new_vec_by_idx: Dict[int, np.ndarray] = {}
     if missing_texts:
         new_vecs = encode_texts(model, missing_texts, batch_size=batch_size)
+
+        # Dim drift check (Codex review r3067162770):
+        # 既存 cache の次元と新規エンコード結果の次元が違う場合、
+        # 古いキャッシュエントリは別モデルのもの（stale）と判断して全破棄し、
+        # 再帰的に本関数を呼び直して一貫した次元で再構築する。これが無いと
+        # 既存 cached entry (old dim) と new_vec_by_idx (new dim) が混在し、
+        # 末尾の np.stack で shape 不一致 exception が飛ぶ。
+        new_dim: Optional[int] = None
+        if new_vecs.ndim == 2 and new_vecs.shape[0] > 0:
+            new_dim = int(new_vecs.shape[1])
+        if (
+            new_dim is not None
+            and _cache_embed_dim is not None
+            and _cache_embed_dim != new_dim
+        ):
+            invalidate_embedding_cache(
+                reason=f"dim drift {_cache_embed_dim} -> {new_dim} "
+                       f"detected in encode_texts_cached"
+            )
+            # 再帰呼び出し: invalidation 後は _cache_embed_dim=None なので
+            # drift check が再発火せず 1 段だけで終わる。全 texts が
+            # missing 扱いになり 1 batch で一貫してエンコードされる。
+            return encode_texts_cached(
+                model, texts, model_name=model_name, batch_size=batch_size
+            )
+
         for idx, vec in zip(missing_indices, new_vecs):
             new_vec_by_idx[idx] = np.asarray(vec)
 
     # 容量上限に達するまでのみ永続化する（hard cap）
-    global _cache_dirty, _cache_embed_dim
     promoted = 0
     skipped = 0
     for idx, vec in new_vec_by_idx.items():

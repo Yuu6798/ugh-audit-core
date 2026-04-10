@@ -450,6 +450,107 @@ def test_tier2_candidate_recovers_from_stale_cache_dim(isolated_cache):
     assert cascade_matcher._cache_embed_dim == 8
 
 
+def test_invalidate_empty_cache_deletes_stale_file_on_save(isolated_cache):
+    """invalidate 後に新規追加がなくても、次の save で .npz が削除される。
+    Codex review r3067162768 の回帰テスト。
+    """
+    fake = _FakeModel(identity="m")
+    # 初回: cache にエントリを入れて disk に flush
+    cascade_matcher.encode_texts_cached(fake, ["x", "y"], model_name="m")
+    cascade_matcher.flush_embedding_cache()
+    assert isolated_cache.exists()
+
+    # invalidate: メモリ空 + dirty=True になる
+    cascade_matcher.invalidate_embedding_cache(reason="test")
+    assert len(cascade_matcher._embedding_cache) == 0
+    assert cascade_matcher._cache_dirty is True
+
+    # save: 空状態を persist → .npz 削除
+    cascade_matcher._save_embedding_cache()
+    assert not isolated_cache.exists()
+    assert cascade_matcher._cache_dirty is False
+
+
+def test_invalidate_then_repopulate_overwrites_stale_file(isolated_cache):
+    """invalidate 後に別のエントリを入れた場合、disk の .npz が新しい
+    エントリのみで上書きされ、古いエントリは含まれない。"""
+    fake = _FakeModel(identity="m")
+    cascade_matcher.encode_texts_cached(fake, ["old1", "old2"], model_name="m")
+    cascade_matcher.flush_embedding_cache()
+
+    cascade_matcher.invalidate_embedding_cache(reason="test")
+    cascade_matcher.encode_texts_cached(fake, ["new1"], model_name="m")
+    cascade_matcher.flush_embedding_cache()
+
+    # 再ロードして確認
+    cascade_matcher.clear_embedding_cache()
+    cascade_matcher._load_embedding_cache()
+
+    new_key = cascade_matcher._make_cache_key("new1", "m")
+    old_key = cascade_matcher._make_cache_key("old1", "m")
+    assert new_key in cascade_matcher._embedding_cache
+    assert old_key not in cascade_matcher._embedding_cache
+
+
+def test_encode_texts_cached_handles_mid_call_dim_drift(isolated_cache):
+    """encode_texts_cached 内で old cached + new encoded の dim drift を
+    proactive に検出し、invalidate + 再エンコードで安全に処理する。
+    Codex review r3067162770 の回帰テスト。
+    """
+    model_name = "drift-test"
+
+    # Phase 1: 16 次元の stale なエントリを cache に注入
+    cascade_matcher._load_embedding_cache()
+    stale_key = cascade_matcher._make_cache_key("cached_text", model_name)
+    cascade_matcher._embedding_cache[stale_key] = np.zeros(16, dtype=np.float32)
+    cascade_matcher._cache_embed_dim = 16
+
+    # Phase 2: 8 次元を返す fake model で、cached_text + new_text を一括リクエスト
+    # 既存ガードが無いと: cached_text → cache hit (16-dim) と
+    # new_text → encode (8-dim) が混在し np.stack で shape error
+    fake_new = _FakeModel(identity=model_name)
+    result = cascade_matcher.encode_texts_cached(
+        fake_new, ["cached_text", "new_text"], model_name=model_name
+    )
+
+    # Phase 3: drift が検出されて cache 全破棄 + 再エンコード
+    # 結果はすべて 8 次元で一貫している
+    assert result.shape == (2, 8)
+    assert cascade_matcher._cache_embed_dim == 8
+
+    # 古い 16 次元エントリは無くなっている
+    # 新しい 8 次元エントリがキャッシュに存在する
+    refreshed_key = cascade_matcher._make_cache_key("cached_text", model_name)
+    assert cascade_matcher._embedding_cache[refreshed_key].shape == (8,)
+    new_key = cascade_matcher._make_cache_key("new_text", model_name)
+    assert cascade_matcher._embedding_cache[new_key].shape == (8,)
+
+
+def test_dim_drift_recovery_does_not_infinite_recurse(isolated_cache):
+    """dim drift 検出 → 再帰呼び出しのパスが 1 段で確実に終了することを確認。"""
+    model_name = "single-recursion"
+    cascade_matcher._load_embedding_cache()
+    stale_key = cascade_matcher._make_cache_key("a", model_name)
+    cascade_matcher._embedding_cache[stale_key] = np.zeros(32, dtype=np.float32)
+    cascade_matcher._cache_embed_dim = 32
+
+    fake = _FakeModel(identity=model_name)  # 8-dim
+    # call_count = calls before
+    call_count_before = len(fake.calls)
+
+    result = cascade_matcher.encode_texts_cached(
+        fake, ["a", "b", "c"], model_name=model_name
+    )
+
+    # 再帰は 1 段のみ: encode_texts 呼び出しは
+    # 1) 最初: [b, c] → drift 検出 → invalidate
+    # 2) 再帰: [a, b, c] → 全部 fresh
+    # 合計 2 回（単純実装では）
+    # ※無限再帰していないことだけ確認すれば十分
+    assert len(fake.calls) - call_count_before <= 3
+    assert result.shape == (3, 8)
+
+
 def test_tier2_candidate_does_not_raise_on_persistent_mismatch(isolated_cache):
     """万一 invalidation 後も dim 不一致が解消しない場合でも、
     例外を投げずに空の pass_tier2=False 結果を返す。"""
