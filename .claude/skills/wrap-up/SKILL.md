@@ -41,5 +41,19 @@
 4. **CLAUDE.md の更新が必要な場合:**
    - サマリーの「CLAUDE.md 更新候補」セクションに内容がある場合、ユーザーに確認の上 CLAUDE.md を更新する
 
-5. **結果をユーザーに報告する:**
+5. **main ブランチに直接 commit & push する:**
+   - memory ファイルは運用ログのためレビュー不要
+   - 作業ブランチにいる場合は `main` に checkout してから commit する
+   - 手順:
+     ```bash
+     git stash          # 未コミットの作業があれば退避
+     git checkout main
+     git add .claude/memory/
+     git commit -m "memory: セッションサマリー YYYY-MM-DD"
+     git push origin main
+     git checkout -                # 元のブランチに戻る
+     git stash pop      # 退避した作業を復元
+     ```
+
+6. **結果をユーザーに報告する:**
    - 保存したファイルパスと内容の要約を表示する
