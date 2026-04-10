@@ -73,6 +73,10 @@ except ValueError:
 _embedding_cache: Dict[str, np.ndarray] = {}
 _cache_loaded: bool = False
 _cache_dirty: bool = False
+# 現在のキャッシュ内エントリの次元数。異なる次元のベクトルが混在しないよう、
+# 新規エンコード時に不一致を検知したら invalidate_embedding_cache() で全破棄する。
+# None の場合は未確定（空キャッシュ or ロード直後）。
+_cache_embed_dim: Optional[int] = None
 
 
 def _make_cache_key(text: str, model_name: str) -> str:
@@ -83,7 +87,7 @@ def _make_cache_key(text: str, model_name: str) -> str:
 
 def _load_embedding_cache() -> None:
     """ディスク上の永続キャッシュを初回アクセス時に読み込む。"""
-    global _cache_loaded, _embedding_cache
+    global _cache_loaded, _embedding_cache, _cache_embed_dim
     if _cache_loaded or _CACHE_DISABLED:
         _cache_loaded = True
         return
@@ -95,6 +99,14 @@ def _load_embedding_cache() -> None:
     except Exception as e:  # noqa: BLE001
         _logger.warning("embedding cache load failed (starting empty): %s", e)
         _embedding_cache = {}
+
+    # ロードしたキャッシュの次元を記録しておく（以降の dim 不一致検出の基準）
+    if _embedding_cache and _cache_embed_dim is None:
+        first_vec = next(iter(_embedding_cache.values()))
+        try:
+            _cache_embed_dim = int(first_vec.shape[0])
+        except (AttributeError, IndexError):
+            _cache_embed_dim = None
 
 
 def _save_embedding_cache() -> None:
@@ -117,10 +129,35 @@ def _save_embedding_cache() -> None:
 
 def clear_embedding_cache() -> None:
     """メモリ上のキャッシュをクリアする（テスト用）。ディスクは触らない。"""
-    global _embedding_cache, _cache_loaded, _cache_dirty
+    global _embedding_cache, _cache_loaded, _cache_dirty, _cache_embed_dim
     _embedding_cache = {}
     _cache_loaded = False
     _cache_dirty = False
+    _cache_embed_dim = None
+
+
+def invalidate_embedding_cache(reason: str = "") -> None:
+    """メモリ上のキャッシュを破棄し、次回 save 時にディスクも空で上書きする。
+
+    モデル重み更新時の stale vector 検出（shape/dim 不一致）など、
+    キャッシュ全体を破棄すべき場面で呼ぶ。呼び出し元で graceful に
+    re-encode する前提の公開 API。
+
+    Args:
+        reason: ログに残す破棄理由（任意）。
+    """
+    global _embedding_cache, _cache_dirty, _cache_embed_dim
+    n_cleared = len(_embedding_cache)
+    if n_cleared == 0 and _cache_embed_dim is None:
+        return
+    _embedding_cache = {}
+    _cache_embed_dim = None
+    _cache_dirty = True
+    _logger.warning(
+        "embedding cache invalidated: %d entries cleared%s",
+        n_cleared,
+        f" ({reason})" if reason else "",
+    )
 
 
 def flush_embedding_cache() -> None:
@@ -326,13 +363,16 @@ def encode_texts_cached(
             new_vec_by_idx[idx] = np.asarray(vec)
 
     # 容量上限に達するまでのみ永続化する（hard cap）
-    global _cache_dirty
+    global _cache_dirty, _cache_embed_dim
     promoted = 0
     skipped = 0
     for idx, vec in new_vec_by_idx.items():
         if len(_embedding_cache) >= _MAX_CACHE_ENTRIES:
             skipped += 1
             continue
+        # 初回投入時に dim を記録。以降の guard 基準となる
+        if _cache_embed_dim is None and vec.ndim >= 1:
+            _cache_embed_dim = int(vec.shape[0])
         _embedding_cache[keys[idx]] = vec
         promoted += 1
     if promoted > 0:
@@ -488,6 +528,36 @@ def tier2_candidate(
     # 直接エンコードし、キャッシュを経由しない。
     prop_emb = encode_texts_cached(model, [proposition])[0]  # (D,)
     seg_embs = encode_texts(model, segments)  # (N, D)
+
+    # Shape guard: cached prop_emb が古いモデル重みの stale vector である
+    # 可能性に備えて、seg_embs の次元と一致しない場合は cache を invalidate
+    # して再エンコードする（Codex review #60 r3067145596）。
+    # これが無いと _cosine_similarity_batch が numpy shape error で abort し、
+    # detector flow 全体が graceful degradation できない。
+    if prop_emb.shape[0] != seg_embs.shape[1]:
+        _logger.warning(
+            "proposition embedding dim %d != segment embedding dim %d; "
+            "invalidating stale cache and re-encoding proposition "
+            "(likely model weights updated without identifier change)",
+            prop_emb.shape[0],
+            seg_embs.shape[1],
+        )
+        invalidate_embedding_cache(
+            reason=f"dim mismatch prop={prop_emb.shape[0]} seg={seg_embs.shape[1]}"
+        )
+        prop_emb = encode_texts_cached(model, [proposition])[0]
+        if prop_emb.shape[0] != seg_embs.shape[1]:
+            # invalidation 後も一致しないのは呼び出し側のモデル不整合
+            # （1 回の呼び出しで異なるモデル同士を混ぜた等）。安全に degrade。
+            return {
+                "top1_sentence": "",
+                "top1_score": 0.0,
+                "top2_sentence": "",
+                "top2_score": 0.0,
+                "gap": 0.0,
+                "all_scores": [],
+                "pass_tier2": False,
+            }
 
     # Cosine similarity
     scores = _cosine_similarity_batch(prop_emb, seg_embs)

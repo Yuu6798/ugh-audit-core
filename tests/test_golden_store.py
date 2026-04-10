@@ -338,6 +338,55 @@ class _RerankFakeModel:
         return out
 
 
+def test_sbert_rerank_recovers_from_stale_cache_dim(tmp_path, monkeypatch):
+    """GoldenStore._sbert_rerank も stale cache dim から gracefully recover する。
+    Codex review #60 r3067145596 の対応を golden_store 側で検証。
+    """
+    import cascade_matcher
+
+    cache_path = tmp_path / "embedding_cache.npz"
+    monkeypatch.setattr(cascade_matcher, "_EMBED_CACHE_PATH", cache_path)
+    monkeypatch.setattr(cascade_matcher, "_CACHE_DISABLED", False)
+    cascade_matcher.clear_embedding_cache()
+
+    fake = _RerankFakeModel(identity="rerank-test-model")
+    monkeypatch.setattr(cascade_matcher, "get_shared_model", lambda: fake)
+
+    store = _empty_store(tmp_path)
+    store.add("a", GoldenEntry(
+        question="PoRとは何か",
+        reference="ref_A",
+        source="test",
+    ))
+    store.add("b", GoldenEntry(
+        question="PoRの定義",
+        reference="ref_B",
+        source="test",
+    ))
+
+    # Stale な 16 次元のエントリで cache を汚染（モデル重み更新後を模倣）
+    cascade_matcher._load_embedding_cache()
+    for q in ["PoRとは何か", "PoRの定義"]:
+        key = cascade_matcher._make_cache_key(q, "rerank-test-model")
+        cascade_matcher._embedding_cache[key] = np.zeros(16, dtype=np.float32)
+    cascade_matcher._cache_embed_dim = 16
+
+    # fake は 8 次元を返す → 次元不一致を検出 → invalidate → re-encode
+    result = store.find_reference("PoRなる何か")
+
+    # 例外なく結果が返る（ref_A or ref_B のいずれか）
+    assert result in ("ref_A", "ref_B")
+
+    # cache は 8 次元で refresh されている
+    for q in ["PoRとは何か", "PoRの定義"]:
+        key = cascade_matcher._make_cache_key(q, "rerank-test-model")
+        assert key in cascade_matcher._embedding_cache
+        assert cascade_matcher._embedding_cache[key].shape == (8,)
+    assert cascade_matcher._cache_embed_dim == 8
+
+    cascade_matcher.clear_embedding_cache()
+
+
 def test_sbert_rerank_does_not_cache_user_query(tmp_path, monkeypatch):
     """find_reference が呼ばれても、ユーザークエリ自体は cache に入らない。
 

@@ -338,6 +338,41 @@ seg_embs = encode_texts(model, segments)                 # ❌ bypass
 ~480 個の使い捨てエントリが cache に残り、継続実行でキャッシュが単調増加、
 `.npz` の full-file load/rewrite コストが累積的に悪化する。
 
+### Shape guard / stale cache 検出（Codex review r3067145596 対応）
+
+モデル識別子（`_infer_model_id()` の結果文字列）は同一でも、ローカル
+パスや retagged checkpoint で **モデル重みが更新されて次元が変わる**
+ケースが起こり得る。この場合、キャッシュ上の stale vector と新しい
+モデルが返す vector で次元が一致せず、`_cosine_similarity_batch` が
+numpy の matrix shape error で abort する → detector flow 全体が graceful
+に degrade できない。
+
+層状防御を実装:
+
+1. **Cache 層の dim tracking** (`cascade_matcher._cache_embed_dim`)
+   - 初回エントリ投入時または `_load_embedding_cache()` 時に記録
+   - `invalidate_embedding_cache(reason="...")` でメモリ cache + dim を破棄
+   - 次回 save 時に空状態が disk に反映される（古い .npz を上書き）
+
+2. **`tier2_candidate` の proactive shape check**
+   - `prop_emb`（possibly cached）と `seg_embs`（fresh）の次元を比較
+   - mismatch → `invalidate_embedding_cache()` → `encode_texts_cached()`
+     再実行 → 新しい dim でリフレッシュ
+   - 再エンコード後も mismatch（= caller 側のモデル不整合）の場合は
+     `pass_tier2=False` の空結果を返して safe degrade
+
+3. **`_sbert_rerank` の同等 guard**
+   - `query_emb`（fresh）と `target_embs`（possibly cached）の次元を比較
+   - 同じ invalidate → re-encode → 最悪 `None` 返却パターン
+
+これにより:
+- stale cache を起因とする `ValueError: shapes ... not aligned` は発生しない
+- detector.py の cascade パイプラインは必ず完了する（Tier 1 のみで継続可能）
+- GoldenStore の `find_reference()` は最悪 bigram fallback に落ちる
+
+fingerprint-based cache key（SBert weights hash を key に含める方式）は
+起動時に全 tensors をハッシュする必要があり過剰なため採用しない。
+
 ### 容量上限（hard cap）
 
 defense-in-depth として、`_MAX_CACHE_ENTRIES`（デフォルト 10000）を超えた
@@ -398,10 +433,11 @@ one-off テキストを渡された場合の保険。
 
 ```python
 from cascade_matcher import (
-    encode_texts_cached,      # 主要エントリ: cached batch encoding
-    clear_embedding_cache,    # メモリクリア（テスト用）
-    flush_embedding_cache,    # 即座にディスク永続化
-    embedding_cache_stats,    # {entries, loaded, dirty, disabled}
+    encode_texts_cached,         # 主要エントリ: cached batch encoding
+    clear_embedding_cache,       # メモリクリア（テスト用）
+    flush_embedding_cache,       # 即座にディスク永続化
+    embedding_cache_stats,       # {entries, loaded, dirty, disabled}
+    invalidate_embedding_cache,  # stale cache 検出時の全破棄
 )
 ```
 
@@ -410,7 +446,7 @@ from cascade_matcher import (
 
 ### テストカバレッジ
 
-`tests/test_embedding_cache.py`（20 件）で以下を検証:
+`tests/test_embedding_cache.py`（24 件）で以下を検証:
 
 | テスト | 検証内容 |
 |---|---|
@@ -434,6 +470,10 @@ from cascade_matcher import (
 | `test_tier2_candidate_only_caches_proposition` | segments が cache に入らない |
 | `test_tier2_candidate_reuses_cached_proposition_across_responses` | prop は hit、segs だけ毎回 encode |
 | `test_tier2_candidate_segments_do_not_fill_cache_over_runs` | 複数 response で cache サイズが prop 数に収束 |
+| `test_invalidate_embedding_cache_clears_state` | invalidate で dim tracker もクリア |
+| `test_cache_embed_dim_tracked_on_new_entries` | 初回投入時の dim 記録 |
+| `test_tier2_candidate_recovers_from_stale_cache_dim` | Codex r3067145596 回帰: stale cache から gracefully recover |
+| `test_tier2_candidate_does_not_raise_on_persistent_mismatch` | invalidation 後も不一致なら safe degrade |
 
 実 SBert モデルを使わない fake encoder で完結するため、SBert 未導入の CI
 環境でも全件実行される。

@@ -68,6 +68,13 @@ similarity を計算し、候補を再ランキングする。
 この分離により、多様なクエリに対して呼ばれても cache サイズは
 GoldenStore のエントリ数で頭打ちとなる。
 
+**Stale cache 対策** (Codex review #60 r3067145596):
+`target_embs`（cached）と `query_emb`（fresh）の次元が不一致の場合
+（モデル重み更新後の stale cache を想定）、
+`cascade_matcher.invalidate_embedding_cache()` で全破棄後に再エンコードする。
+再度の不一致は caller 側のモデル不整合と判断し、`_sbert_rerank` は `None`
+を返して GoldenStore 全体は bigram fallback に落ちる。
+
 再ランキング後、以下の gap 条件で top1 を採用するかを決める:
 
 | 条件 | 閾値 | 由来 |

@@ -383,3 +383,108 @@ def test_tier2_candidate_segments_do_not_fill_cache_over_runs(isolated_cache):
 
     # 命題は 1 つだけなので cache サイズも 1
     assert len(cascade_matcher._embedding_cache) == 1
+
+
+# ============================================================
+# Stale cache dim recovery (Codex review r3067145596 対応)
+# ============================================================
+
+
+def test_invalidate_embedding_cache_clears_state(isolated_cache):
+    """invalidate_embedding_cache がメモリ cache と dim tracker をクリアする。"""
+    fake = _FakeModel(identity="m")
+    cascade_matcher.encode_texts_cached(fake, ["a", "b"], model_name="m")
+    assert len(cascade_matcher._embedding_cache) == 2
+    assert cascade_matcher._cache_embed_dim == 8
+
+    cascade_matcher.invalidate_embedding_cache(reason="test")
+
+    assert len(cascade_matcher._embedding_cache) == 0
+    assert cascade_matcher._cache_embed_dim is None
+    assert cascade_matcher._cache_dirty is True  # 空状態も persist 対象
+
+
+def test_cache_embed_dim_tracked_on_new_entries(isolated_cache):
+    """初回投入時にキャッシュの次元が記録される。"""
+    fake = _FakeModel(identity="m")
+    assert cascade_matcher._cache_embed_dim is None
+
+    cascade_matcher.encode_texts_cached(fake, ["x"], model_name="m")
+    assert cascade_matcher._cache_embed_dim == 8
+
+
+def test_tier2_candidate_recovers_from_stale_cache_dim(isolated_cache):
+    """異なる次元のベクトルが cache に残っていても、tier2_candidate は
+    gracefully recover して正しい結果を返す（shape error を raise しない）。
+    """
+    proposition = "命題A"
+    response = "セグメントAです。セグメントBです。セグメントCです。"
+
+    # 初回エンコードで cache に proposition を投入（dim=8）
+    fake_old = _FakeModel(identity="cached-test-model")
+    cascade_matcher.tier2_candidate(proposition, response, fake_old)
+    prop_key = cascade_matcher._make_cache_key(proposition, "cached-test-model")
+    assert cascade_matcher._embedding_cache[prop_key].shape == (8,)
+
+    # 意図的に stale な 16 次元ベクトルで proposition のエントリを上書き
+    # （= モデル重み更新後の stale cache の状態を模倣）
+    cascade_matcher._embedding_cache[prop_key] = np.zeros(16, dtype=np.float32)
+    cascade_matcher._cache_embed_dim = 16
+
+    # 新しいモデル（8 次元）で同じ proposition を tier2_candidate にかける。
+    # invariant: shape mismatch を検出 → invalidate → re-encode → 正常完了
+    fake_new = _FakeModel(identity="cached-test-model")
+    result = cascade_matcher.tier2_candidate(proposition, response, fake_new)
+
+    # shape error で abort していないこと
+    assert "top1_score" in result
+    assert "pass_tier2" in result
+    assert isinstance(result["top1_score"], float)
+
+    # キャッシュは新しい 8 次元でリフレッシュされている
+    refreshed_key = cascade_matcher._make_cache_key(
+        proposition, "cached-test-model"
+    )
+    assert refreshed_key in cascade_matcher._embedding_cache
+    assert cascade_matcher._embedding_cache[refreshed_key].shape == (8,)
+    assert cascade_matcher._cache_embed_dim == 8
+
+
+def test_tier2_candidate_does_not_raise_on_persistent_mismatch(isolated_cache):
+    """万一 invalidation 後も dim 不一致が解消しない場合でも、
+    例外を投げずに空の pass_tier2=False 結果を返す。"""
+    proposition = "命題"
+    response = "応答1。応答2。"
+
+    # fake_prop は 4 次元しか返さない（segments は 8 次元）
+    class _BadModel:
+        def __init__(self):
+            self.calls: list[list[str]] = []
+
+            class _Config:
+                _name_or_path = "bad-model"
+
+            class _AutoModel:
+                config = _Config()
+
+            class _FM:
+                auto_model = _AutoModel()
+
+            self._first = _FM()
+
+        def _first_module(self):
+            return self._first
+
+        def encode(self, texts, batch_size=64, convert_to_numpy=True):
+            self.calls.append(list(texts))
+            # proposition は 4 次元、segments は 8 次元を返す異常モデル
+            if len(texts) == 1:
+                return np.zeros((1, 4), dtype=np.float32)
+            return np.zeros((len(texts), 8), dtype=np.float32)
+
+    bad = _BadModel()
+    result = cascade_matcher.tier2_candidate(proposition, response, bad)
+
+    # 例外を投げない
+    assert result["pass_tier2"] is False
+    assert result["top1_score"] == 0.0

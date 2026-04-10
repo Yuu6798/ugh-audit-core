@@ -333,6 +333,7 @@ class GoldenStore:
                 encode_texts,
                 encode_texts_cached,
                 get_shared_model,
+                invalidate_embedding_cache,
             )
         except ImportError:
             return None
@@ -346,9 +347,31 @@ class GoldenStore:
             query_emb = encode_texts(model, [question])[0]
             # entry.question は reusable → cache 経由
             # model_name は auto-infer に委ねる（モデル差し替え時のキャッシュ混線防止）
-            target_embs = encode_texts_cached(
-                model, [entry.question for _, entry in candidates]
-            )
+            candidate_questions = [entry.question for _, entry in candidates]
+            target_embs = encode_texts_cached(model, candidate_questions)
+
+            # Shape guard (Codex review #60 r3067145596):
+            # target_embs が stale cache entry を含む場合、query_emb と次元が
+            # 一致しない可能性がある（モデル重み更新後など）。検出したら
+            # cache を invalidate して再エンコードする。
+            if query_emb.shape[0] != target_embs.shape[1]:
+                _logger.warning(
+                    "GoldenStore rerank: query dim %d != candidate dim %d; "
+                    "invalidating stale cache and re-encoding candidates",
+                    query_emb.shape[0],
+                    target_embs.shape[1],
+                )
+                invalidate_embedding_cache(
+                    reason=(
+                        f"dim mismatch query={query_emb.shape[0]} "
+                        f"cand={target_embs.shape[1]}"
+                    )
+                )
+                target_embs = encode_texts_cached(model, candidate_questions)
+                if query_emb.shape[0] != target_embs.shape[1]:
+                    # 再エンコード後も不一致は callerレベルの不整合 → degrade
+                    return None
+
             scores = _cosine_similarity_batch(query_emb, target_embs)
         except Exception as e:  # noqa: BLE001
             _logger.warning("GoldenStore SBert rerank failed: %s", e)
