@@ -166,15 +166,32 @@ def _count_sentences(text: str) -> int:
 
 
 def _count_pattern_hits(text: str, patterns: Tuple[str, ...]) -> Tuple[int, List[str]]:
-    """複数 substring パターンの出現回数と hit list を返す"""
-    count = 0
-    hits: List[str] = []
-    for p in patterns:
-        occurrences = text.count(p)
-        if occurrences > 0:
-            count += occurrences
-            hits.append(f"{p}×{occurrences}")
-    return count, hits
+    """複数 substring パターンの **非重複** 出現回数と hit list を返す。
+
+    同じ位置を複数の pattern が cover する場合 (例: 「非常に勉強になり」と
+    「勉強になり」が「非常に勉強になりました」に両方 match する場合)、
+    **長い pattern を優先して 1 つの expression を 1 回だけカウントする**。
+    単純な text.count() の和では double-count が発生し、before/after 比較を
+    歪める (Codex review PR #61 r3067340176)。
+
+    実装: 長い順に sort した pattern を alternation regex にまとめ、
+    re.finditer で左端優先 + 非重複マッチを列挙する。
+    """
+    if not patterns or not text:
+        return 0, []
+    # 長い pattern を優先 (alternation は left-to-right を見るので、
+    # 長い方を先に置くことで「非常に勉強になり」が「勉強になり」より先に試される)
+    sorted_patterns = sorted(patterns, key=len, reverse=True)
+    regex = re.compile("|".join(re.escape(p) for p in sorted_patterns))
+
+    per_pattern: Dict[str, int] = {}
+    for match in regex.finditer(text):
+        key = match.group(0)
+        per_pattern[key] = per_pattern.get(key, 0) + 1
+
+    total = sum(per_pattern.values())
+    hits = [f"{p}×{c}" for p, c in per_pattern.items()]
+    return total, hits
 
 
 def _char_bigrams(text: str) -> set:

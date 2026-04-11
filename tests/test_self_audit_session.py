@@ -109,6 +109,51 @@ def test_split_by_principle_turn():
     assert before.mean_L_Q_proxy > after.mean_L_Q_proxy
 
 
+def test_overlapping_patterns_not_double_counted():
+    """「非常に勉強になり」と「勉強になり」が両方辞書にあっても
+    同じ出現は 1 回しかカウントされない (Codex PR #61 r3067340176 回帰テスト)。
+    """
+    # 真の expression 数 = 1 (「非常に勉強になりました」1 つ)
+    content = "非常に勉強になりました。"
+    m = sas.compute_turn_metrics(1, "assistant", content)
+
+    # 旧実装だと "非常に勉強になり×1" + "勉強になり×1" = 2 にインフレする
+    # 修正後は長い方を優先して合計 1
+    total_eval_hits = sum(
+        int(h.split("×")[1]) for h in m.evaluative_hits if "×" in h
+    )
+    assert total_eval_hits == 1, (
+        f"expected 1 total evaluative hit, got {total_eval_hits}: {m.evaluative_hits}"
+    )
+
+
+def test_overlapping_and_standalone_counted_separately():
+    """「非常に勉強になりました」と独立した「勉強になりました」が共存する場合、
+    2 回として正しくカウントされる (longest-match first が機能している証明)。
+    """
+    # 真の expression 数 = 2 (非常に勉強になり 1 つ + 独立の 勉強になり 1 つ)
+    content = "非常に勉強になりました。別の話題で勉強になりました。"
+    m = sas.compute_turn_metrics(1, "assistant", content)
+
+    total_eval_hits = sum(
+        int(h.split("×")[1]) for h in m.evaluative_hits if "×" in h
+    )
+    assert total_eval_hits == 2, (
+        f"expected 2 total evaluative hits, got {total_eval_hits}: {m.evaluative_hits}"
+    )
+
+
+def test_count_pattern_hits_raw_function():
+    """helper の直接テスト: longest-match first で非重複マッチ"""
+    text = "非常に勉強になりました"
+    patterns = ("非常に勉強になり", "勉強になり")
+    total, hits = sas._count_pattern_hits(text, patterns)
+    assert total == 1
+    # 長い方が採用されているはず
+    assert any("非常に勉強になり" in h for h in hits)
+    assert not any(h.startswith("勉強になり×") for h in hits)
+
+
 def test_sample_transcript_runs_end_to_end():
     """同梱のサンプル transcript が end-to-end でエラーなく処理できる"""
     sample_path = _REPO_ROOT / "analysis" / "self_audit_sample.json"
