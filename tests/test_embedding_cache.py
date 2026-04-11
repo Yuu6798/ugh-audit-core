@@ -549,6 +549,86 @@ def test_save_merges_with_concurrent_disk_additions(isolated_cache):
     )
 
 
+def test_save_uses_unique_tmp_file_name(isolated_cache, monkeypatch):
+    """並行 save で tmp file collision が起きないよう、各呼び出しで
+    pid + random suffix を含むユニークな tmp 名が使われる。
+    Codex review r3067190373 対応。
+    """
+    fake = _FakeModel(identity="m")
+    cascade_matcher.encode_texts_cached(fake, ["a"], model_name="m")
+
+    observed_tmp_names: list[str] = []
+    orig_open = open
+
+    def tracking_open(path, mode="r", *args, **kwargs):
+        # tmp ファイルへの書き込みだけを記録
+        p = str(path)
+        if ".tmp" in p and "w" in mode:
+            observed_tmp_names.append(p)
+        return orig_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", tracking_open)
+
+    cascade_matcher.flush_embedding_cache()
+    assert len(observed_tmp_names) == 1
+    tmp_name = observed_tmp_names[0]
+
+    # tmp 名には pid が含まれている（per-process uniqueness）
+    import os as _os
+    assert str(_os.getpid()) in tmp_name
+    # 固定名 embedding_cache.npz.tmp では**ない**（collision 防止）
+    assert not tmp_name.endswith("embedding_cache.npz.tmp")
+    # 最終 .npz は正しく生成されている
+    assert isolated_cache.exists()
+
+
+def test_save_different_calls_use_different_tmp_names(isolated_cache, monkeypatch):
+    """連続した save 呼び出しでも tmp 名は毎回ユニーク（random suffix）。"""
+    fake = _FakeModel(identity="m")
+
+    observed: list[str] = []
+    orig_open = open
+
+    def tracking_open(path, mode="r", *args, **kwargs):
+        p = str(path)
+        if ".tmp" in p and "w" in mode:
+            observed.append(p)
+        return orig_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", tracking_open)
+
+    # 2 回 save して tmp 名が異なることを確認
+    cascade_matcher.encode_texts_cached(fake, ["a"], model_name="m")
+    cascade_matcher.flush_embedding_cache()
+    cascade_matcher.encode_texts_cached(fake, ["b"], model_name="m")
+    cascade_matcher.flush_embedding_cache()
+
+    assert len(observed) == 2
+    assert observed[0] != observed[1]
+
+
+def test_save_cleans_up_tmp_on_failure(isolated_cache, monkeypatch):
+    """write 途中で例外が起きても tmp file が残骸として残らない。"""
+    fake = _FakeModel(identity="m")
+    cascade_matcher.encode_texts_cached(fake, ["a"], model_name="m")
+
+    # np.savez を失敗させる
+    def failing_savez(fh, **kwargs):
+        # file に少し書いた状態で失敗（tmp file は作られている）
+        fh.write(b"partial")
+        raise OSError("simulated write failure")
+
+    monkeypatch.setattr(cascade_matcher.np, "savez", failing_savez)
+
+    # save は exception を raise するが、warning を吐いて吸収する
+    cascade_matcher.flush_embedding_cache()
+
+    # tmp file の残骸が存在しない（cleanup が走った）
+    parent = isolated_cache.parent
+    tmp_leftovers = list(parent.glob("*.tmp"))
+    assert tmp_leftovers == []
+
+
 def test_merge_skips_disk_entries_with_wrong_dim(isolated_cache):
     """merge 時に次元が合わない disk エントリはスキップされる。"""
     fake = _FakeModel(identity="m")

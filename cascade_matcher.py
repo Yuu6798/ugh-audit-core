@@ -178,12 +178,28 @@ def _save_embedding_cache() -> None:
                         "reload-before-save failed, writing in-memory only: %s", e
                     )
 
-        tmp_path = _EMBED_CACHE_PATH.with_name(_EMBED_CACHE_PATH.name + ".tmp")
-        # np.savez は file-like に対しては拡張子を追加しないため、
-        # 開いたバイナリハンドルを渡すことで衝突の無い atomic write を実現する。
-        with open(tmp_path, "wb") as fh:
-            np.savez(fh, **merged)
-        tmp_path.replace(_EMBED_CACHE_PATH)
+        # Per-process unique tmp file (Codex review r3067190373):
+        # 固定 .tmp 名だと並行プロセスが同じ tmp file を同時に open/replace
+        # し合い、inode が上書きされて atomic write の保証が壊れる。
+        # pid + random suffix で各プロセス（各呼び出し）が独立した tmp を
+        # 使うようにして衝突を排除する。
+        tmp_path = _EMBED_CACHE_PATH.with_name(
+            f"{_EMBED_CACHE_PATH.name}.{os.getpid()}-{os.urandom(4).hex()}.tmp"
+        )
+        try:
+            # np.savez は file-like に対しては拡張子を追加しないため、
+            # 開いたバイナリハンドルを渡すことで衝突の無い atomic write を実現する。
+            with open(tmp_path, "wb") as fh:
+                np.savez(fh, **merged)
+            tmp_path.replace(_EMBED_CACHE_PATH)
+        except Exception:
+            # 書き出し途中の tmp が残らないよう best-effort で cleanup
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except OSError:
+                pass
+            raise
         _cache_dirty = False
         _invalidation_pending = False
     except Exception as e:  # noqa: BLE001
