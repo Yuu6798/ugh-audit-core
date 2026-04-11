@@ -152,6 +152,94 @@ def test_extract_transcript_mixed_block_not_dropped(tmp_path):
     assert assistant_turns[1]["content"] == "回答2"
 
 
+def test_classify_user_record_kinds():
+    """_classify_user_record が 4 種類を正しく識別する
+    (Codex PR #61 r3067402451 対応の基礎テスト)。
+    """
+    # real_text: string content
+    kind, text = ect._classify_user_record(
+        {"type": "user", "message": {"content": "hello"}}
+    )
+    assert kind == "real_text"
+    assert text == "hello"
+
+    # real_text: list with text blocks
+    kind, text = ect._classify_user_record({
+        "type": "user",
+        "message": {"content": [{"type": "text", "text": "質問"}]},
+    })
+    assert kind == "real_text"
+    assert text == "質問"
+
+    # real_no_text: image only (no text block)
+    kind, text = ect._classify_user_record({
+        "type": "user",
+        "message": {
+            "content": [{"type": "image", "source": {"data": "...", "type": "base64"}}]
+        },
+    })
+    assert kind == "real_no_text"
+    assert text is None
+
+    # tool_only: tool_result のみ
+    kind, text = ect._classify_user_record({
+        "type": "user",
+        "message": {"content": [{"type": "tool_result", "content": "..."}]},
+    })
+    assert kind == "tool_only"
+    assert text is None
+
+    # invalid: 壊れた record
+    kind, text = ect._classify_user_record({"type": "user"})
+    assert kind == "invalid"
+    assert text is None
+
+
+def test_extract_transcript_image_only_user_preserves_boundary(tmp_path):
+    """text 無し (image のみ) の user turn でも boundary が保持される
+    (Codex PR #61 r3067402451 回帰テスト)。
+    """
+    jsonl_path = tmp_path / "session.jsonl"
+    records = [
+        {"type": "user", "message": {"content": "最初の質問"}},
+        {
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "回答 A"}]},
+        },
+        # 画像のみの user turn (text なし)
+        {
+            "type": "user",
+            "message": {
+                "content": [
+                    {"type": "image", "source": {"data": "xxx", "type": "base64"}}
+                ]
+            },
+        },
+        {
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "回答 B (画像への応答)"}]},
+        },
+    ]
+    with open(jsonl_path, "w", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+    turns = ect.extract_transcript(jsonl_path)
+
+    user_turns = [t for t in turns if t["role"] == "user"]
+    assistant_turns = [t for t in turns if t["role"] == "assistant"]
+
+    # real user turn が 2 つ (text + image-only) 両方とも境界として残る
+    assert len(user_turns) == 2
+    assert user_turns[0]["content"] == "最初の質問"
+    assert "non-text" in user_turns[1]["content"].lower()
+
+    # assistant turn も 2 つに分離されている (merge されていない)
+    assert len(assistant_turns) == 2
+    assert assistant_turns[0]["content"] == "回答 A"
+    assert assistant_turns[1]["content"] == "回答 B (画像への応答)"
+
+
 def test_extract_transcript_skips_pure_tool_result_user_records(tmp_path):
     """tool_result のみの user レコードはスキップされ、隣接 assistant turn の
     segmentation を壊さない。

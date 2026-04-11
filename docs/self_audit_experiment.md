@@ -74,7 +74,7 @@ filler / 評価語密度」とは target が異なる。そのため本実験は
 
 ### Infrastructure bug discovery
 
-Phase 1 の最初の実行結果は、外部 review (Codex bot) によって **3 件の
+Phase 1 の最初の実行結果は、外部 review (Codex bot) によって **5 件の
 measurement bug** を露呈させた。初回の数値は全て inflated / misleading
 だったため、fix 後の再測定値のみを信頼できる結果として扱う。
 
@@ -94,51 +94,55 @@ measurement bug** を露呈させた。初回の数値は全て inflated / misle
    `(?:✅.*){3,}` + DOTALL で、散発した ✅ を含む普通の multi-item list
    も streak として誤検出していた。fix: `✅(?:[ \t\u3000]*✅){2,}` に
    変更し、連続した ✅ (間に whitespace のみ許容) だけを検出
+4. **r3067402450** (self_audit_session.py): `_count_sentences()` が日本語
+   終止符と改行しか split 対象にしていなかったため、英語 `"Added tests.
+   Fixed bug."` が 1 sentence と数えられていた。英語混じり turn で
+   L_Q/L_F の分母が inflated される。fix: ASCII sentence punctuation
+   (`.`, `!`, `?`) の後に whitespace か EOF が続く箇所で split。
+   `e.g.,` や `v3.14` は誤検出しないよう `.` の直後の非 whitespace 文字は
+   split 対象外
+5. **r3067402451** (extract_claude_transcript.py): text 無しの user record
+   (画像 / document のみ) で `_is_real_user_input()` が None を返し、
+   caller が `continue` してしまうため real user turn 境界が消失、
+   assistant chunks が誤って merge されていた。fix: `_classify_user_record()`
+   を導入し `real_text` / `real_no_text` / `tool_only` / `invalid` の
+   4 種類に分類、real 系は必ず turn 境界として flush する
 
-3 件の修正は commits `9f42358`, `f41aa56` に含まれる。
+修正は commits `9f42358`, `f41aa56`, 本 PR の続きに含まれる。
 
 これ自体が Phase 1 の重要な finding: **self-audit infrastructure の
 quality control は外部 review なしでは成立しない**。
 
 ### 修正後の測定値
 
+以下の数値は 5 件の infrastructure bug 全てを修正した最終実装 (commit
+`d813644` 以降) で測定したもの。
+
 #### 全 turn naive before/after
 
 | metric | before (n=16) | after (n=22) | delta |
 |---|---|---|---|
-| L_Q_proxy (mean) | 0.0104 | 0.0451 | **+334%** ↑ |
-| L_F_proxy (mean) | 0.0035 | 0.0112 | **+220%** ↑ |
-| decoration_ratio | 0.3013 | 0.2356 | -21.8% ↓ |
-| redundancy_proxy | 0.2174 | 0.1624 | -25.3% ↓ |
+| L_Q_proxy (mean) | 0.0089 | 0.0420 | **+372%** ↑ |
+| L_F_proxy (mean) | 0.0028 | 0.0100 | **+257%** ↑ |
+| decoration_ratio | 0.3013 | 0.2400 | -20.3% ↓ |
+| redundancy_proxy | 0.2174 | 0.1666 | -23.4% ↓ |
 
 L_Q / L_F が大幅に上がっている理由は task distribution の変化: "after"
 期間が self-audit について議論する meta 応答に偏り、避けるべき評価語を
 例示・quote する文脈で proxy が上昇した (mention vs use の失敗)。
 
-#### Task 層別化
-
-比較を fair にするため、自動分類で assistant turns を code_report
-(commit hash や pytest 結果を含む) と meta (それ以外) に分けた。
-
-| category | n | L_Q | L_F | decoration | redundancy |
-|---|---|---|---|---|---|
-| before code_report | 9 | 0.0126 | 0.0062 | 0.2588 | 0.2855 |
-| after code_report | 10 | 0.0377 | 0.0050 | 0.1387 | 0.1489 |
-| **drift phase (22-32)** | 6 | 0.0188 | 0.0092 | 0.2775 | 0.3356 |
-| before meta | 7 | 0.0075 | 0.0000 | 0.3559 | 0.1298 |
-| after meta | 12 | 0.0513 | 0.0163 | 0.3163 | 0.1736 |
-
 #### 最もフェアな cut: drift phase → after code reports
 
 drift phase (turns 22-32 の Codex cycle で私の drift が最大だった period)
-を after の同一タスク type (code_report) と比較:
+を after の同一タスク type (code_report) と比較。task stratification により
+mention-vs-use と task distribution 交絡を部分的に除去する:
 
-| metric | drift | after code | delta |
+| metric | drift (n=6) | after code (n=11) | delta |
 |---|---|---|---|
-| L_Q_proxy | 0.0188 | 0.0377 | **+100%** ↑ |
-| L_F_proxy | 0.0092 | 0.0050 | **-46%** ↓ |
-| decoration_ratio | 0.2775 | 0.1387 | **-50%** ↓ |
-| redundancy_proxy | 0.3356 | 0.1489 | **-56%** ↓ |
+| L_Q_proxy | 0.0159 | 0.0332 | **+109%** ↑ |
+| L_F_proxy | 0.0074 | 0.0036 | **-51%** ↓ |
+| decoration_ratio | 0.2775 | 0.1350 | **-51%** ↓ |
+| redundancy_proxy | 0.3356 | 0.1610 | **-52%** ↓ |
 
 ## 修正後の honest findings
 

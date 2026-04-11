@@ -162,10 +162,23 @@ class TurnMetrics:
 
 
 def _count_sentences(text: str) -> int:
-    """句点 + 改行で粗く文カウント"""
+    """句点 + 改行で粗く文カウント。
+
+    - 日本語の終止符: 。 ． ！ ？
+    - 改行 (\\n) も文境界とみなす
+    - ASCII sentence punctuation: `.`, `!`, `?` は後続に whitespace か文末が
+      続く場合のみ境界とみなす (Codex review PR #61 r3067402450)。
+      これにより `"Added tests. Fixed bug."` が正しく 2 文として数えられる。
+      `e.g.,` や `v3.14` のような punctuation はスキップされる
+      (`.` の後が whitespace ではない)
+    """
     if not text.strip():
         return 0
-    sentences = re.split(r"[。．\n]+", text)
+    # 分割パターン:
+    # 1) 日本語終止符 / 改行 (連続可)
+    # 2) ASCII sentence punctuation の直後の whitespace (lookbehind)
+    # 3) ASCII sentence punctuation の直後の文末 (lookbehind + lookahead to $)
+    sentences = re.split(r"[。．！？\n]+|(?<=[.!?])\s+|(?<=[.!?])$", text)
     return max(1, sum(1 for s in sentences if s.strip()))
 
 

@@ -38,43 +38,82 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+
+# user record の分類
+# - "real_text":    実ユーザー入力のテキストが取れた (turn 境界 + content)
+# - "real_no_text": 実ユーザー入力だが text ブロックがない (image/document のみ)
+#                   → turn 境界は保持するが content は placeholder
+# - "tool_only":    tool_result のみ (ツール出力、turn 境界ではない)
+# - "invalid":      malformed record
+_USER_REAL_TEXT = "real_text"
+_USER_REAL_NO_TEXT = "real_no_text"
+_USER_TOOL_ONLY = "tool_only"
+_USER_INVALID = "invalid"
+
+
+def _classify_user_record(rec: Dict) -> Tuple[str, Optional[str]]:
+    """user レコードを分類し (kind, text) を返す。
+
+    text/image/document/tool_result が混在しうる Claude API の content 形式で、
+    実ユーザー turn 境界 (text があってもなくても) と tool 出力だけの record
+    を区別する。これによって text 無しの user turn (image 等) が境界を
+    落とさず、assistant chunks が誤って merge されるのを防ぐ
+    (Codex review PR #61 r3067358382 + r3067402451)。
+
+    Returns:
+        ("real_text", content)   — 実ユーザー入力、text あり
+        ("real_no_text", None)   — 実ユーザー入力だが text ブロック無し
+        ("tool_only", None)      — tool_result のみ (turn 境界ではない)
+        ("invalid", None)        — malformed
+    """
+    if rec.get("type") != "user":
+        return (_USER_INVALID, None)
+    msg = rec.get("message", {})
+    if not isinstance(msg, dict):
+        return (_USER_INVALID, None)
+    content = msg.get("content")
+    if isinstance(content, str):
+        return (_USER_REAL_TEXT, content)
+    if not isinstance(content, list):
+        return (_USER_INVALID, None)
+
+    texts: List[str] = []
+    has_tool_result = False
+    has_other_non_text = False
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "text":
+            texts.append(block.get("text", ""))
+        elif btype == "tool_result":
+            has_tool_result = True
+        else:
+            # image, document, etc — text を持たない実ユーザー入力
+            has_other_non_text = True
+
+    if texts:
+        combined = "\n".join(t for t in texts if t.strip())
+        if combined.strip():
+            return (_USER_REAL_TEXT, combined)
+    if has_other_non_text:
+        return (_USER_REAL_NO_TEXT, None)
+    if has_tool_result:
+        return (_USER_TOOL_ONLY, None)
+    return (_USER_INVALID, None)
 
 
 def _is_real_user_input(rec: Dict) -> Optional[str]:
-    """user レコードから実ユーザー入力のテキストを抽出する。
+    """後方互換 wrapper: real_text の text を返し、それ以外は None。
 
-    content は str / list のいずれかで、list の場合は text と tool_result が
-    同じ message 内に混在することがある (Claude API のメッセージ仕様)。
-    その場合でも text ブロックは実ユーザー入力なので拾う必要がある
-    (Codex review PR #61 r3067358382)。
-
-    ルール:
-    - content が str → そのまま返す
-    - content が list → text ブロックを全部連結して返す。tool_result ブロック
-      は無視 (混在していても text があれば拾う)
-    - text ブロックが 1 つも無ければ None (ツール出力だけの user レコード)
+    既存テストとの互換のため残す。新しいコードは `_classify_user_record`
+    を直接使って kind と text を両方受け取ること (turn 境界の判定に必要)。
     """
-    if rec.get("type") != "user":
-        return None
-    msg = rec.get("message", {})
-    if not isinstance(msg, dict):
-        return None
-    content = msg.get("content")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        texts = []
-        for block in content:
-            if not isinstance(block, dict):
-                continue
-            if block.get("type") == "text":
-                texts.append(block.get("text", ""))
-            # tool_result は無視。text と混在していても text を drop しない。
-        if texts:
-            combined = "\n".join(t for t in texts if t.strip())
-            if combined.strip():
-                return combined
+    kind, text = _classify_user_record(rec)
+    if kind == _USER_REAL_TEXT:
+        return text
     return None
 
 
@@ -134,16 +173,25 @@ def extract_transcript(jsonl_path: Path) -> List[Dict[str, Any]]:
             rtype = rec.get("type", "")
 
             if rtype == "user":
-                user_text = _is_real_user_input(rec)
-                if user_text is None:
-                    continue  # tool_result 等はスキップ
-                # 直前の assistant chunks を flush してから user を追加
+                kind, user_text = _classify_user_record(rec)
+                if kind in (_USER_TOOL_ONLY, _USER_INVALID):
+                    # tool output や malformed はスキップ (turn 境界ではない)
+                    continue
+                # real_text / real_no_text のどちらも turn 境界として扱う。
+                # 直前の assistant chunks を flush してから user turn を追加する。
                 _flush_assistant()
                 turn_counter += 1
+                if kind == _USER_REAL_TEXT:
+                    content_str = user_text or ""
+                else:
+                    # 画像 / document only user turn は placeholder を置いて
+                    # 境界だけ保持 (metric は assistant turn しか見ないので
+                    # content は audit に影響しない)
+                    content_str = "[non-text user content]"
                 turns.append({
                     "turn": turn_counter,
                     "role": "user",
-                    "content": user_text,
+                    "content": content_str,
                 })
 
             elif rtype == "assistant":

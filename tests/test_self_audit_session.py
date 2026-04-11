@@ -195,6 +195,44 @@ def test_checkmark_below_threshold_not_detected():
     assert not any("checkmark_streak" in h for h in m.filler_hits)
 
 
+def test_sentence_count_ascii_punctuation():
+    """ASCII sentence punctuation で文境界を検出する
+    (Codex PR #61 r3067402450 回帰テスト)。
+    """
+    # "Added tests. Fixed bug." は 2 文
+    assert sas._count_sentences("Added tests. Fixed bug.") == 2
+    # 単独 "!", "?" も境界
+    assert sas._count_sentences("Hello world! Next statement.") == 2
+    assert sas._count_sentences("Is this a question? Yes it is.") == 2
+    # 日本語と英語の混在
+    assert sas._count_sentences("日本語の文。English sentence.") == 2
+
+
+def test_sentence_count_abbreviation_not_split():
+    """abbreviation や decimal は誤検出しない"""
+    # "e.g.," は "." の後が "," なので split されない
+    assert sas._count_sentences("e.g., this is a single sentence.") == 1
+    # "v3.14" の "." は後が数字なので split されない
+    assert sas._count_sentences("v3.14 was released.") == 1
+
+
+def test_sentence_count_empty_and_single():
+    assert sas._count_sentences("") == 0
+    assert sas._count_sentences("   ") == 0
+    assert sas._count_sentences("Single sentence without period") == 1
+
+
+def test_L_Q_proxy_normalized_by_english_sentence_count():
+    """英語混じり turn で L_Q_proxy が分母 inflation しない"""
+    # 2 文の英語テキスト、両方に評価語
+    content = "This is素晴らしい. That is素晴らしい."
+    m = sas.compute_turn_metrics(1, "assistant", content)
+    # 2 文 × 2 hits = L_Q_proxy = 1.0 (100%)
+    # 旧実装なら 1 文扱いで L_Q_proxy = 2.0 (200%)
+    assert m.sentence_count == 2
+    assert m.L_Q_proxy == 1.0
+
+
 def test_sample_transcript_runs_end_to_end():
     """同梱のサンプル transcript が end-to-end でエラーなく処理できる"""
     sample_path = _REPO_ROOT / "analysis" / "self_audit_sample.json"
