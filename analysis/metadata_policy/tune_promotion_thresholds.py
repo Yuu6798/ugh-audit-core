@@ -28,7 +28,8 @@ def score_policy(questions: list[dict], usage: int, accepted: int, confidence: f
         proposition_count = len(item.get("core_propositions") or [])
         avg_props += proposition_count
         simulated_confidence = min(1.0, 0.45 + 0.1 * min(proposition_count, 4))
-        if proposition_count >= accepted and simulated_confidence >= confidence:
+        simulated_usage = max(1, proposition_count)  # 命題数を usage proxy として使用
+        if simulated_usage >= usage and proposition_count >= accepted and simulated_confidence >= confidence:
             promotable += 1
     avg_props = avg_props / total if total else 0.0
     coverage = promotable / total if total else 0.0

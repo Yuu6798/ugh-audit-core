@@ -26,7 +26,9 @@ def load_promotion_policy(policy_path: Path | None = None) -> PromotionPolicy:
     if not path.exists():
         return DEFAULT_PROMOTION_POLICY
     data = json.loads(path.read_text(encoding="utf-8"))
-    return PromotionPolicy(**{**asdict(DEFAULT_PROMOTION_POLICY), **data})
+    valid_keys = {f.name for f in PromotionPolicy.__dataclass_fields__.values()}
+    merged = {**asdict(DEFAULT_PROMOTION_POLICY), **{k: v for k, v in data.items() if k in valid_keys}}
+    return PromotionPolicy(**merged)
 
 
 def format_recommendation_reasons(reasons: list[str]) -> str:
