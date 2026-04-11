@@ -137,6 +137,8 @@ tests/                # pytest (fixture は tmp_path, モック不使用)
 examples/             # basic_audit.py — E2E サンプル
 docs/                 # 設計ドキュメント
 analysis/             # 検証・分析スクリプト + 成果物
+                      #   self_audit_session.py        — Self-Audit 実験の proxy metric
+                      #   extract_claude_transcript.py — Claude Code jsonl → transcript
 ```
 
 ### コンポーネント別設計ドキュメント
@@ -151,6 +153,7 @@ analysis/             # 検証・分析スクリプト + 成果物
 | LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 検証結果 (HA48 / HA20 / baseline) | [`docs/validation.md`](docs/validation.md) |
+| Self-Audit 実験 (Claude 出力の proxy 測定) | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
 
 ### ドキュメント管理ポリシー
 
