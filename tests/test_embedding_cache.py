@@ -471,6 +471,41 @@ def test_invalidate_empty_cache_deletes_stale_file_on_save(isolated_cache):
     assert cascade_matcher._cache_dirty is False
 
 
+def test_flush_before_lazy_load_preserves_disk_state(isolated_cache):
+    """fresh process (lazy load 前) で flush_embedding_cache() を呼んでも、
+    disk 上の既存エントリが保持される。Codex review r3067224... の回帰テスト。
+    """
+    # Phase 1: disk に既存エントリを書き出す
+    fake = _FakeModel(identity="m")
+    cascade_matcher.encode_texts_cached(
+        fake, ["preserved_a", "preserved_b"], model_name="m"
+    )
+    cascade_matcher.flush_embedding_cache()
+    assert isolated_cache.exists()
+
+    # Phase 2: プロセス再起動を模倣: メモリ状態を完全リセット
+    cascade_matcher.clear_embedding_cache()
+    assert cascade_matcher._cache_loaded is False
+    assert len(cascade_matcher._embedding_cache) == 0
+    # disk file は残っている（前プロセスの成果物）
+    assert isolated_cache.exists()
+
+    # Phase 3: lazy load 前に flush を呼ぶ（診断・メンテ操作を想定）
+    cascade_matcher.flush_embedding_cache()
+
+    # 修正前: 空メモリを authoritative とみなして disk が unlink される
+    # 修正後: lazy load で disk state を取り込んでから save → disk 維持
+    assert isolated_cache.exists()
+
+    # 再ロードして既存エントリが保持されていることを確認
+    cascade_matcher.clear_embedding_cache()
+    cascade_matcher._load_embedding_cache()
+    key_a = cascade_matcher._make_cache_key("preserved_a", "m")
+    key_b = cascade_matcher._make_cache_key("preserved_b", "m")
+    assert key_a in cascade_matcher._embedding_cache
+    assert key_b in cascade_matcher._embedding_cache
+
+
 def test_invalidate_at_startup_purges_stale_disk_file(isolated_cache):
     """プロセス起動直後（lazy load 前）に invalidate を呼んでも、
     disk 上の stale .npz が次の save で削除される。

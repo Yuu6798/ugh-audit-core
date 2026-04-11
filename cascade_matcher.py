@@ -262,8 +262,16 @@ def invalidate_embedding_cache(reason: str = "") -> None:
 
 
 def flush_embedding_cache() -> None:
-    """現時点のキャッシュを即座にディスクへ永続化する。"""
+    """現時点のキャッシュを即座にディスクへ永続化する。
+
+    lazy load 前に呼ばれた場合でも disk 上の既存エントリを維持するため、
+    まず `_load_embedding_cache()` で disk 状態をメモリに取り込んでから
+    save する（Codex review r3067224... 対応）。これが無いと fresh process
+    の診断フラッシュが空メモリを authoritative とみなして disk を unlink
+    し、既存キャッシュを silent に wipe してしまう。
+    """
     global _cache_dirty
+    _load_embedding_cache()
     _cache_dirty = True
     _save_embedding_cache()
 
