@@ -154,6 +154,47 @@ def test_count_pattern_hits_raw_function():
     assert not any(h.startswith("勉強になり×") for h in hits)
 
 
+def test_checkmark_streak_contiguous_only():
+    """contiguous な ✅ streak (3 個以上) のみ検出する。
+    Codex PR #61 r3067358384 回帰テスト。
+    """
+    # ✅ が 3 つ連続 → 検出
+    m = sas.compute_turn_metrics(1, "assistant", "対応済み ✅✅✅")
+    assert any("checkmark_streak" in h for h in m.filler_hits)
+
+    # ✅ が 5 つ連続 → 検出
+    m = sas.compute_turn_metrics(1, "assistant", "✅✅✅✅✅")
+    assert any("checkmark_streak" in h for h in m.filler_hits)
+
+    # 全角 space だけ挟んで 3 つ → 検出 (実質 streak)
+    m = sas.compute_turn_metrics(1, "assistant", "✅　✅　✅")
+    assert any("checkmark_streak" in h for h in m.filler_hits)
+
+
+def test_checkmark_not_detected_in_legitimate_list():
+    """散発した ✅ を含む multi-item report は誤検出しない。"""
+    # 複数行の compliant list (各行に ✅)
+    content = "- 項目A ✅\n- 項目B ✅\n- 項目C ✅\n- 項目D ✅"
+    m = sas.compute_turn_metrics(1, "assistant", content)
+    assert not any("checkmark_streak" in h for h in m.filler_hits)
+
+    # 段落間に散発
+    content = "段落1で結論 ✅\n\n段落2 ✅\n\n段落3 ✅"
+    m = sas.compute_turn_metrics(1, "assistant", content)
+    assert not any("checkmark_streak" in h for h in m.filler_hits)
+
+    # 同一行の離れた 3 つ (テキスト挟む)
+    content = "A は ✅ だが B は ✅ で C も ✅"
+    m = sas.compute_turn_metrics(1, "assistant", content)
+    assert not any("checkmark_streak" in h for h in m.filler_hits)
+
+
+def test_checkmark_below_threshold_not_detected():
+    """✅ が 2 つだけなら streak ではない。"""
+    m = sas.compute_turn_metrics(1, "assistant", "一部 ✅✅ のみ")
+    assert not any("checkmark_streak" in h for h in m.filler_hits)
+
+
 def test_sample_transcript_runs_end_to_end():
     """同梱のサンプル transcript が end-to-end でエラーなく処理できる"""
     sample_path = _REPO_ROOT / "analysis" / "self_audit_sample.json"

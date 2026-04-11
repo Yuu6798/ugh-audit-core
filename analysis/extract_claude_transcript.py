@@ -42,7 +42,19 @@ from typing import Any, Dict, List, Optional
 
 
 def _is_real_user_input(rec: Dict) -> Optional[str]:
-    """user レコードが実ユーザー入力ならその文字列、そうでなければ None。"""
+    """user レコードから実ユーザー入力のテキストを抽出する。
+
+    content は str / list のいずれかで、list の場合は text と tool_result が
+    同じ message 内に混在することがある (Claude API のメッセージ仕様)。
+    その場合でも text ブロックは実ユーザー入力なので拾う必要がある
+    (Codex review PR #61 r3067358382)。
+
+    ルール:
+    - content が str → そのまま返す
+    - content が list → text ブロックを全部連結して返す。tool_result ブロック
+      は無視 (混在していても text があれば拾う)
+    - text ブロックが 1 つも無ければ None (ツール出力だけの user レコード)
+    """
     if rec.get("type") != "user":
         return None
     msg = rec.get("message", {})
@@ -51,20 +63,18 @@ def _is_real_user_input(rec: Dict) -> Optional[str]:
     content = msg.get("content")
     if isinstance(content, str):
         return content
-    # content が list の場合、tool_result ではなく純粋な text ブロックのみ
-    # で構成されていれば実ユーザー入力とみなす
     if isinstance(content, list):
         texts = []
         for block in content:
             if not isinstance(block, dict):
                 continue
-            btype = block.get("type")
-            if btype == "tool_result":
-                return None  # ツール出力なので除外
-            if btype == "text":
+            if block.get("type") == "text":
                 texts.append(block.get("text", ""))
+            # tool_result は無視。text と混在していても text を drop しない。
         if texts:
-            return "\n".join(texts)
+            combined = "\n".join(t for t in texts if t.strip())
+            if combined.strip():
+                return combined
     return None
 
 

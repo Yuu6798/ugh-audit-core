@@ -129,7 +129,11 @@ _ACHIEVEMENT_REPORT_RE = re.compile(
 )
 
 # Checkmark 羅列 (✅✅✅... 累計報告の兆候)
-_CHECKMARK_BULLET_RE = re.compile(r"(?:✅.*){3,}", re.DOTALL)
+# 連続した 3 マーク以上だけを検出する。マーク間には whitespace (半角 SP /
+# tab / 全角 SP) のみ許容し、改行やテキストが挟まるケースは別パターンとして
+# 扱う (Codex review PR #61 r3067358384: 旧 `(?:✅.*){3,}` + DOTALL は、散発
+# した ✅ を含む普通の multi-item report を誤検出していた)。
+_CHECKMARK_BULLET_RE = re.compile(r"✅(?:[ \t\u3000]*✅){2,}")
 
 # Banner section (## 見出し形式)
 _HEADING_RE = re.compile(r"^#{1,4}\s+\S", re.MULTILINE)
