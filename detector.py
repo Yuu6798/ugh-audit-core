@@ -19,7 +19,7 @@ from ugh_calculator import Evidence, _compute_delta_e, _compute_s
 # --- cascade フォールバック import ---
 try:
     from cascade_matcher import (
-        load_model as _cascade_load_model,
+        get_shared_model as _get_cascade_model,
         tier2_candidate,
         tier3_filter,
     )
@@ -27,27 +27,11 @@ try:
 except ImportError:
     _HAS_CASCADE = False
 
+    def _get_cascade_model():  # type: ignore[no-redef]
+        """cascade_matcher 未導入時のフォールバック。常に None を返す。"""
+        return None
+
 _logger = logging.getLogger(__name__)
-
-# SBert モデルキャッシュ（初回ロード時に設定）
-_cascade_model = None
-_cascade_load_attempted = False
-
-
-def _get_cascade_model():
-    """SBert モデルをキャッシュ付きでロードする。失敗時は None を返し、再試行しない。"""
-    global _cascade_model, _cascade_load_attempted
-    if _cascade_model is not None:
-        return _cascade_model
-    if _cascade_load_attempted or not _HAS_CASCADE:
-        return None
-    _cascade_load_attempted = True
-    try:
-        _cascade_model = _cascade_load_model()
-        return _cascade_model
-    except Exception as e:
-        _logger.warning("cascade SBert モデルロード失敗（Tier 1 のみで動作）: %s", e)
-        return None
 
 
 # --- 演算子検出 ---

@@ -40,6 +40,48 @@ Agent({ model: "sonnet", subagent_type: "Explore", prompt: "..." })
 Agent({ subagent_type: "Explore", prompt: "..." })
 ```
 
+## 出力の自己監査原則（Self-Audit Principle）
+
+本リポジトリは AI 回答の意味的誠実性を **PoR / ΔE / L_sem** で定量評価する
+基盤である。**Claude 自身の出力もこの指標で自己監査すること**。
+このリポジトリが測ろうとしているものに、自分の発話が抵触していないかを
+常に確認する。迷ったら「今の出力を `audit.py` に通したらどう判定されるか」
+を考える。
+
+### 指標と出力挙動の対応
+
+| 指標 | Claude 出力での意味 |
+|---|---|
+| **C 軸**（命題カバレッジ） | 次の判断に必要な情報を含んでいるか |
+| **f2**（未知性） | 知っていることと推測を明確に区別しているか |
+| **f4**（前提受容） | ユーザー発言やレビューコメントを無批判に受け入れていないか |
+| **L_Q**（演算子ロス） | 評価語・お世辞で命題の極性を偽装していないか |
+| **L_F**（未知性ロス） | 情報量ゼロの banner・感想段落を挟んでいないか |
+
+### 書くべきもの（C 軸に貢献）
+
+- 設計判断の根拠、採用しなかった選択肢とその理由
+- 将来のリスク・次の意思決定ポイント
+- 既存仮定との矛盾の発見（例: `invalidate` と `merge` のセマンティクス衝突）
+- 次に同じコードを触る人がミスを避けるための文脈
+
+### 書かないもの（ノイズ）
+
+- 事実の感情的な再記述（「的確な指摘でした」「非常に勉強になります」）
+- 累計報告・過去会話の要約（ログを見れば済む）
+- 体裁だけの banner セクション（「所感」「観察」）
+- 評価語だけで情報量ゼロの段落
+- 自動挙動の再宣言（「次の CI 結果を待ちます」等）
+
+### 判断基準
+
+自分の出力を含意レベルで分解し、**既存命題を言い換えているだけの文は
+削る**。新しい含意を追加する文だけ残す。これは L_sem で言えば
+`L_Q` / `L_F` を最小化する操作に対応する。
+
+この原則は、本リポジトリが測る「意味的誠実性」を Claude 自身の出力にも
+適用するという単純な一貫性要請に由来する。
+
 ## Session Memory（永続記憶ワークフロー）
 
 セッション間の記憶喪失を防ぐため、`.claude/memory/` にセッションサマリーを蓄積する。
@@ -102,7 +144,8 @@ analysis/             # 検証・分析スクリプト + 成果物
 | コンポーネント | ドキュメント |
 |---|---|
 | 検出層 (演算子フレーム + Relaxed Tier1) | [`docs/detector_design.md`](docs/detector_design.md) |
-| Cascade Matcher (SBert Tier 2/3) | [`docs/cascade_design.md`](docs/cascade_design.md) |
+| Cascade Matcher (SBert Tier 2/3 + 永続キャッシュ) | [`docs/cascade_design.md`](docs/cascade_design.md) |
+| GoldenStore リファレンス検索 (bigram + SBert rerank) | [`docs/golden_store.md`](docs/golden_store.md) |
 | 計算式 (PoR / ΔE / verdict / gate) | [`docs/formulas.md`](docs/formulas.md) |
 | 意味損失関数 L_sem | [`docs/semantic_loss.md`](docs/semantic_loss.md) |
 | LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
@@ -111,7 +154,7 @@ analysis/             # 検証・分析スクリプト + 成果物
 
 ### ドキュメント管理ポリシー
 
-**CLAUDE.md はリポジトリ横断の普遍的内容のみ記述する (目標: 300 行以内)。**
+**CLAUDE.md はリポジトリ横断の普遍的内容のみ記述する (目標: 400 行以内)。**
 
 新機能・新仕様を追加する際のドキュメント作成ルール:
 
@@ -205,6 +248,7 @@ python examples/basic_audit.py
 | Golden Store | リファレンスセット | `~/.ugh_audit/golden_store.json` |
 | Audit DB | 監査ログ | `~/.ugh_audit/audit.db` |
 | Meta Cache | LLM 生成メタキャッシュ | `~/.ugh_audit/meta_cache/` |
+| Embedding Cache | SBert 永続埋め込み (`.npz`) | `~/.ugh_audit/embedding_cache.npz` |
 | HA48 統合 CSV | 48 件統合アノテーション | `data/human_annotation_48/annotation_48_merged.csv` |
 
 ### 環境変数
@@ -215,8 +259,12 @@ python examples/basic_audit.py
 | `ANTHROPIC_API_KEY` | Claude API キー（LLM meta 生成 / 実験基盤用） | なし |
 | `OPENAI_API_KEY` | OpenAI API キー（GPT/Codex 回答生成用） | なし |
 | `UGH_META_CACHE_DIR` | LLM meta キャッシュディレクトリ | `~/.ugh_audit/meta_cache/` |
+| `UGH_AUDIT_CACHE_DIR` | 埋め込みキャッシュディレクトリ | `~/.ugh_audit/` |
+| `UGH_AUDIT_EMBED_CACHE_DISABLE` | `1/true/yes` で埋め込みキャッシュ無効化 | 無効化しない |
+| `UGH_AUDIT_EMBED_CACHE_MAX` | 埋め込みキャッシュのエントリ上限 (hard cap) | 10000 |
 
-読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` で書き込み可能パスを指定する。
+読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` / `UGH_AUDIT_CACHE_DIR=/tmp/ugh_cache`
+で書き込み可能パスを指定する。
 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` は `experiments/` の実行時のみ必要。
 
 ## Key Thresholds（コア定数）

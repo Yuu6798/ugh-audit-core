@@ -7,7 +7,12 @@ detector.py の既存ロジックは一切変更しない。
 """
 from __future__ import annotations
 
+import atexit
+import hashlib
+import logging
+import os
 import re
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -19,6 +24,8 @@ try:
 except ImportError:
     _HAS_SBERT = False
 
+_logger = logging.getLogger(__name__)
+
 # --- パラメータ ---
 THETA_SBERT: float = 0.50   # cosine similarity 閾値（dev_cascade_20 で校正済み）
 DELTA_GAP: float = 0.04     # top1 - top2 ギャップ閾値（dev_cascade_20 で校正済み）
@@ -28,6 +35,302 @@ MODEL_NAME: str = "paraphrase-multilingual-MiniLM-L12-v2"
 
 # 括弧保護用プレースホルダ
 _PAREN_PLACEHOLDER = "\x00PERIOD\x00"
+
+# ============================================================
+# 永続埋め込みキャッシュ
+# ============================================================
+#
+# 同一テキスト・同一モデルの embedding 再計算を避けるための永続キャッシュ。
+# HA48 反復評価や GoldenStore 再スコアのように同じリファレンスを繰り返し
+# エンコードするワークロードで体感的な高速化が見込める。
+#
+# 設計方針:
+#   - キーは sha256(model_name || '\x00' || text) の先頭 24hex 文字
+#     （96bit、衝突確率は本プロジェクト規模では実質ゼロ）
+#   - .npz 形式で永続化。キーは単一 hex 文字列で np.savez の制約を満たす
+#   - プロセス終了時に atexit で save（書き込み頻度を抑える）
+#   - UGH_AUDIT_EMBED_CACHE_DISABLE=1 で無効化可能
+#   - UGH_AUDIT_CACHE_DIR 環境変数でディレクトリ変更可能
+
+_DEFAULT_CACHE_DIR = Path(
+    os.environ.get("UGH_AUDIT_CACHE_DIR", str(Path.home() / ".ugh_audit"))
+)
+_EMBED_CACHE_PATH = _DEFAULT_CACHE_DIR / "embedding_cache.npz"
+_CACHE_DISABLED = os.environ.get("UGH_AUDIT_EMBED_CACHE_DISABLE", "").lower() in (
+    "1", "true", "yes", "on"
+)
+
+# 容量上限（defense-in-depth）。runaway growth を防ぐため、上限に達したら
+# 新規エントリは返却はするがディスクには永続化しない（LRU ではなく単純な
+# hard cap）。_MAX_CACHE_ENTRIES 環境変数で調整可能。
+try:
+    _MAX_CACHE_ENTRIES: int = int(
+        os.environ.get("UGH_AUDIT_EMBED_CACHE_MAX", "10000")
+    )
+except ValueError:
+    _MAX_CACHE_ENTRIES = 10000
+
+_embedding_cache: Dict[str, np.ndarray] = {}
+_cache_loaded: bool = False
+_cache_dirty: bool = False
+# 現在のキャッシュ内エントリの次元数。異なる次元のベクトルが混在しないよう、
+# 新規エンコード時に不一致を検知したら invalidate_embedding_cache() で全破棄する。
+# None の場合は未確定（空キャッシュ or ロード直後）。
+_cache_embed_dim: Optional[int] = None
+# invalidation 後の authoritative write マーカー。True の間は次回 save で
+# disk との reload-merge をスキップし、in-memory 状態で上書きする。
+# これにより invalidate → 再エンコード → save のフローで、disk 上の stale
+# エントリが merge で復活するのを防ぐ。
+_invalidation_pending: bool = False
+
+
+def _make_cache_key(text: str, model_name: str) -> str:
+    """テキスト + モデル名から衝突確率の低いキャッシュキーを生成する。"""
+    combined = f"{model_name}\x00{text}".encode("utf-8")
+    return hashlib.sha256(combined).hexdigest()[:24]
+
+
+def _load_embedding_cache() -> None:
+    """ディスク上の永続キャッシュを初回アクセス時に読み込む。"""
+    global _cache_loaded, _embedding_cache, _cache_embed_dim
+    if _cache_loaded or _CACHE_DISABLED:
+        _cache_loaded = True
+        return
+    _cache_loaded = True
+    try:
+        if _EMBED_CACHE_PATH.exists():
+            with np.load(_EMBED_CACHE_PATH) as npz:
+                _embedding_cache = {k: npz[k] for k in npz.files}
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("embedding cache load failed (starting empty): %s", e)
+        _embedding_cache = {}
+
+    # ロードしたキャッシュの次元を記録しておく（以降の dim 不一致検出の基準）
+    if _embedding_cache and _cache_embed_dim is None:
+        first_vec = next(iter(_embedding_cache.values()))
+        try:
+            _cache_embed_dim = int(first_vec.shape[0])
+        except (AttributeError, IndexError):
+            _cache_embed_dim = None
+
+
+def _save_embedding_cache() -> None:
+    """ダーティな永続キャッシュをディスクへ書き出す（atomic write）。
+
+    空状態で dirty の場合（invalidation 後など）は、ディスク上の .npz を
+    削除することで stale state の持ち越しを防ぐ（Codex review r3067162768）。
+
+    並行プロセス対策として、書き出し前に disk 上の現在状態を再読み込みし、
+    自プロセスの in-memory 状態と merge してから書き戻す（Codex review
+    r3067185XXX）。これにより「別プロセスが加えた新規エントリを自プロセス
+    の save で silent に上書き削除する」lost-update 問題を緩和する。
+
+    制約: file lock は使わないため load → write 間の微小な race window は
+    残るが、失われ得るのは最大でも 1 エントリで次回呼び出し時に自然に再
+    キャッシュされる。研究段階の scale（HA48）と運用想定（シングル or
+    少数プロセス）を考慮した意図的なトレードオフ。
+    """
+    global _cache_dirty, _invalidation_pending
+    if _CACHE_DISABLED or not _cache_dirty:
+        return
+    try:
+        _EMBED_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if not _embedding_cache:
+            # 空状態の persist: 古い .npz を unlink することで次回起動時に
+            # stale なベクトルが再ロードされないようにする
+            if _EMBED_CACHE_PATH.exists():
+                _EMBED_CACHE_PATH.unlink()
+            _cache_dirty = False
+            _invalidation_pending = False
+            return
+
+        # Invalidation pending の場合は disk と merge せず authoritative に
+        # 上書きする。これにより invalidate → 再エンコード → save フローで
+        # 古い disk エントリが merge で復活するのを防ぐ。
+        if _invalidation_pending:
+            merged: Dict[str, np.ndarray] = dict(_embedding_cache)
+        else:
+            # Reload-then-merge: 並行プロセスの追加分を取り込む
+            merged = dict(_embedding_cache)
+            if _EMBED_CACHE_PATH.exists():
+                try:
+                    with np.load(_EMBED_CACHE_PATH) as npz:
+                        disk_state = {k: npz[k] for k in npz.files}
+                    for k, v in disk_state.items():
+                        # 自プロセスの in-memory が優先（fresh encode を尊重）
+                        if k in merged:
+                            continue
+                        # Dim consistency check: 別モデルの stale エントリが
+                        # 紛れ込むのを防ぐ
+                        if (
+                            _cache_embed_dim is not None
+                            and hasattr(v, "shape")
+                            and v.ndim >= 1
+                            and v.shape[0] != _cache_embed_dim
+                        ):
+                            continue
+                        # 容量上限も尊重
+                        if len(merged) >= _MAX_CACHE_ENTRIES:
+                            break
+                        merged[k] = v
+                except Exception as e:  # noqa: BLE001
+                    _logger.warning(
+                        "reload-before-save failed, writing in-memory only: %s", e
+                    )
+
+        # Per-process unique tmp file (Codex review r3067190373):
+        # 固定 .tmp 名だと並行プロセスが同じ tmp file を同時に open/replace
+        # し合い、inode が上書きされて atomic write の保証が壊れる。
+        # pid + random suffix で各プロセス（各呼び出し）が独立した tmp を
+        # 使うようにして衝突を排除する。
+        tmp_path = _EMBED_CACHE_PATH.with_name(
+            f"{_EMBED_CACHE_PATH.name}.{os.getpid()}-{os.urandom(4).hex()}.tmp"
+        )
+        try:
+            # np.savez は file-like に対しては拡張子を追加しないため、
+            # 開いたバイナリハンドルを渡すことで衝突の無い atomic write を実現する。
+            with open(tmp_path, "wb") as fh:
+                np.savez(fh, **merged)
+            tmp_path.replace(_EMBED_CACHE_PATH)
+        except Exception:
+            # 書き出し途中の tmp が残らないよう best-effort で cleanup
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except OSError:
+                pass
+            raise
+        _cache_dirty = False
+        _invalidation_pending = False
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("embedding cache save failed: %s", e)
+
+
+def clear_embedding_cache() -> None:
+    """メモリ上のキャッシュをクリアする（テスト用）。ディスクは触らない。"""
+    global _embedding_cache, _cache_loaded, _cache_dirty, _cache_embed_dim
+    global _invalidation_pending
+    _embedding_cache = {}
+    _cache_loaded = False
+    _cache_dirty = False
+    _cache_embed_dim = None
+    _invalidation_pending = False
+
+
+def invalidate_embedding_cache(reason: str = "") -> None:
+    """メモリ上のキャッシュを破棄し、次回 save 時にディスクも空で上書きする。
+
+    モデル重み更新時の stale vector 検出（shape/dim 不一致）など、
+    キャッシュ全体を破棄すべき場面で呼ぶ。呼び出し元で graceful に
+    re-encode する前提の公開 API。
+
+    プロセス起動直後（lazy load 前）で disk に stale .npz が残っている
+    ケースでも機能するよう、まず `_load_embedding_cache()` で disk 状態を
+    メモリに読み込んでから破棄する（Codex review r3067177175 対応）。
+    これにより「モデル更新後に手動で invalidate を呼ぶ」という推奨リカバリ
+    フローが、起動時点で実際に disk ファイルを purge するようになる。
+
+    Args:
+        reason: ログに残す破棄理由（任意）。
+    """
+    global _embedding_cache, _cache_dirty, _cache_embed_dim, _invalidation_pending
+
+    # disk 上のキャッシュを先に読み込む。これにより起動直後（メモリ空）の
+    # invalidate 呼び出しが no-op にならない。
+    _load_embedding_cache()
+
+    n_cleared = len(_embedding_cache)
+    # _load_embedding_cache() が破損ファイルで失敗した場合もあり得るので、
+    # disk ファイル自体の存在も no-op 判定に入れる
+    file_exists = (not _CACHE_DISABLED) and _EMBED_CACHE_PATH.exists()
+
+    if n_cleared == 0 and _cache_embed_dim is None and not file_exists:
+        return
+
+    _embedding_cache = {}
+    _cache_embed_dim = None
+    _cache_dirty = True
+    # 次回 save で disk との merge をスキップし、in-memory 状態（可能なら
+    # 再エンコード後の fresh entries のみ）で authoritative に上書きする
+    _invalidation_pending = True
+    _logger.warning(
+        "embedding cache invalidated: %d entries cleared%s%s",
+        n_cleared,
+        " (disk file present)" if file_exists and n_cleared == 0 else "",
+        f" ({reason})" if reason else "",
+    )
+
+
+def flush_embedding_cache() -> None:
+    """現時点のキャッシュを即座にディスクへ永続化する。
+
+    lazy load 前に呼ばれた場合でも disk 上の既存エントリを維持するため、
+    まず `_load_embedding_cache()` で disk 状態をメモリに取り込んでから
+    save する（Codex review r3067224... 対応）。これが無いと fresh process
+    の診断フラッシュが空メモリを authoritative とみなして disk を unlink
+    し、既存キャッシュを silent に wipe してしまう。
+    """
+    global _cache_dirty
+    _load_embedding_cache()
+    _cache_dirty = True
+    _save_embedding_cache()
+
+
+def embedding_cache_stats() -> Dict[str, int]:
+    """キャッシュの状態を返す（テスト / 診断用）。"""
+    return {
+        "entries": len(_embedding_cache),
+        "loaded": int(_cache_loaded),
+        "dirty": int(_cache_dirty),
+        "disabled": int(_CACHE_DISABLED),
+    }
+
+
+atexit.register(_save_embedding_cache)
+
+
+# ============================================================
+# 共有モデルシングルトン
+# ============================================================
+
+_shared_model: Optional["SentenceTransformer"] = None
+_shared_load_failures: int = 0
+# 一過性エラー（HF 初回 DL の I/O hiccup、一時的な lock 競合など）で
+# permanent disable されるのを避けるため、プロセス存続中に最大 N 回まで
+# ロードを再試行する。N 回連続失敗したら恒久的に諦める（真に欠損している
+# ケースで毎コール重いロードを繰り返すのを防ぐ bound）。
+_MAX_SHARED_LOAD_ATTEMPTS: int = 3
+
+
+def get_shared_model() -> Optional["SentenceTransformer"]:
+    """プロセス内で共有される SBert モデルを返す。
+
+    detector.py, golden_store.py など複数箇所から呼ばれる想定。
+    一過性のロード失敗で SBert が permanent disable されないよう、
+    `_MAX_SHARED_LOAD_ATTEMPTS` 回までは再試行する（Codex review
+    r3067206914 対応）。失敗回数がキャップに達したら以降は None を返す。
+    sentence-transformers 未導入時も None を返す。
+    """
+    global _shared_model, _shared_load_failures
+    if _shared_model is not None:
+        return _shared_model
+    if not _HAS_SBERT:
+        return None
+    if _shared_load_failures >= _MAX_SHARED_LOAD_ATTEMPTS:
+        return None
+    try:
+        _shared_model = load_model()
+        _shared_load_failures = 0  # 成功したらカウンタをリセット
+        return _shared_model
+    except Exception as e:  # noqa: BLE001
+        _shared_load_failures += 1
+        _logger.warning(
+            "shared SBert model load failed (attempt %d/%d): %s",
+            _shared_load_failures,
+            _MAX_SHARED_LOAD_ATTEMPTS,
+            e,
+        )
+        return None
 
 
 def load_model(model_name: str = MODEL_NAME) -> SentenceTransformer:
@@ -55,7 +358,7 @@ def encode_texts(
     texts: List[str],
     batch_size: int = 64,
 ) -> np.ndarray:
-    """テキストリストを batch encoding する。
+    """テキストリストを batch encoding する（キャッシュ非経由）。
 
     Args:
         model: SentenceTransformer インスタンス。
@@ -66,6 +369,181 @@ def encode_texts(
         (N, D) の numpy 配列。各行が1テキストの embedding。
     """
     return model.encode(texts, batch_size=batch_size, convert_to_numpy=True)
+
+
+def _infer_model_id(model) -> str:
+    """SentenceTransformer インスタンスから stable な識別子を best-effort で抽出する。
+
+    複数の属性パスを順番に試し、どれも取れなければクラス名ベースの
+    フォールバック識別子を返す。デフォルト `MODEL_NAME` にフォールバック
+    しないのは、別モデルを渡した呼び出しが silent にキャッシュ衝突する
+    のを防ぐため（Codex review r3067060572 の指摘事項）。
+
+    Args:
+        model: SentenceTransformer インスタンス。
+
+    Returns:
+        モデル識別子文字列。未解決時は `"unknown-model:<ClassName>"` 形式。
+    """
+    # 方法 1: 下位 transformer の HF config._name_or_path
+    try:
+        first_module = model._first_module()
+        auto_model = getattr(first_module, "auto_model", None)
+        if auto_model is not None:
+            config = getattr(auto_model, "config", None)
+            if config is not None:
+                name = (
+                    getattr(config, "_name_or_path", None)
+                    or getattr(config, "name_or_path", None)
+                )
+                if name:
+                    return str(name)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 方法 2: model_card_data.base_model（新しめの sentence-transformers）
+    try:
+        card = getattr(model, "model_card_data", None)
+        if card is not None:
+            name = getattr(card, "base_model", None)
+            if name:
+                return str(name)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 方法 3: tokenizer.name_or_path
+    try:
+        first_module = model._first_module()
+        tokenizer = getattr(first_module, "tokenizer", None) or getattr(
+            model, "tokenizer", None
+        )
+        if tokenizer is not None:
+            name = getattr(tokenizer, "name_or_path", None)
+            if name:
+                return str(name)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 最終フォールバック: クラス名（default MODEL_NAME には落とさない）
+    return f"unknown-model:{type(model).__name__}"
+
+
+def encode_texts_cached(
+    model: SentenceTransformer,
+    texts: List[str],
+    model_name: Optional[str] = None,
+    batch_size: int = 64,
+) -> np.ndarray:
+    """永続キャッシュを経由して encode する。
+
+    キャッシュに存在するテキストはディスク / メモリから取得し、未キャッシュ
+    のものだけを 1 バッチでモデルに投げる。戻り値の順序は `texts` と一致する。
+
+    **使い分け指針**: この関数は **再利用性の高いテキスト**
+    （リファレンス命題、GoldenStore の question など）にのみ使うこと。
+    AI回答セグメントなど一回限りのテキストを渡すとキャッシュが単調増加し、
+    `.npz` 全体ロード / 書き出しのコストが累積的に悪化する
+    （Codex review #60 r3067115341 の指摘事項）。
+    一回限りテキストは `encode_texts()` を直接呼ぶこと。
+
+    容量上限 `_MAX_CACHE_ENTRIES` を超えた場合、未キャッシュ分のベクトルは
+    返却はするがメモリ / ディスクには永続化しない（hard cap、LRU なし）。
+
+    Args:
+        model: SentenceTransformer インスタンス。
+        texts: エンコード対象のテキストリスト。
+        model_name: キャッシュキーに埋め込むモデル識別子。
+            None の場合 `_infer_model_id(model)` で実インスタンスから自動推論する
+            （異なるモデル間のキャッシュ混線を防ぐため）。明示指定すれば推論を上書き。
+        batch_size: 未キャッシュ分に対するバッチサイズ。
+
+    Returns:
+        (N, D) の numpy 配列。
+    """
+    global _cache_dirty, _cache_embed_dim
+
+    if not texts:
+        return np.zeros((0, 0), dtype=np.float32)
+
+    if _CACHE_DISABLED:
+        return encode_texts(model, texts, batch_size=batch_size)
+
+    _load_embedding_cache()
+
+    if model_name is None:
+        model_name = _infer_model_id(model)
+
+    keys = [_make_cache_key(t, model_name) for t in texts]
+    missing_indices: List[int] = []
+    missing_texts: List[str] = []
+    for i, (k, t) in enumerate(zip(keys, texts)):
+        if k not in _embedding_cache:
+            missing_indices.append(i)
+            missing_texts.append(t)
+
+    # 未キャッシュ分を一括 encode し、idx → vec の対応を作る
+    new_vec_by_idx: Dict[int, np.ndarray] = {}
+    if missing_texts:
+        new_vecs = encode_texts(model, missing_texts, batch_size=batch_size)
+
+        # Dim drift check (Codex review r3067162770):
+        # 既存 cache の次元と新規エンコード結果の次元が違う場合、
+        # 古いキャッシュエントリは別モデルのもの（stale）と判断して全破棄し、
+        # 再帰的に本関数を呼び直して一貫した次元で再構築する。これが無いと
+        # 既存 cached entry (old dim) と new_vec_by_idx (new dim) が混在し、
+        # 末尾の np.stack で shape 不一致 exception が飛ぶ。
+        new_dim: Optional[int] = None
+        if new_vecs.ndim == 2 and new_vecs.shape[0] > 0:
+            new_dim = int(new_vecs.shape[1])
+        if (
+            new_dim is not None
+            and _cache_embed_dim is not None
+            and _cache_embed_dim != new_dim
+        ):
+            invalidate_embedding_cache(
+                reason=f"dim drift {_cache_embed_dim} -> {new_dim} "
+                       f"detected in encode_texts_cached"
+            )
+            # 再帰呼び出し: invalidation 後は _cache_embed_dim=None なので
+            # drift check が再発火せず 1 段だけで終わる。全 texts が
+            # missing 扱いになり 1 batch で一貫してエンコードされる。
+            return encode_texts_cached(
+                model, texts, model_name=model_name, batch_size=batch_size
+            )
+
+        for idx, vec in zip(missing_indices, new_vecs):
+            new_vec_by_idx[idx] = np.asarray(vec)
+
+    # 容量上限に達するまでのみ永続化する（hard cap）
+    promoted = 0
+    skipped = 0
+    for idx, vec in new_vec_by_idx.items():
+        if len(_embedding_cache) >= _MAX_CACHE_ENTRIES:
+            skipped += 1
+            continue
+        # 初回投入時に dim を記録。以降の guard 基準となる
+        if _cache_embed_dim is None and vec.ndim >= 1:
+            _cache_embed_dim = int(vec.shape[0])
+        _embedding_cache[keys[idx]] = vec
+        promoted += 1
+    if promoted > 0:
+        _cache_dirty = True
+    if skipped > 0:
+        _logger.warning(
+            "embedding cache at capacity %d; %d new entries not persisted "
+            "(consider pruning cache or raising UGH_AUDIT_EMBED_CACHE_MAX)",
+            _MAX_CACHE_ENTRIES, skipped,
+        )
+
+    # 結果アセンブル: キャッシュに入った分は cache から、
+    # cap で弾かれた分は new_vec_by_idx から取る
+    result: List[np.ndarray] = []
+    for i, k in enumerate(keys):
+        if k in _embedding_cache:
+            result.append(_embedding_cache[k])
+        else:
+            result.append(new_vec_by_idx[i])
+    return np.stack(result)
 
 
 def split_response(response: str) -> List[str]:
@@ -194,12 +672,43 @@ def tier2_candidate(
             "pass_tier2": False,
         }
 
-    # Encode proposition + all segments in one batch
-    all_texts = [proposition] + segments
-    embeddings = encode_texts(model, all_texts)
+    # Proposition は HA48 繰り返し評価などで再利用されるため永続キャッシュ経由。
+    # 一方で response segments は AI回答ごとに一意で二度と使われないため、
+    # キャッシュに入れると単調増加して .npz の load/save コストが悪化する
+    # （Codex review #60 r3067115341）。そのため segments は encode_texts で
+    # 直接エンコードし、キャッシュを経由しない。
+    prop_emb = encode_texts_cached(model, [proposition])[0]  # (D,)
+    seg_embs = encode_texts(model, segments)  # (N, D)
 
-    prop_emb = embeddings[0]  # (D,)
-    seg_embs = embeddings[1:]  # (N, D)
+    # Shape guard: cached prop_emb が古いモデル重みの stale vector である
+    # 可能性に備えて、seg_embs の次元と一致しない場合は cache を invalidate
+    # して再エンコードする（Codex review #60 r3067145596）。
+    # これが無いと _cosine_similarity_batch が numpy shape error で abort し、
+    # detector flow 全体が graceful degradation できない。
+    if prop_emb.shape[0] != seg_embs.shape[1]:
+        _logger.warning(
+            "proposition embedding dim %d != segment embedding dim %d; "
+            "invalidating stale cache and re-encoding proposition "
+            "(likely model weights updated without identifier change)",
+            prop_emb.shape[0],
+            seg_embs.shape[1],
+        )
+        invalidate_embedding_cache(
+            reason=f"dim mismatch prop={prop_emb.shape[0]} seg={seg_embs.shape[1]}"
+        )
+        prop_emb = encode_texts_cached(model, [proposition])[0]
+        if prop_emb.shape[0] != seg_embs.shape[1]:
+            # invalidation 後も一致しないのは呼び出し側のモデル不整合
+            # （1 回の呼び出しで異なるモデル同士を混ぜた等）。安全に degrade。
+            return {
+                "top1_sentence": "",
+                "top1_score": 0.0,
+                "top2_sentence": "",
+                "top2_score": 0.0,
+                "gap": 0.0,
+                "all_scores": [],
+                "pass_tier2": False,
+            }
 
     # Cosine similarity
     scores = _cosine_similarity_batch(prop_emb, seg_embs)
