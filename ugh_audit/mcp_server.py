@@ -267,7 +267,6 @@ def audit_answer(
         missing.extend(["delta_e", "quality_score"])
 
     # fail-closed: verdict/mode が想定値であることを保証
-    is_reliable = mode == "computed" and verdict in {"accept", "rewrite", "regenerate"}
     assert verdict in VALID_VERDICTS, f"invalid verdict: {verdict}"
     assert mode in VALID_MODES, f"invalid mode: {mode}"
 
@@ -275,15 +274,22 @@ def audit_answer(
     if evidence.propositions_total > 0:
         hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
 
+    gate_v = _gate_verdict_safe(
+        evidence.f1_anchor, evidence.f2_unknown,
+        evidence.f3_operator, evidence.f4_premise,
+    )
+    is_reliable = (
+        mode == "computed"
+        and verdict in {"accept", "rewrite", "regenerate"}
+        and gate_v != "fail"
+    )
+
     gate = {
         "f1": evidence.f1_anchor,
         "f2": evidence.f2_unknown,
         "f3": evidence.f3_operator,
         "f4": evidence.f4_premise,
-        "gate_verdict": _gate_verdict_safe(
-            evidence.f1_anchor, evidence.f2_unknown,
-            evidence.f3_operator, evidence.f4_premise,
-        ),
+        "gate_verdict": gate_v,
         "primary_fail": _primary_fail_safe(
             evidence.f1_anchor, evidence.f2_unknown,
             evidence.f3_operator, evidence.f4_premise,
