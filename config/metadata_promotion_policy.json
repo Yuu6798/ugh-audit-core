@@ -1,0 +1,7 @@
+{
+  "min_usage_count": 3,
+  "min_accepted_count": 2,
+  "min_confidence": 0.7,
+  "max_rejected_count_for_promotion": 0,
+  "rejected_count_threshold": 3
+}

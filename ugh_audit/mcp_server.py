@@ -25,7 +25,14 @@ from .storage.audit_db import AuditDB
 
 # パイプライン A のインポート
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from ugh_calculator import Evidence, calculate  # noqa: E402
+from ugh_calculator import (  # noqa: E402
+    Evidence,
+    VALID_MODES,
+    VALID_VERDICTS,
+    calculate,
+    derive_mode,
+    derive_verdict,
+)
 
 # detector（検出層）— 利用可能な場合のみ使用
 try:
@@ -36,17 +43,6 @@ except ImportError:
 
 # --- 定数 ---
 SCHEMA_VERSION = "2.0.0"
-
-_VERDICT_ACCEPT = 0.10
-_VERDICT_REWRITE = 0.25
-
-
-def _verdict(delta_e: float) -> str:
-    if delta_e <= _VERDICT_ACCEPT:
-        return "accept"
-    if delta_e <= _VERDICT_REWRITE:
-        return "rewrite"
-    return "regenerate"
 
 
 def _gate_verdict(f1: float, f2: float, f3: float, f4: float) -> str:
@@ -160,6 +156,7 @@ class AuditOutput:
     structural_gate: Dict
     saved_id: Optional[int]
     mode: str
+    is_reliable: bool
     matched_id: Optional[str]
     metadata_source: str
     computed_components: List[str] = field(default_factory=list)
@@ -261,15 +258,18 @@ def audit_answer(
         if "question_meta_missing" not in errors:
             errors.append("core_propositions_missing")
 
-    # verdict / mode
-    if state.C is not None and state.delta_e is not None:
-        verdict = _verdict(state.delta_e)
-        mode = "computed"
+    # verdict / mode (集約関数で導出)
+    verdict = derive_verdict(state)
+    mode = derive_mode(state)
+    if mode == "computed":
         computed.extend(["delta_e", "quality_score"])
     else:
-        verdict = "degraded"
-        mode = "degraded"
         missing.extend(["delta_e", "quality_score"])
+
+    # fail-closed: verdict/mode が想定値であることを保証
+    is_reliable = mode == "computed" and verdict in {"accept", "rewrite", "regenerate"}
+    assert verdict in VALID_VERDICTS, f"invalid verdict: {verdict}"
+    assert mode in VALID_MODES, f"invalid mode: {mode}"
 
     hit_rate: Optional[str] = None
     if evidence.propositions_total > 0:
@@ -332,6 +332,7 @@ def audit_answer(
         structural_gate=gate,
         saved_id=saved_id,
         mode=mode,
+        is_reliable=is_reliable,
         matched_id=matched_id,
         metadata_source=metadata_source,
         computed_components=sorted(computed),

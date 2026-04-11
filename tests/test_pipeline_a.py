@@ -95,25 +95,26 @@ class TestVerdict:
         assert self._verdict(0.50) == "regenerate"
         assert self._verdict(1.00) == "regenerate"
 
-    def test_verdict_from_server(self):
-        """server.py の _verdict と同じ結果になることを確認"""
-        from ugh_audit.server import _verdict as server_verdict
+    def test_verdict_centralized(self):
+        """derive_verdict が server/mcp で共有される集約関数であることを確認"""
+        from ugh_calculator import derive_verdict, State
 
-        assert server_verdict(0.0) == "accept"
-        assert server_verdict(0.10) == "accept"
-        assert server_verdict(0.11) == "rewrite"
-        assert server_verdict(0.25) == "rewrite"
-        assert server_verdict(0.26) == "regenerate"
+        def _make(delta_e):
+            if delta_e is None:
+                return State(S=1.0, C=None, delta_e=None, quality_score=None,
+                             delta_e_bin=None, C_bin=None,
+                             por_state="inactive", grv_tag="none")
+            return State(S=1.0, C=1.0, delta_e=delta_e,
+                         quality_score=5.0 - 4.0 * delta_e,
+                         delta_e_bin=1, C_bin=3,
+                         por_state="inactive", grv_tag="none")
 
-    def test_verdict_from_mcp(self):
-        """mcp_server.py の _verdict と同じ結果になることを確認"""
-        from ugh_audit.mcp_server import _verdict as mcp_verdict
-
-        assert mcp_verdict(0.0) == "accept"
-        assert mcp_verdict(0.10) == "accept"
-        assert mcp_verdict(0.11) == "rewrite"
-        assert mcp_verdict(0.25) == "rewrite"
-        assert mcp_verdict(0.26) == "regenerate"
+        assert derive_verdict(_make(0.0)) == "accept"
+        assert derive_verdict(_make(0.10)) == "accept"
+        assert derive_verdict(_make(0.11)) == "rewrite"
+        assert derive_verdict(_make(0.25)) == "rewrite"
+        assert derive_verdict(_make(0.26)) == "regenerate"
+        assert derive_verdict(_make(None)) == "degraded"
 
     def test_verdict_from_collector(self):
         """audit_collector.py の _verdict と同じ結果になることを確認"""

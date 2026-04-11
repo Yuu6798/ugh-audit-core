@@ -12,7 +12,7 @@ from typing import Dict, List
 
 import yaml
 
-from ugh_calculator import Evidence, State
+from ugh_calculator import Evidence, State, VALID_VERDICTS, derive_verdict
 
 # --- opcodes のロード ---
 _OPCODES_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "opcodes"
@@ -27,22 +27,8 @@ def _load_opcodes() -> Dict[str, dict]:
 
 
 def _decision(state: State) -> str:
-    """decision logic（HA48 検証済み確定値）
-
-    ΔE ≤ 0.10  → accept
-    0.10 < ΔE ≤ 0.25  → rewrite
-    ΔE > 0.25  → regenerate
-    C=None (ΔE算出不可) → degraded
-
-    server.py / mcp_server.py の _verdict() と同一閾値。
-    """
-    if state.delta_e is None:
-        return "degraded"
-    if state.delta_e <= 0.10:
-        return "accept"
-    if state.delta_e <= 0.25:
-        return "rewrite"
-    return "regenerate"
+    """decision logic — derive_verdict() に委譲"""
+    return derive_verdict(state)
 
 
 def _build_repair_order(
@@ -126,9 +112,10 @@ def decide(state: State, evidence: Evidence) -> dict:
     opcodes = _load_opcodes()
 
     decision = _decision(state)
+    assert decision in VALID_VERDICTS, f"invalid decision: {decision}"
 
-    # accept判定時は修復不要 — STOP_REWRITEのみ
-    if decision == "accept":
+    # accept/degraded判定時は修復不要 — STOP_REWRITEのみ
+    if decision in {"accept", "degraded"}:
         repair_order = ["STOP_REWRITE"]
     else:
         repair_order = _build_repair_order(evidence, state, opcodes)
