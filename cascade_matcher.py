@@ -270,27 +270,42 @@ atexit.register(_save_embedding_cache)
 # ============================================================
 
 _shared_model: Optional["SentenceTransformer"] = None
-_shared_load_attempted: bool = False
+_shared_load_failures: int = 0
+# 一過性エラー（HF 初回 DL の I/O hiccup、一時的な lock 競合など）で
+# permanent disable されるのを避けるため、プロセス存続中に最大 N 回まで
+# ロードを再試行する。N 回連続失敗したら恒久的に諦める（真に欠損している
+# ケースで毎コール重いロードを繰り返すのを防ぐ bound）。
+_MAX_SHARED_LOAD_ATTEMPTS: int = 3
 
 
 def get_shared_model() -> Optional["SentenceTransformer"]:
     """プロセス内で共有される SBert モデルを返す。
 
     detector.py, golden_store.py など複数箇所から呼ばれる想定。
-    初回ロードに失敗した場合は以降 None を返し再試行しない。
+    一過性のロード失敗で SBert が permanent disable されないよう、
+    `_MAX_SHARED_LOAD_ATTEMPTS` 回までは再試行する（Codex review
+    r3067206914 対応）。失敗回数がキャップに達したら以降は None を返す。
     sentence-transformers 未導入時も None を返す。
     """
-    global _shared_model, _shared_load_attempted
+    global _shared_model, _shared_load_failures
     if _shared_model is not None:
         return _shared_model
-    if _shared_load_attempted or not _HAS_SBERT:
+    if not _HAS_SBERT:
         return None
-    _shared_load_attempted = True
+    if _shared_load_failures >= _MAX_SHARED_LOAD_ATTEMPTS:
+        return None
     try:
         _shared_model = load_model()
+        _shared_load_failures = 0  # 成功したらカウンタをリセット
         return _shared_model
     except Exception as e:  # noqa: BLE001
-        _logger.warning("shared SBert model load failed: %s", e)
+        _shared_load_failures += 1
+        _logger.warning(
+            "shared SBert model load failed (attempt %d/%d): %s",
+            _shared_load_failures,
+            _MAX_SHARED_LOAD_ATTEMPTS,
+            e,
+        )
         return None
 
 

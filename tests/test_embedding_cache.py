@@ -688,6 +688,95 @@ def test_dim_drift_recovery_does_not_infinite_recurse(isolated_cache):
     assert result.shape == (3, 8)
 
 
+# ============================================================
+# 共有モデルロードの bounded retry (Codex review r3067206914 対応)
+# ============================================================
+
+
+@pytest.fixture
+def reset_shared_model():
+    """共有モデルのグローバル状態をテスト前後でリセットする。"""
+    cascade_matcher._shared_model = None
+    cascade_matcher._shared_load_failures = 0
+    yield
+    cascade_matcher._shared_model = None
+    cascade_matcher._shared_load_failures = 0
+
+
+def test_shared_model_retries_after_transient_failure(reset_shared_model, monkeypatch):
+    """一過性のロード失敗後でも次の呼び出しで再試行して成功を拾える。"""
+    monkeypatch.setattr(cascade_matcher, "_HAS_SBERT", True)
+
+    call_count = {"n": 0}
+    sentinel_model = object()
+
+    def flaky_load(model_name=cascade_matcher.MODEL_NAME):
+        call_count["n"] += 1
+        if call_count["n"] < 3:
+            raise OSError("simulated transient failure")
+        return sentinel_model
+
+    monkeypatch.setattr(cascade_matcher, "load_model", flaky_load)
+
+    # 最初の 2 回は失敗 → None
+    assert cascade_matcher.get_shared_model() is None
+    assert cascade_matcher._shared_load_failures == 1
+    assert cascade_matcher.get_shared_model() is None
+    assert cascade_matcher._shared_load_failures == 2
+
+    # 3 回目で成功 → モデル取得、失敗カウンタ reset
+    assert cascade_matcher.get_shared_model() is sentinel_model
+    assert cascade_matcher._shared_load_failures == 0
+    assert call_count["n"] == 3
+
+    # 以降は cached model を即返し、load_model は呼ばれない
+    assert cascade_matcher.get_shared_model() is sentinel_model
+    assert call_count["n"] == 3
+
+
+def test_shared_model_stops_retrying_after_cap(reset_shared_model, monkeypatch):
+    """_MAX_SHARED_LOAD_ATTEMPTS を超えたら以降は load_model を呼ばない。"""
+    monkeypatch.setattr(cascade_matcher, "_HAS_SBERT", True)
+    monkeypatch.setattr(cascade_matcher, "_MAX_SHARED_LOAD_ATTEMPTS", 2)
+
+    call_count = {"n": 0}
+
+    def always_fail(model_name=cascade_matcher.MODEL_NAME):
+        call_count["n"] += 1
+        raise OSError("permanent failure")
+
+    monkeypatch.setattr(cascade_matcher, "load_model", always_fail)
+
+    # cap=2 までは試行
+    assert cascade_matcher.get_shared_model() is None
+    assert cascade_matcher.get_shared_model() is None
+    assert call_count["n"] == 2
+
+    # 3 回目以降は試行せずに None を返す（bound cost）
+    assert cascade_matcher.get_shared_model() is None
+    assert cascade_matcher.get_shared_model() is None
+    assert call_count["n"] == 2
+
+
+def test_shared_model_returns_none_without_sbert(reset_shared_model, monkeypatch):
+    """sentence-transformers 未導入時は load_model を呼ばずに None。"""
+    monkeypatch.setattr(cascade_matcher, "_HAS_SBERT", False)
+
+    called = {"n": 0}
+
+    def should_not_be_called(model_name=cascade_matcher.MODEL_NAME):
+        called["n"] += 1
+        return object()
+
+    monkeypatch.setattr(cascade_matcher, "load_model", should_not_be_called)
+
+    assert cascade_matcher.get_shared_model() is None
+    assert cascade_matcher.get_shared_model() is None
+    assert called["n"] == 0
+    # _HAS_SBERT=False の早期リターンは failure カウントを消費しない
+    assert cascade_matcher._shared_load_failures == 0
+
+
 def test_tier2_candidate_does_not_raise_on_persistent_mismatch(isolated_cache):
     """万一 invalidation 後も dim 不一致が解消しない場合でも、
     例外を投げずに空の pass_tier2=False 結果を返す。"""

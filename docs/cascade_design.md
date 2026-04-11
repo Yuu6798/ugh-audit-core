@@ -525,8 +525,14 @@ from cascade_matcher import (
 golden_store.py` の両方から利用され、モデルロードの重複を避ける。
 
 - 初回呼び出し時に `load_model()` を実行
-- ロード失敗時は `None` を返し、以降リトライしない
+- **Bounded retry** (Codex review r3067206914 対応): ロード失敗時は
+  `_MAX_SHARED_LOAD_ATTEMPTS` (デフォルト 3) までは次回呼び出しで再試行
+  する。HF 初回 DL の I/O hiccup などの一過性失敗で SBert が恒久的に
+  disable されるのを防ぐ。一方、連続 N 回失敗後は None を返し続け、
+  真に欠損しているケースで毎コール重いロードを繰り返すコストを防ぐ
+- 成功時は失敗カウンタをリセット（断続的失敗後の成功も正常動作）
 - sentence-transformers 未導入環境でも `None` を返すのみでエラーは投げない
+  （`_HAS_SBERT=False` は failure カウントを消費しない）
 
 以前は `detector.py` が独自にシングルトンを持っていたが、`golden_store.py`
 の Stage 3 再スコアでも SBert を使うため、重複ロードを避けるため
