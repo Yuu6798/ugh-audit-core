@@ -164,21 +164,31 @@ class TurnMetrics:
 def _count_sentences(text: str) -> int:
     """句点 + 改行で粗く文カウント。
 
-    - 日本語の終止符: 。 ． ！ ？
-    - 改行 (\\n) も文境界とみなす
-    - ASCII sentence punctuation: `.`, `!`, `?` は後続に whitespace か文末が
-      続く場合のみ境界とみなす (Codex review PR #61 r3067402450)。
-      これにより `"Added tests. Fixed bug."` が正しく 2 文として数えられる。
-      `e.g.,` や `v3.14` のような punctuation はスキップされる
-      (`.` の後が whitespace ではない)
+    分割ルール:
+    - 日本語の終止符 (。．！？) と改行は文境界
+    - ASCII sentence punctuation (.!?) は直前が非数字・非空白かつ後続に
+      whitespace か文末が続く場合のみ境界: `"Added. Fixed."` → 2 文
+      (Codex PR #61 r3067402450)
+    - `"v3.14"` のような数字の直後の `.` は split されない (数字除外)
+
+    前処理:
+    - 行頭の番号付きリストマーカー (`1.` `2)` 等) は空文字に置換する。
+      これが無いと `"1. Added tests\\n2. Fixed bug"` が 4 文扱いに膨らむ
+      (Codex PR #61 r3067417544)。line-start に限定しているので、mid-line
+      の `"Section 1. It is..."` のような数字参照は影響を受けない
     """
     if not text.strip():
         return 0
+    # 行頭の番号リストマーカーを除去 (MULTILINE)
+    text = re.sub(r"(?m)^\s*\d+[.)]\s+", "", text)
     # 分割パターン:
     # 1) 日本語終止符 / 改行 (連続可)
-    # 2) ASCII sentence punctuation の直後の whitespace (lookbehind)
-    # 3) ASCII sentence punctuation の直後の文末 (lookbehind + lookahead to $)
-    sentences = re.split(r"[。．！？\n]+|(?<=[.!?])\s+|(?<=[.!?])$", text)
+    # 2) 非数字非空白 + ASCII sentence punctuation + whitespace
+    # 3) ASCII sentence punctuation + EOF (末尾 trim 用)
+    sentences = re.split(
+        r"[。．！？\n]+|(?<=[^\d\s][.!?])\s+|(?<=[.!?])$",
+        text,
+    )
     return max(1, sum(1 for s in sentences if s.strip()))
 
 
@@ -361,6 +371,10 @@ def load_transcript(path: Path) -> List[Dict]:
 
 
 def write_csv(metrics: List[TurnMetrics], path: Path) -> None:
+    # --output に新規 subdirectory を含むパスが指定されても失敗しないよう、
+    # parent を先に作る (Codex PR #61 r3067417546)。extract_claude_transcript.py
+    # の main() と同じ慣習。
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([

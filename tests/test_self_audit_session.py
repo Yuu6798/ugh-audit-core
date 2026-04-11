@@ -233,6 +233,46 @@ def test_L_Q_proxy_normalized_by_english_sentence_count():
     assert m.L_Q_proxy == 1.0
 
 
+def test_sentence_count_numbered_list_not_over_split():
+    """番号付きリスト (1. / 2. / 3.) が false sentence boundary を作らない
+    (Codex PR #61 r3067417544 回帰テスト)。
+    """
+    # "1. Added tests\n2. Fixed bug" は 2 項目 = 2 文
+    assert sas._count_sentences("1. Added tests\n2. Fixed bug") == 2
+    # 3 項目
+    assert sas._count_sentences("1. First\n2. Second\n3. Third") == 3
+    # preamble + 3 項目 = 4 文
+    assert sas._count_sentences("Steps:\n1. Run tests\n2. Commit\n3. Push") == 4
+    # parens variant
+    assert sas._count_sentences("1) First\n2) Second") == 2
+
+
+def test_sentence_count_bullet_list_unaffected():
+    """ハイフン bullet list は数値リストと無関係に改行で split される"""
+    assert sas._count_sentences("- A\n- B\n- C") == 3
+
+
+def test_write_csv_creates_parent_directories(tmp_path):
+    """--output が存在しない subdirectory を指しても失敗しない
+    (Codex PR #61 r3067417546 回帰テスト)。
+    """
+    nested_path = tmp_path / "new" / "nested" / "dir" / "metrics.csv"
+    assert not nested_path.parent.exists()
+
+    metrics = [
+        sas.TurnMetrics(turn=1, role="assistant", char_count=10, sentence_count=1),
+        sas.TurnMetrics(turn=2, role="assistant", char_count=20, sentence_count=2),
+    ]
+    sas.write_csv(metrics, nested_path)
+
+    assert nested_path.exists()
+    assert nested_path.parent.exists()
+    # File contains header + 2 rows
+    content = nested_path.read_text(encoding="utf-8")
+    assert "turn" in content
+    assert content.count("\n") >= 3  # header + 2 data rows (+ trailing)
+
+
 def test_sample_transcript_runs_end_to_end():
     """同梱のサンプル transcript が end-to-end でエラーなく処理できる"""
     sample_path = _REPO_ROOT / "analysis" / "self_audit_sample.json"
