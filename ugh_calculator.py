@@ -20,8 +20,16 @@ WEIGHTS_F = {"f1": 5, "f2": 25, "f3": 5, "f4": 5}  # 構造要素の重み
 WEIGHT_S = 2   # ΔE計算における S の重み
 WEIGHT_C = 1   # ΔE計算における C の重み
 
+# --- verdict 閾値 (HA48 検証済み確定値) ---
+VERDICT_ACCEPT = 0.10
+VERDICT_REWRITE = 0.25
+
 # --- ΔE ビン閾値 (HA48 検証済み確定値に統一) ---
-DELTA_E_BIN_THRESHOLDS = [0.10, 0.25]  # accept/rewrite境界, rewrite/regenerate境界
+DELTA_E_BIN_THRESHOLDS = [VERDICT_ACCEPT, VERDICT_REWRITE]
+
+# --- 有効な verdict / mode 値 ---
+VALID_VERDICTS = frozenset({"accept", "rewrite", "regenerate", "degraded"})
+VALID_MODES = frozenset({"computed", "degraded"})
 
 # --- C ビン閾値 ---
 C_BIN_THRESHOLDS = [0.34, 0.67]  # bin1/2境界, bin2/3境界
@@ -192,3 +200,30 @@ def calculate(evidence: Evidence) -> State:
         por_state="inactive",
         grv_tag=_grv_tag(evidence),
     )
+
+
+def derive_verdict(state: State) -> str:
+    """State から verdict を導出する (HA48 検証済み確定値)
+
+    ΔE ≤ 0.10  → accept
+    0.10 < ΔE ≤ 0.25  → rewrite
+    ΔE > 0.25  → regenerate
+    C=None (ΔE算出不可) → degraded
+    """
+    if state.delta_e is None:
+        return "degraded"
+    if state.delta_e <= VERDICT_ACCEPT:
+        return "accept"
+    if state.delta_e <= VERDICT_REWRITE:
+        return "rewrite"
+    return "regenerate"
+
+
+def derive_mode(state: State) -> str:
+    """State から mode を導出する
+
+    C が存在すれば computed、なければ degraded。
+    """
+    if state.C is None:
+        return "degraded"
+    return "computed"
