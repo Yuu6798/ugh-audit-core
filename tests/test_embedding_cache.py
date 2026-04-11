@@ -514,6 +514,100 @@ def test_invalidate_is_noop_when_truly_empty(isolated_cache):
     assert not isolated_cache.exists()
 
 
+def test_save_merges_with_concurrent_disk_additions(isolated_cache):
+    """save 時に他プロセスが disk に追加したエントリを merge して保持する。
+    Codex review r3067185... 対応。
+    """
+    fake = _FakeModel(identity="m")
+
+    # Process A: 'a' を encode して in-memory に保持（まだ flush しない）
+    cascade_matcher.encode_texts_cached(fake, ["a"], model_name="m")
+    key_a = cascade_matcher._make_cache_key("a", "m")
+    assert key_a in cascade_matcher._embedding_cache
+
+    # 並行プロセス B を模倣: disk に 'b' を直接書き込む
+    # （A の知らないところで別プロセスが追加した状態）
+    key_b = cascade_matcher._make_cache_key("b", "m")
+    vec_b = np.full(8, 7.5, dtype=np.float32)
+    with open(isolated_cache, "wb") as fh:
+        np.savez(fh, **{key_b: vec_b})
+    assert isolated_cache.exists()
+
+    # Process A が flush: 旧実装だと disk を silent に overwrite して 'b' が消える
+    # 新実装だと reload-merge で {a, b} 両方が保存される
+    cascade_matcher.flush_embedding_cache()
+
+    # 再ロードして確認
+    cascade_matcher.clear_embedding_cache()
+    cascade_matcher._load_embedding_cache()
+
+    assert key_a in cascade_matcher._embedding_cache
+    assert key_b in cascade_matcher._embedding_cache
+    # B の vector が exact に保持されている
+    np.testing.assert_array_equal(
+        cascade_matcher._embedding_cache[key_b], vec_b
+    )
+
+
+def test_merge_skips_disk_entries_with_wrong_dim(isolated_cache):
+    """merge 時に次元が合わない disk エントリはスキップされる。"""
+    fake = _FakeModel(identity="m")
+
+    # A: 8-dim entry を in-memory
+    cascade_matcher.encode_texts_cached(fake, ["a"], model_name="m")
+    assert cascade_matcher._cache_embed_dim == 8
+
+    # Disk に 16-dim の stale エントリが存在する状況を模倣
+    # （別モデルが過去に書いた残骸）
+    key_stale = cascade_matcher._make_cache_key("stale", "m")
+    vec_stale = np.zeros(16, dtype=np.float32)
+    with open(isolated_cache, "wb") as fh:
+        np.savez(fh, **{key_stale: vec_stale})
+
+    # Flush: merge でスキャンするが dim 不一致で stale をスキップ
+    cascade_matcher.flush_embedding_cache()
+
+    # 再ロード
+    cascade_matcher.clear_embedding_cache()
+    cascade_matcher._load_embedding_cache()
+
+    # A のエントリだけが残り、stale エントリは含まれない
+    key_a = cascade_matcher._make_cache_key("a", "m")
+    assert key_a in cascade_matcher._embedding_cache
+    assert key_stale not in cascade_matcher._embedding_cache
+
+
+def test_invalidation_pending_skips_merge(isolated_cache):
+    """invalidate 後の save は merge を行わず authoritative に上書きする。
+
+    これが無いと invalidate → 再エンコード → save フローで disk 上の
+    古いエントリが merge で復活してしまう。
+    """
+    fake = _FakeModel(identity="m")
+
+    # Disk に古いエントリを用意
+    cascade_matcher.encode_texts_cached(fake, ["old1", "old2"], model_name="m")
+    cascade_matcher.flush_embedding_cache()
+    assert isolated_cache.exists()
+
+    # invalidate → 新しいエントリを追加 → flush
+    cascade_matcher.invalidate_embedding_cache(reason="model-update-recovery")
+    assert cascade_matcher._invalidation_pending is True
+    cascade_matcher.encode_texts_cached(fake, ["new1"], model_name="m")
+    cascade_matcher.flush_embedding_cache()
+    # フラグは save 後にリセット
+    assert cascade_matcher._invalidation_pending is False
+
+    # 再ロードして: new1 のみ、old1/old2 は復活しない
+    cascade_matcher.clear_embedding_cache()
+    cascade_matcher._load_embedding_cache()
+
+    key_new1 = cascade_matcher._make_cache_key("new1", "m")
+    key_old1 = cascade_matcher._make_cache_key("old1", "m")
+    assert key_new1 in cascade_matcher._embedding_cache
+    assert key_old1 not in cascade_matcher._embedding_cache
+
+
 def test_invalidate_then_repopulate_overwrites_stale_file(isolated_cache):
     """invalidate 後に別のエントリを入れた場合、disk の .npz が新しい
     エントリのみで上書きされ、古いエントリは含まれない。"""

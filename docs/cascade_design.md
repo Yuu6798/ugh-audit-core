@@ -417,6 +417,43 @@ one-off テキストを渡された場合の保険。
 - **Atomic write**: `.npz.tmp` に書いた後 `Path.replace()` で差し替え
 - **破損回復**: 読み込み時に `np.load` が失敗したら警告ログを出して空
   スタート
+- **並行プロセス対策**: 書き出し前に disk 上の現在状態を reload して
+  自プロセスの in-memory と merge してから書き戻す
+  （in-memory 優先、dim consistency + 容量上限チェック付き）
+- **Invalidation 優先**: `invalidate_embedding_cache()` 後は
+  `_invalidation_pending` フラグで次回 save の merge を無効化し、
+  in-memory 状態で authoritative に上書きする（disk 上の stale エントリ
+  が merge で復活するのを防ぐ）
+
+### 並行プロセスセマンティクス（Codex review r3067185...）
+
+**カバーする問題**: 2 つのプロセス A / B が同じキャッシュファイルに
+書き込むと、後に exit した側が先に exit した側の新規エントリを silent
+に上書き削除する lost-update 問題。
+
+**対策**: 書き出し前の **reload-then-merge**:
+
+```
+save():
+  if invalidation_pending:
+      # Authoritative write（merge しない）
+      disk = in_memory
+  else:
+      merged = dict(in_memory)        # 自プロセスが優先
+      for k, v in disk.items():
+          if k in merged: continue     # 既存は上書きしない
+          if v.shape[0] != cache_dim: continue  # 次元不一致は stale
+          if len(merged) >= MAX: break  # 容量上限
+          merged[k] = v                 # 他プロセスの追加を取り込む
+      disk = merged
+```
+
+**カバーしない限界**: load と write の間の race window（非常に小さい）。
+ここで lost update が起きうるのは最大 1 エントリで、次回呼び出し時に
+自然に再キャッシュされる。File lock を使った厳密な排他は、研究段階の
+scale（HA48）と運用想定（シングル or 少数プロセス）に対して過剰と判断
+して採用しない。production scale に移行した場合は portalocker / fcntl
+ベースの lock 追加を検討する。
 
 ### 環境変数
 
@@ -446,7 +483,7 @@ from cascade_matcher import (
 
 ### テストカバレッジ
 
-`tests/test_embedding_cache.py`（24 件）で以下を検証:
+`tests/test_embedding_cache.py`（27 件）で以下を検証:
 
 | テスト | 検証内容 |
 |---|---|
@@ -474,6 +511,9 @@ from cascade_matcher import (
 | `test_cache_embed_dim_tracked_on_new_entries` | 初回投入時の dim 記録 |
 | `test_tier2_candidate_recovers_from_stale_cache_dim` | Codex r3067145596 回帰: stale cache から gracefully recover |
 | `test_tier2_candidate_does_not_raise_on_persistent_mismatch` | invalidation 後も不一致なら safe degrade |
+| `test_save_merges_with_concurrent_disk_additions` | Codex r3067185 回帰: 並行プロセスの追加分を保持 |
+| `test_merge_skips_disk_entries_with_wrong_dim` | merge 時の dim consistency check |
+| `test_invalidation_pending_skips_merge` | invalidate 後は merge スキップして authoritative write |
 
 実 SBert モデルを使わない fake encoder で完結するため、SBert 未導入の CI
 環境でも全件実行される。

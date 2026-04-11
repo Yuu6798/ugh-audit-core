@@ -77,6 +77,11 @@ _cache_dirty: bool = False
 # 新規エンコード時に不一致を検知したら invalidate_embedding_cache() で全破棄する。
 # None の場合は未確定（空キャッシュ or ロード直後）。
 _cache_embed_dim: Optional[int] = None
+# invalidation 後の authoritative write マーカー。True の間は次回 save で
+# disk との reload-merge をスキップし、in-memory 状態で上書きする。
+# これにより invalidate → 再エンコード → save のフローで、disk 上の stale
+# エントリが merge で復活するのを防ぐ。
+_invalidation_pending: bool = False
 
 
 def _make_cache_key(text: str, model_name: str) -> str:
@@ -114,8 +119,18 @@ def _save_embedding_cache() -> None:
 
     空状態で dirty の場合（invalidation 後など）は、ディスク上の .npz を
     削除することで stale state の持ち越しを防ぐ（Codex review r3067162768）。
+
+    並行プロセス対策として、書き出し前に disk 上の現在状態を再読み込みし、
+    自プロセスの in-memory 状態と merge してから書き戻す（Codex review
+    r3067185XXX）。これにより「別プロセスが加えた新規エントリを自プロセス
+    の save で silent に上書き削除する」lost-update 問題を緩和する。
+
+    制約: file lock は使わないため load → write 間の微小な race window は
+    残るが、失われ得るのは最大でも 1 エントリで次回呼び出し時に自然に再
+    キャッシュされる。研究段階の scale（HA48）と運用想定（シングル or
+    少数プロセス）を考慮した意図的なトレードオフ。
     """
-    global _cache_dirty
+    global _cache_dirty, _invalidation_pending
     if _CACHE_DISABLED or not _cache_dirty:
         return
     try:
@@ -126,14 +141,51 @@ def _save_embedding_cache() -> None:
             if _EMBED_CACHE_PATH.exists():
                 _EMBED_CACHE_PATH.unlink()
             _cache_dirty = False
+            _invalidation_pending = False
             return
+
+        # Invalidation pending の場合は disk と merge せず authoritative に
+        # 上書きする。これにより invalidate → 再エンコード → save フローで
+        # 古い disk エントリが merge で復活するのを防ぐ。
+        if _invalidation_pending:
+            merged: Dict[str, np.ndarray] = dict(_embedding_cache)
+        else:
+            # Reload-then-merge: 並行プロセスの追加分を取り込む
+            merged = dict(_embedding_cache)
+            if _EMBED_CACHE_PATH.exists():
+                try:
+                    with np.load(_EMBED_CACHE_PATH) as npz:
+                        disk_state = {k: npz[k] for k in npz.files}
+                    for k, v in disk_state.items():
+                        # 自プロセスの in-memory が優先（fresh encode を尊重）
+                        if k in merged:
+                            continue
+                        # Dim consistency check: 別モデルの stale エントリが
+                        # 紛れ込むのを防ぐ
+                        if (
+                            _cache_embed_dim is not None
+                            and hasattr(v, "shape")
+                            and v.ndim >= 1
+                            and v.shape[0] != _cache_embed_dim
+                        ):
+                            continue
+                        # 容量上限も尊重
+                        if len(merged) >= _MAX_CACHE_ENTRIES:
+                            break
+                        merged[k] = v
+                except Exception as e:  # noqa: BLE001
+                    _logger.warning(
+                        "reload-before-save failed, writing in-memory only: %s", e
+                    )
+
         tmp_path = _EMBED_CACHE_PATH.with_name(_EMBED_CACHE_PATH.name + ".tmp")
         # np.savez は file-like に対しては拡張子を追加しないため、
         # 開いたバイナリハンドルを渡すことで衝突の無い atomic write を実現する。
         with open(tmp_path, "wb") as fh:
-            np.savez(fh, **_embedding_cache)
+            np.savez(fh, **merged)
         tmp_path.replace(_EMBED_CACHE_PATH)
         _cache_dirty = False
+        _invalidation_pending = False
     except Exception as e:  # noqa: BLE001
         _logger.warning("embedding cache save failed: %s", e)
 
@@ -141,10 +193,12 @@ def _save_embedding_cache() -> None:
 def clear_embedding_cache() -> None:
     """メモリ上のキャッシュをクリアする（テスト用）。ディスクは触らない。"""
     global _embedding_cache, _cache_loaded, _cache_dirty, _cache_embed_dim
+    global _invalidation_pending
     _embedding_cache = {}
     _cache_loaded = False
     _cache_dirty = False
     _cache_embed_dim = None
+    _invalidation_pending = False
 
 
 def invalidate_embedding_cache(reason: str = "") -> None:
@@ -163,7 +217,7 @@ def invalidate_embedding_cache(reason: str = "") -> None:
     Args:
         reason: ログに残す破棄理由（任意）。
     """
-    global _embedding_cache, _cache_dirty, _cache_embed_dim
+    global _embedding_cache, _cache_dirty, _cache_embed_dim, _invalidation_pending
 
     # disk 上のキャッシュを先に読み込む。これにより起動直後（メモリ空）の
     # invalidate 呼び出しが no-op にならない。
@@ -180,6 +234,9 @@ def invalidate_embedding_cache(reason: str = "") -> None:
     _embedding_cache = {}
     _cache_embed_dim = None
     _cache_dirty = True
+    # 次回 save で disk との merge をスキップし、in-memory 状態（可能なら
+    # 再エンコード後の fresh entries のみ）で authoritative に上書きする
+    _invalidation_pending = True
     _logger.warning(
         "embedding cache invalidated: %d entries cleared%s%s",
         n_cleared,
