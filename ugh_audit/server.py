@@ -27,7 +27,9 @@ from pydantic import BaseModel, Field
 
 from .mcp_server import configure as _mcp_configure
 from .mcp_server import mcp as _mcp_instance
+from .metadata_generator import detect_missing_metadata
 from .reference.golden_store import GoldenStore
+from .soft_rescue import maybe_build_soft_rescue
 from .storage.audit_db import AuditDB
 
 # パイプライン A のインポート
@@ -104,16 +106,12 @@ def _run_pipeline(
     matched_id: Optional[str] = None
 
     # LLM meta 自動生成（opt-in、detector 利用可能時のみ）
-    if not question_meta and auto_generate_meta and _HAS_DETECTOR:
+    missing_fields = detect_missing_metadata(question_meta)
+    if missing_fields and auto_generate_meta and _HAS_DETECTOR:
         try:
             from experiments.meta_generator import generate_meta
             question_meta = generate_meta(question)
-            if question_meta.get("core_propositions"):
-                metadata_source = "llm_generated"
-            else:
-                # core_propositions は空だが question は保持
-                # → detect() で f1/f2/f3 構造チェックは実行される（C=None, degraded）
-                metadata_source = "llm_generated"
+            metadata_source = "llm_generated"
         except Exception:
             pass  # import 失敗や API エラーは silent に degraded
 
@@ -160,8 +158,8 @@ def _run_pipeline(
 
     # verdict / mode (集約関数で導出)
     verdict = derive_verdict(state)
-    mode = derive_mode(state)
-    if mode == "computed":
+    mode = derive_mode(state, metadata_source=metadata_source)
+    if mode in ("computed", "computed_ai_draft"):
         computed.extend(["delta_e", "quality_score"])
     else:
         missing.extend(["delta_e", "quality_score"])
@@ -174,17 +172,31 @@ def _run_pipeline(
     if evidence.propositions_total > 0:
         hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
 
+    # soft rescue (AI 草案メタデータで C=0 のとき部分ヒットを回収)
+    metadata_confidence = (question_meta or {}).get("metadata_confidence")
+    rescue = maybe_build_soft_rescue(
+        question=question,
+        response=response,
+        question_meta=question_meta,
+        mode=mode,
+        metadata_confidence=metadata_confidence,
+        S=state.S,
+        C=state.C,
+        f2=evidence.f2_unknown,
+        f3=evidence.f3_operator,
+    )
+
     gate_v = _gate_verdict_safe(
         evidence.f1_anchor, evidence.f2_unknown,
         evidence.f3_operator, evidence.f4_premise,
     )
     is_reliable = (
-        mode == "computed"
+        mode in ("computed", "computed_ai_draft")
         and verdict in {"accept", "rewrite", "regenerate"}
         and gate_v != GATE_FAIL
     )
 
-    return {
+    result = {
         "schema_version": SCHEMA_VERSION,
         "S": state.S,
         "C": state.C,
@@ -210,7 +222,7 @@ def _run_pipeline(
         "computed_components": sorted(computed),
         "missing_components": sorted(missing),
         "errors": errors,
-        "degraded_reason": errors if mode != "computed" else [],
+        "degraded_reason": errors if mode == "degraded" else [],
         # DB 保存用メタデータ
         "_session_id": session_id or str(uuid.uuid4()),
         "_question": question,
@@ -219,6 +231,9 @@ def _run_pipeline(
         "_question_meta": question_meta,
         "_hit_sources": evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
     }
+    if rescue is not None:
+        result["soft_rescue"] = rescue
+    return result
 
 
 # ---------------------------------------------------------------------------

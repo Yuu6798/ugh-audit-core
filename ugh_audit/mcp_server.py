@@ -20,7 +20,9 @@ from typing import Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from .metadata_generator import detect_missing_metadata
 from .reference.golden_store import GoldenStore
+from .soft_rescue import maybe_build_soft_rescue
 from .storage.audit_db import AuditDB
 
 # パイプライン A のインポート
@@ -164,6 +166,7 @@ class AuditOutput:
     missing_components: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     degraded_reason: List[str] = field(default_factory=list)
+    soft_rescue: Optional[Dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -206,15 +209,12 @@ def audit_answer(
     metadata_source = "none"
 
     # LLM meta 自動生成（opt-in）
-    if not question_meta and auto_generate_meta and _HAS_DETECTOR:
+    missing_fields = detect_missing_metadata(question_meta)
+    if missing_fields and auto_generate_meta and _HAS_DETECTOR:
         try:
             from experiments.meta_generator import generate_meta
             question_meta = generate_meta(question)
-            if question_meta.get("core_propositions"):
-                metadata_source = "llm_generated"
-            else:
-                # core_propositions 空でも question を保持 → f1/f2/f3 構造チェック実行
-                metadata_source = "llm_generated"
+            metadata_source = "llm_generated"
         except Exception:
             pass  # silent fallback to degraded
     matched_id: Optional[str] = None
@@ -261,8 +261,8 @@ def audit_answer(
 
     # verdict / mode (集約関数で導出)
     verdict = derive_verdict(state)
-    mode = derive_mode(state)
-    if mode == "computed":
+    mode = derive_mode(state, metadata_source=metadata_source)
+    if mode in ("computed", "computed_ai_draft"):
         computed.extend(["delta_e", "quality_score"])
     else:
         missing.extend(["delta_e", "quality_score"])
@@ -275,12 +275,26 @@ def audit_answer(
     if evidence.propositions_total > 0:
         hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
 
+    # soft rescue (AI 草案メタデータで C=0 のとき部分ヒットを回収)
+    metadata_confidence = (question_meta or {}).get("metadata_confidence")
+    rescue = maybe_build_soft_rescue(
+        question=question,
+        response=response,
+        question_meta=question_meta,
+        mode=mode,
+        metadata_confidence=metadata_confidence,
+        S=state.S,
+        C=state.C,
+        f2=evidence.f2_unknown,
+        f3=evidence.f3_operator,
+    )
+
     gate_v = _gate_verdict_safe(
         evidence.f1_anchor, evidence.f2_unknown,
         evidence.f3_operator, evidence.f4_premise,
     )
     is_reliable = (
-        mode == "computed"
+        mode in ("computed", "computed_ai_draft")
         and verdict in {"accept", "rewrite", "regenerate"}
         and gate_v != GATE_FAIL
     )
@@ -299,7 +313,7 @@ def audit_answer(
 
     # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
     saved_id: Optional[int] = None
-    if mode == "computed":
+    if mode in ("computed", "computed_ai_draft"):
         saved_id = db.save(
             session_id=session_id or str(uuid.uuid4()),
             question=question,
@@ -326,7 +340,7 @@ def audit_answer(
             retry_of=retry_of,
         )
 
-    degraded_reason = errors if mode != "computed" else []
+    degraded_reason = errors if mode == "degraded" else []
 
     return AuditOutput(
         schema_version=SCHEMA_VERSION,
@@ -346,6 +360,7 @@ def audit_answer(
         missing_components=sorted(missing),
         errors=errors,
         degraded_reason=degraded_reason,
+        soft_rescue=rescue,
     )
 
 
