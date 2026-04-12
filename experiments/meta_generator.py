@@ -108,8 +108,11 @@ def _validate_meta(meta: dict, question: str) -> dict:
     # metadata_confidence を保持 (soft_rescue のガード条件で使用)
     raw_confidence = meta.get("metadata_confidence")
     confidence: Optional[float] = None
-    if isinstance(raw_confidence, (int, float)):
-        confidence = float(max(0.0, min(1.0, raw_confidence)))
+    if raw_confidence is not None:
+        try:
+            confidence = float(max(0.0, min(1.0, float(raw_confidence))))
+        except (TypeError, ValueError):
+            pass
 
     valid = {
         "question": str(question),  # 常に入力値を使用、str に強制
