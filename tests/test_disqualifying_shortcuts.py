@@ -38,11 +38,11 @@ class TestShortcutRebuttalContext:
         hits, hit_ids, miss_ids = check_propositions(response, props, shortcuts)
         assert hits > 0
 
-    def test_shortcut_not_fired_with_shikashi(self):
-        """「しかし」による反論文脈でショートカットが発火しない"""
+    def test_shortcut_not_fired_with_explicit_denial(self):
+        """明示的否定を伴う文脈でショートカットが発火しない"""
         props = ["命題A"]
         shortcuts = ["不可能である"]
-        response = "不可能であるという主張もあるが、しかし近年の研究で命題Aが示された。"
+        response = "不可能であるとは言えない。近年の研究で命題Aが示された。"
         hits, hit_ids, miss_ids = check_propositions(response, props, shortcuts)
         assert hits > 0
 

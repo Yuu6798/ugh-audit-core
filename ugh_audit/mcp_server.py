@@ -215,6 +215,10 @@ def audit_answer(
         try:
             from experiments.meta_generator import generate_meta
             generated = generate_meta(question)
+            actually_filled = any(
+                field in generated and generated[field]
+                for field in missing_fields
+            )
             if question_meta:
                 merged = {**generated, **question_meta}
                 for field in missing_fields:
@@ -223,7 +227,8 @@ def audit_answer(
                 question_meta = merged
             else:
                 question_meta = generated
-            metadata_source = "llm_generated"
+            if actually_filled:
+                metadata_source = "llm_generated"
         except Exception:
             pass  # silent fallback to degraded
     matched_id: Optional[str] = None

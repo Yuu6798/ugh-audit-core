@@ -112,8 +112,12 @@ def _run_pipeline(
         try:
             from experiments.meta_generator import generate_meta
             generated = generate_meta(question)
+            # 欠損フィールドが実際に埋まったか確認
+            actually_filled = any(
+                field in generated and generated[field]
+                for field in missing_fields
+            )
             if question_meta:
-                # inline 提供分を保持し、欠損フィールドのみ LLM 生成値で補完
                 merged = {**generated, **question_meta}
                 for field in missing_fields:
                     if field in generated and generated[field]:
@@ -121,7 +125,8 @@ def _run_pipeline(
                 question_meta = merged
             else:
                 question_meta = generated
-            metadata_source = "llm_generated"
+            if actually_filled:
+                metadata_source = "llm_generated"
         except Exception:
             pass  # import 失敗や API エラーは silent に degraded
 
