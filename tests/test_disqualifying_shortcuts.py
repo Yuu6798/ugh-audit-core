@@ -42,7 +42,7 @@ class TestShortcutRebuttalContext:
         """明示的否定を伴う文脈でショートカットが発火しない"""
         props = ["命題A"]
         shortcuts = ["不可能である"]
-        response = "不可能であるとは言えない。近年の研究で命題Aが示された。"
+        response = "不可能であるというのは正確ではない。近年の研究で命題Aが示された。"
         hits, hit_ids, miss_ids = check_propositions(response, props, shortcuts)
         assert hits > 0
 

@@ -180,6 +180,6 @@ class PromotionPolicy:
 | `META_SOURCE_INLINE` | `"inline"` | `ugh_calculator.py` |
 | `META_SOURCE_NONE` | `"none"` | `ugh_calculator.py` |
 | `GATE_FAIL` | `"fail"` | `ugh_calculator.py` |
-| `_DQ_NEGATION_CUES` | 否定文脈キュー (15 個) | `detector.py` |
+| `_DQ_NEGATION_CUES` | 否定文脈キュー (13 個) | `detector.py` |
 | `_META_DESCRIPTION_RE` | メタ記述フィルタ正規表現 | `experiments/meta_generator.py` |
 | `METADATA_GENERATION_SCHEMA_VERSION` | `"1.0.0"` | `ugh_audit/metadata_generator.py` |
