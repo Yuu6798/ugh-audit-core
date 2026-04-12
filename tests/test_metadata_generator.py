@@ -35,6 +35,11 @@ class TestDetectMissingMetadata:
         meta = {"core_propositions": [], "trap_type": "none"}
         assert detect_missing_metadata(meta) == ["core_propositions"]
 
+    def test_empty_trap_type_is_not_missing(self):
+        """trap_type="" は「罠なし」の明示指定であり欠損ではない"""
+        meta = {"core_propositions": ["命題A"], "trap_type": ""}
+        assert detect_missing_metadata(meta) == []
+
 
 class TestBuildMetadataRequest:
     def test_no_missing_returns_none(self):
