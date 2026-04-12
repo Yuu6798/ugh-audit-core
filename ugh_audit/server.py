@@ -188,7 +188,11 @@ def _run_pipeline(
         hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
 
     # soft rescue (AI 草案メタデータで C=0 のとき部分ヒットを回収)
-    metadata_confidence = (question_meta or {}).get("metadata_confidence")
+    raw_confidence = (question_meta or {}).get("metadata_confidence")
+    try:
+        metadata_confidence = float(raw_confidence) if raw_confidence is not None else None
+    except (TypeError, ValueError):
+        metadata_confidence = None
     rescue = maybe_build_soft_rescue(
         question=question,
         response=response,
