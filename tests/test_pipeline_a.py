@@ -145,8 +145,8 @@ class TestGateVerdict:
         assert _gate_verdict(0.5, 1.0, 0.0, 0.0) == "fail"
 
     def test_gate_mcp_consistent(self):
-        from ugh_audit.server import _gate_verdict as srv
-        from ugh_audit.mcp_server import _gate_verdict as mcp
+        from ugh_audit.server import _gate_verdict_safe as srv
+        from ugh_audit.mcp_server import _gate_verdict_safe as mcp
         for args in [(0.0, 0.0, 0.0, 0.0), (0.5, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0)]:
             assert srv(*args) == mcp(*args)
 

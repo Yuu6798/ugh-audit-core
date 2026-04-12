@@ -14,7 +14,9 @@ def detect_missing_metadata(question_meta: Optional[dict[str, Any]]) -> list[str
     meta = question_meta or {}
     if not meta.get("core_propositions"):
         missing.append("core_propositions")
-    if not meta.get("trap_type"):
+    # trap_type="" は「罠なし」の明示指定 — 欠損とみなさない
+    # trap_type が未設定 or None の場合のみ欠損
+    if "trap_type" not in meta or meta["trap_type"] is None:
         missing.append("trap_type")
     return missing
 

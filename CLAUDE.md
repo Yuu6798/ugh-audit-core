@@ -128,6 +128,9 @@ ugh_audit/
 ├── reference/        # リファレンスセット管理
 ├── report/           # テキスト/CSVレポート生成
 ├── engine/           # Phase 2 エンジン (calculator, decision, runtime, metapatch)
+├── metadata_generator.py  # メタデータ欠損検出 + LLM 生成リクエスト構築
+├── metadata_policy.py     # AI草案メタデータの昇格ポリシー
+├── soft_rescue.py    # AI草案メタデータ向け soft-hit rescue (C=0 部分回収)
 ├── server.py         # REST API + MCP 統合サーバー
 └── mcp_server.py     # MCP スタンドアロンサーバー
 
@@ -154,6 +157,7 @@ analysis/             # 検証・分析スクリプト + 成果物
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 検証結果 (HA48 / HA20 / baseline) | [`docs/validation.md`](docs/validation.md) |
 | Self-Audit 実験 (Claude 出力の proxy 測定) | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
+| メタデータパイプライン (metadata_generator / soft_rescue / computed_ai_draft) | [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md) |
 
 ### ドキュメント管理ポリシー
 
@@ -282,6 +286,8 @@ python examples/basic_audit.py
 | verdict: rewrite | C≠None AND 0.10 < ΔE ≤ 0.25 | 同上 |
 | verdict: regenerate | C≠None AND ΔE > 0.25 | 同上 |
 | verdict: degraded | C=None OR ΔE=None | 同上 |
+| is_reliable | mode∈{computed, computed_ai_draft} AND verdict∈{accept,rewrite,regenerate} AND gate_verdict≠fail | `server.py` / `mcp_server.py` |
+| VALID_MODES | `{computed, computed_ai_draft, degraded}` | `ugh_calculator.py` |
 
 実装詳細・チューニング閾値は各コンポーネントドキュメントを参照。
 

@@ -27,13 +27,19 @@ from pydantic import BaseModel, Field
 
 from .mcp_server import configure as _mcp_configure
 from .mcp_server import mcp as _mcp_instance
+from .metadata_generator import detect_missing_metadata
 from .reference.golden_store import GoldenStore
+from .soft_rescue import maybe_build_soft_rescue
 from .storage.audit_db import AuditDB
 
 # パイプライン A のインポート
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
     Evidence,
+    GATE_FAIL,
+    META_SOURCE_INLINE,
+    META_SOURCE_LLM,
+    META_SOURCE_NONE,
     VALID_MODES,
     VALID_VERDICTS,
     calculate,
@@ -50,7 +56,6 @@ except ImportError:
 
 # --- 定数 ---
 SCHEMA_VERSION = "2.0.0"
-GATE_FAIL = "fail"
 
 
 def _gate_verdict_safe(f1: float, f2: float, f3: float, f4: Optional[float]) -> str:
@@ -100,27 +105,38 @@ def _run_pipeline(
     LLM (Claude API) で動的生成を試みる。
     """
     errors: List[str] = []
-    metadata_source = "none"
+    metadata_source = META_SOURCE_NONE
     matched_id: Optional[str] = None
 
     # LLM meta 自動生成（opt-in、detector 利用可能時のみ）
-    if not question_meta and auto_generate_meta and _HAS_DETECTOR:
+    # 部分的な inline メタデータが提供された場合は欠損フィールドのみ補完する
+    missing_fields = detect_missing_metadata(question_meta)
+    if missing_fields and auto_generate_meta and _HAS_DETECTOR:
         try:
             from experiments.meta_generator import generate_meta
-            question_meta = generate_meta(question)
-            if question_meta.get("core_propositions"):
-                metadata_source = "llm_generated"
+            generated = generate_meta(question)
+            actually_filled = any(
+                field in generated and generated[field] is not None
+                for field in missing_fields
+            )
+            if question_meta:
+                # inline 提供分を保持し、欠損フィールドのみ LLM 生成値で補完
+                merged = dict(question_meta)
+                for field in missing_fields:
+                    if field in generated and generated[field] is not None:
+                        merged[field] = generated[field]
+                question_meta = merged
             else:
-                # core_propositions は空だが question は保持
-                # → detect() で f1/f2/f3 構造チェックは実行される（C=None, degraded）
-                metadata_source = "llm_generated"
+                question_meta = generated
+            if actually_filled:
+                metadata_source = META_SOURCE_LLM
         except Exception:
             pass  # import 失敗や API エラーは silent に degraded
 
     detected = False
     if question_meta and _HAS_DETECTOR:
-        if metadata_source != "llm_generated":
-            metadata_source = "inline"
+        if metadata_source != META_SOURCE_LLM:
+            metadata_source = META_SOURCE_INLINE
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
         if "question" not in question_meta:
@@ -160,8 +176,8 @@ def _run_pipeline(
 
     # verdict / mode (集約関数で導出)
     verdict = derive_verdict(state)
-    mode = derive_mode(state)
-    if mode == "computed":
+    mode = derive_mode(state, metadata_source=metadata_source)
+    if mode in ("computed", "computed_ai_draft"):
         computed.extend(["delta_e", "quality_score"])
     else:
         missing.extend(["delta_e", "quality_score"])
@@ -174,17 +190,35 @@ def _run_pipeline(
     if evidence.propositions_total > 0:
         hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
 
+    # soft rescue (AI 草案メタデータで C=0 のとき部分ヒットを回収)
+    raw_confidence = (question_meta or {}).get("metadata_confidence")
+    try:
+        metadata_confidence = float(raw_confidence) if raw_confidence is not None else None
+    except (TypeError, ValueError):
+        metadata_confidence = None
+    rescue = maybe_build_soft_rescue(
+        question=question,
+        response=response,
+        question_meta=question_meta,
+        mode=mode,
+        metadata_confidence=metadata_confidence,
+        S=state.S,
+        C=state.C,
+        f2=evidence.f2_unknown,
+        f3=evidence.f3_operator,
+    )
+
     gate_v = _gate_verdict_safe(
         evidence.f1_anchor, evidence.f2_unknown,
         evidence.f3_operator, evidence.f4_premise,
     )
     is_reliable = (
-        mode == "computed"
+        mode in ("computed", "computed_ai_draft")
         and verdict in {"accept", "rewrite", "regenerate"}
         and gate_v != GATE_FAIL
     )
 
-    return {
+    result = {
         "schema_version": SCHEMA_VERSION,
         "S": state.S,
         "C": state.C,
@@ -210,7 +244,7 @@ def _run_pipeline(
         "computed_components": sorted(computed),
         "missing_components": sorted(missing),
         "errors": errors,
-        "degraded_reason": errors if mode != "computed" else [],
+        "degraded_reason": errors if mode == "degraded" else [],
         # DB 保存用メタデータ
         "_session_id": session_id or str(uuid.uuid4()),
         "_question": question,
@@ -219,6 +253,9 @@ def _run_pipeline(
         "_question_meta": question_meta,
         "_hit_sources": evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
     }
+    if rescue is not None:
+        result["soft_rescue"] = rescue
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +317,7 @@ class AuditResponse(BaseModel):
     structural_gate: Optional[StructuralGateResponse] = None
     saved_id: Optional[int] = Field(None, description="DB保存時の行ID (degraded時はnull)")
     retry_of: Optional[int] = Field(None, description="再監査元の saved_id (初回はnull)")
-    mode: str = Field(..., description="実行モード: computed / degraded")
+    mode: str = Field(..., description="実行モード: computed / computed_ai_draft / degraded")
     is_reliable: bool = Field(
         ..., description="結果が信頼できるか (mode=computed かつ verdict が計算済みの場合 true)"
     )
@@ -295,6 +332,9 @@ class AuditResponse(BaseModel):
     errors: List[str] = Field(default_factory=list, description="エラーメッセージのリスト")
     degraded_reason: List[str] = Field(
         default_factory=list, description="degraded 時の理由リスト"
+    )
+    soft_rescue: Optional[dict] = Field(
+        None, description="AI草案メタデータの soft-hit rescue 結果 (該当時のみ)"
     )
 
 
@@ -437,12 +477,12 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         session_id=req.session_id,
         auto_generate_meta=req.auto_generate_meta,
     )
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, pipeline_fn)
 
     # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
     saved_id: Optional[int] = None
-    if result["mode"] == "computed":
+    if result["mode"] in ("computed", "computed_ai_draft"):
         save_fn = partial(
             db.save,
             session_id=result["_session_id"],
@@ -462,7 +502,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
             metadata_source=result["metadata_source"],
             generated_meta=_json.dumps(
                 result.get("_question_meta") or {}, ensure_ascii=False,
-            ) if result.get("metadata_source") == "llm_generated" else "",
+            ) if result.get("metadata_source") == META_SOURCE_LLM else "",
             hit_sources=_json.dumps(
                 result.get("_hit_sources", {}), ensure_ascii=False,
             ),
@@ -489,6 +529,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         missing_components=result["missing_components"],
         errors=result["errors"],
         degraded_reason=result["degraded_reason"],
+        soft_rescue=result.get("soft_rescue"),
     )
 
 

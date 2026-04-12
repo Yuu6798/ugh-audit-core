@@ -53,6 +53,10 @@ SYSTEM_PROMPT = """\
 core_propositions の代替表現（1-2 個）。
 異なる言い回しでも命題カバレッジとして認めるべき表現。
 
+### metadata_confidence
+生成したメタデータの自信度（0.0-1.0）。
+質問の意図が明確で命題が確実なら 0.8 以上、推測が多いなら低めに設定。
+
 ## 実例
 
 ### 例1 (ugh_theory / metric_omnipotence)
@@ -67,7 +71,8 @@ core_propositions の代替表現（1-2 個）。
   ],
   "disqualifying_shortcuts": ["PoRが高い＝誠実と直結させる"],
   "acceptable_variants": ["PoRが高くても表面的一致の場合があると指摘する"],
-  "trap_type": "metric_omnipotence"
+  "trap_type": "metric_omnipotence",
+  "metadata_confidence": 0.9
 }
 ```
 
@@ -81,9 +86,10 @@ core_propositions の代替表現（1-2 個）。
     "カント的な反省的判断ではない",
     "個別の主観的経験に基づく判断とは異なる"
   ],
-  "disqualifying_shortcuts": ["「AIは美を理解できない」と全否定する"],
+  "disqualifying_shortcuts": ["AIは美を一切理解できない"],
   "acceptable_variants": ["進化美学の観点から美的判断の計算可能性を論じる"],
-  "trap_type": "binary_reduction"
+  "trap_type": "binary_reduction",
+  "metadata_confidence": 0.85
 }
 ```
 
@@ -98,10 +104,11 @@ core_propositions の代替表現（1-2 個）。
     "テスト品質がチームの能力に依存し非標準化"
   ],
   "disqualifying_shortcuts": [
-    "「レッドチーミングで安全性が確保できる」と保証として語る"
+    "レッドチーミングで安全性は十分に確保できる"
   ],
   "acceptable_variants": ["形式検証やランダムテストとの相補性を論じる"],
-  "trap_type": "safety_boilerplate"
+  "trap_type": "safety_boilerplate",
+  "metadata_confidence": 0.9
 }
 ```
 
@@ -115,7 +122,8 @@ core_propositions の代替表現（1-2 個）。
   "core_propositions": ["...", "...", "..."],
   "disqualifying_shortcuts": ["..."],
   "acceptable_variants": ["..."],
-  "trap_type": "<7種のいずれか or 空文字列>"
+  "trap_type": "<7種のいずれか or 空文字列>",
+  "metadata_confidence": 0.0
 }
 ```
 """

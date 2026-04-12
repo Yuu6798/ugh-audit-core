@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import List, Optional
 
 from .prompts.meta_generation_v1 import (
@@ -26,6 +27,13 @@ except ImportError:
     _HAS_ANTHROPIC = False
 
 logger = logging.getLogger(__name__)
+
+# メタ言語的記述を検出するパターン
+# 「...」と〜 (鉤括弧で引用した上での動作記述) / と全否定 はショートカットとして不適切
+# 注: 「と断言」「と主張する」は鉤括弧なしの表層フレーズとして有効なため除外
+_META_DESCRIPTION_RE = re.compile(
+    r'「.+」と|と全否定|のみで答える$'
+)
 
 # デフォルトモデル
 DEFAULT_MODEL = "claude-sonnet-4-6"
@@ -87,13 +95,35 @@ def _validate_meta(meta: dict, question: str) -> dict:
         logger.warning("不明な trap_type '%s' を空文字に修正しました", trap_type)
         trap_type = ""
 
+    # disqualifying_shortcuts のメタ言語的記述をフィルタ
+    # 「...」と全否定する のようなメタ記述は表層文字列ではないため除外
+    raw_shortcuts = _coerce_str_list(meta.get("disqualifying_shortcuts"))
+    filtered_shortcuts = [
+        s for s in raw_shortcuts
+        if not _META_DESCRIPTION_RE.search(s)
+    ]
+    if len(filtered_shortcuts) < len(raw_shortcuts):
+        dropped = set(raw_shortcuts) - set(filtered_shortcuts)
+        logger.warning("メタ言語的ショートカットを除外: %s", dropped)
+
+    # metadata_confidence を保持 (soft_rescue のガード条件で使用)
+    raw_confidence = meta.get("metadata_confidence")
+    confidence: Optional[float] = None
+    if raw_confidence is not None:
+        try:
+            confidence = float(max(0.0, min(1.0, float(raw_confidence))))
+        except (TypeError, ValueError):
+            pass
+
     valid = {
         "question": str(question),  # 常に入力値を使用、str に強制
         "core_propositions": _coerce_str_list(meta.get("core_propositions")),
-        "disqualifying_shortcuts": _coerce_str_list(meta.get("disqualifying_shortcuts")),
+        "disqualifying_shortcuts": filtered_shortcuts,
         "acceptable_variants": _coerce_str_list(meta.get("acceptable_variants")),
         "trap_type": trap_type,
     }
+    if confidence is not None:
+        valid["metadata_confidence"] = confidence
     return valid
 
 

@@ -29,7 +29,12 @@ DELTA_E_BIN_THRESHOLDS = [VERDICT_ACCEPT, VERDICT_REWRITE]
 
 # --- 有効な verdict / mode 値 ---
 VALID_VERDICTS = frozenset({"accept", "rewrite", "regenerate", "degraded"})
-VALID_MODES = frozenset({"computed", "degraded"})
+VALID_MODES = frozenset({"computed", "computed_ai_draft", "degraded"})
+VALID_METADATA_SOURCES = frozenset({"inline", "llm_generated", "none"})
+META_SOURCE_LLM = "llm_generated"
+META_SOURCE_INLINE = "inline"
+META_SOURCE_NONE = "none"
+GATE_FAIL = "fail"
 
 # --- C ビン閾値 ---
 C_BIN_THRESHOLDS = [0.34, 0.67]  # bin1/2境界, bin2/3境界
@@ -219,11 +224,15 @@ def derive_verdict(state: State) -> str:
     return "regenerate"
 
 
-def derive_mode(state: State) -> str:
-    """State から mode を導出する
+def derive_mode(state: State, *, metadata_source: str = "none") -> str:
+    """State + metadata_source から mode を導出する
 
-    C が存在すれば computed、なければ degraded。
+    C が存在しなければ degraded。
+    C が存在し metadata_source が llm_generated なら computed_ai_draft。
+    それ以外は computed。
     """
     if state.C is None:
         return "degraded"
+    if metadata_source == META_SOURCE_LLM:
+        return "computed_ai_draft"
     return "computed"

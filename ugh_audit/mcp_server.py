@@ -20,13 +20,19 @@ from typing import Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from .metadata_generator import detect_missing_metadata
 from .reference.golden_store import GoldenStore
+from .soft_rescue import maybe_build_soft_rescue
 from .storage.audit_db import AuditDB
 
 # パイプライン A のインポート
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
     Evidence,
+    GATE_FAIL,
+    META_SOURCE_INLINE,
+    META_SOURCE_LLM,
+    META_SOURCE_NONE,
     VALID_MODES,
     VALID_VERDICTS,
     calculate,
@@ -43,17 +49,6 @@ except ImportError:
 
 # --- 定数 ---
 SCHEMA_VERSION = "2.0.0"
-GATE_FAIL = "fail"
-
-
-def _gate_verdict(f1: float, f2: float, f3: float, f4: float) -> str:
-    vals = [f1, f2, f3, f4]
-    fail_max = max(vals)
-    if fail_max == 0.0:
-        return "pass"
-    if fail_max >= 1.0:
-        return GATE_FAIL
-    return "warn"
 
 
 def _gate_verdict_safe(f1: float, f2: float, f3: float, f4: Optional[float]) -> str:
@@ -164,6 +159,7 @@ class AuditOutput:
     missing_components: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     degraded_reason: List[str] = field(default_factory=list)
+    soft_rescue: Optional[Dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -203,18 +199,29 @@ def audit_answer(
 
     ref = reference or golden.find_reference(question)
     errors: List[str] = []
-    metadata_source = "none"
+    metadata_source = META_SOURCE_NONE
 
     # LLM meta 自動生成（opt-in）
-    if not question_meta and auto_generate_meta and _HAS_DETECTOR:
+    # 部分的な inline メタデータが提供された場合は欠損フィールドのみ補完する
+    missing_fields = detect_missing_metadata(question_meta)
+    if missing_fields and auto_generate_meta and _HAS_DETECTOR:
         try:
             from experiments.meta_generator import generate_meta
-            question_meta = generate_meta(question)
-            if question_meta.get("core_propositions"):
-                metadata_source = "llm_generated"
+            generated = generate_meta(question)
+            actually_filled = any(
+                fld in generated and generated[fld] is not None
+                for fld in missing_fields
+            )
+            if question_meta:
+                merged = dict(question_meta)
+                for fld in missing_fields:
+                    if fld in generated and generated[fld] is not None:
+                        merged[fld] = generated[fld]
+                question_meta = merged
             else:
-                # core_propositions 空でも question を保持 → f1/f2/f3 構造チェック実行
-                metadata_source = "llm_generated"
+                question_meta = generated
+            if actually_filled:
+                metadata_source = META_SOURCE_LLM
         except Exception:
             pass  # silent fallback to degraded
     matched_id: Optional[str] = None
@@ -222,8 +229,8 @@ def audit_answer(
     # detect → calculate パイプライン
     detected = False
     if question_meta and _HAS_DETECTOR:
-        if metadata_source != "llm_generated":
-            metadata_source = "inline"
+        if metadata_source != META_SOURCE_LLM:
+            metadata_source = META_SOURCE_INLINE
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
         if "question" not in question_meta:
@@ -261,8 +268,8 @@ def audit_answer(
 
     # verdict / mode (集約関数で導出)
     verdict = derive_verdict(state)
-    mode = derive_mode(state)
-    if mode == "computed":
+    mode = derive_mode(state, metadata_source=metadata_source)
+    if mode in ("computed", "computed_ai_draft"):
         computed.extend(["delta_e", "quality_score"])
     else:
         missing.extend(["delta_e", "quality_score"])
@@ -275,12 +282,30 @@ def audit_answer(
     if evidence.propositions_total > 0:
         hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
 
+    # soft rescue (AI 草案メタデータで C=0 のとき部分ヒットを回収)
+    raw_confidence = (question_meta or {}).get("metadata_confidence")
+    try:
+        metadata_confidence = float(raw_confidence) if raw_confidence is not None else None
+    except (TypeError, ValueError):
+        metadata_confidence = None
+    rescue = maybe_build_soft_rescue(
+        question=question,
+        response=response,
+        question_meta=question_meta,
+        mode=mode,
+        metadata_confidence=metadata_confidence,
+        S=state.S,
+        C=state.C,
+        f2=evidence.f2_unknown,
+        f3=evidence.f3_operator,
+    )
+
     gate_v = _gate_verdict_safe(
         evidence.f1_anchor, evidence.f2_unknown,
         evidence.f3_operator, evidence.f4_premise,
     )
     is_reliable = (
-        mode == "computed"
+        mode in ("computed", "computed_ai_draft")
         and verdict in {"accept", "rewrite", "regenerate"}
         and gate_v != GATE_FAIL
     )
@@ -299,7 +324,7 @@ def audit_answer(
 
     # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
     saved_id: Optional[int] = None
-    if mode == "computed":
+    if mode in ("computed", "computed_ai_draft"):
         saved_id = db.save(
             session_id=session_id or str(uuid.uuid4()),
             question=question,
@@ -318,7 +343,7 @@ def audit_answer(
             metadata_source=metadata_source,
             generated_meta=_json.dumps(
                 question_meta or {}, ensure_ascii=False,
-            ) if metadata_source == "llm_generated" else "",
+            ) if metadata_source == META_SOURCE_LLM else "",
             hit_sources=_json.dumps(
                 evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
                 ensure_ascii=False,
@@ -326,7 +351,7 @@ def audit_answer(
             retry_of=retry_of,
         )
 
-    degraded_reason = errors if mode != "computed" else []
+    degraded_reason = errors if mode == "degraded" else []
 
     return AuditOutput(
         schema_version=SCHEMA_VERSION,
@@ -346,6 +371,7 @@ def audit_answer(
         missing_components=sorted(missing),
         errors=errors,
         degraded_reason=degraded_reason,
+        soft_rescue=rescue,
     )
 
 
