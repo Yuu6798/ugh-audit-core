@@ -78,7 +78,7 @@ class TestComputedAiDraftPipeline:
         assert resp.status_code == 200
         data = resp.json()
         assert data["mode"] == "computed"
-        assert "soft_rescue" not in data
+        assert data["soft_rescue"] is None
 
     def test_degraded_without_meta(self, client):
         """メタデータなしでは mode=degraded"""

@@ -295,7 +295,7 @@ class AuditResponse(BaseModel):
     structural_gate: Optional[StructuralGateResponse] = None
     saved_id: Optional[int] = Field(None, description="DB保存時の行ID (degraded時はnull)")
     retry_of: Optional[int] = Field(None, description="再監査元の saved_id (初回はnull)")
-    mode: str = Field(..., description="実行モード: computed / degraded")
+    mode: str = Field(..., description="実行モード: computed / computed_ai_draft / degraded")
     is_reliable: bool = Field(
         ..., description="結果が信頼できるか (mode=computed かつ verdict が計算済みの場合 true)"
     )
@@ -310,6 +310,9 @@ class AuditResponse(BaseModel):
     errors: List[str] = Field(default_factory=list, description="エラーメッセージのリスト")
     degraded_reason: List[str] = Field(
         default_factory=list, description="degraded 時の理由リスト"
+    )
+    soft_rescue: Optional[dict] = Field(
+        None, description="AI草案メタデータの soft-hit rescue 結果 (該当時のみ)"
     )
 
 
@@ -457,7 +460,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
 
     # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
     saved_id: Optional[int] = None
-    if result["mode"] == "computed":
+    if result["mode"] in ("computed", "computed_ai_draft"):
         save_fn = partial(
             db.save,
             session_id=result["_session_id"],
@@ -504,6 +507,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         missing_components=result["missing_components"],
         errors=result["errors"],
         degraded_reason=result["degraded_reason"],
+        soft_rescue=result.get("soft_rescue"),
     )
 
 
