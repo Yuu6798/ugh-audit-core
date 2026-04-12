@@ -81,7 +81,7 @@ core_propositions の代替表現（1-2 個）。
     "カント的な反省的判断ではない",
     "個別の主観的経験に基づく判断とは異なる"
   ],
-  "disqualifying_shortcuts": ["「AIは美を理解できない」と全否定する"],
+  "disqualifying_shortcuts": ["AIは美を一切理解できない"],
   "acceptable_variants": ["進化美学の観点から美的判断の計算可能性を論じる"],
   "trap_type": "binary_reduction"
 }
@@ -98,7 +98,7 @@ core_propositions の代替表現（1-2 個）。
     "テスト品質がチームの能力に依存し非標準化"
   ],
   "disqualifying_shortcuts": [
-    "「レッドチーミングで安全性が確保できる」と保証として語る"
+    "レッドチーミングで安全性は十分に確保できる"
   ],
   "acceptable_variants": ["形式検証やランダムテストとの相補性を論じる"],
   "trap_type": "safety_boilerplate"
