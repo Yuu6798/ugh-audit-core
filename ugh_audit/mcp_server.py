@@ -29,7 +29,10 @@ from .storage.audit_db import AuditDB
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
     Evidence,
+    GATE_FAIL,
+    META_SOURCE_INLINE,
     META_SOURCE_LLM,
+    META_SOURCE_NONE,
     VALID_MODES,
     VALID_VERDICTS,
     calculate,
@@ -46,17 +49,6 @@ except ImportError:
 
 # --- 定数 ---
 SCHEMA_VERSION = "2.0.0"
-GATE_FAIL = "fail"
-
-
-def _gate_verdict(f1: float, f2: float, f3: float, f4: float) -> str:
-    vals = [f1, f2, f3, f4]
-    fail_max = max(vals)
-    if fail_max == 0.0:
-        return "pass"
-    if fail_max >= 1.0:
-        return GATE_FAIL
-    return "warn"
 
 
 def _gate_verdict_safe(f1: float, f2: float, f3: float, f4: Optional[float]) -> str:
@@ -207,7 +199,7 @@ def audit_answer(
 
     ref = reference or golden.find_reference(question)
     errors: List[str] = []
-    metadata_source = "none"
+    metadata_source = META_SOURCE_NONE
 
     # LLM meta 自動生成（opt-in）
     # 部分的な inline メタデータが提供された場合は欠損フィールドのみ補完する
@@ -217,14 +209,14 @@ def audit_answer(
             from experiments.meta_generator import generate_meta
             generated = generate_meta(question)
             actually_filled = any(
-                field in generated and generated[field]
-                for field in missing_fields
+                fld in generated and generated[fld]
+                for fld in missing_fields
             )
             if question_meta:
                 merged = dict(question_meta)
-                for field in missing_fields:
-                    if field in generated and generated[field]:
-                        merged[field] = generated[field]
+                for fld in missing_fields:
+                    if fld in generated and generated[fld]:
+                        merged[fld] = generated[fld]
                 question_meta = merged
             else:
                 question_meta = generated
@@ -238,7 +230,7 @@ def audit_answer(
     detected = False
     if question_meta and _HAS_DETECTOR:
         if metadata_source != META_SOURCE_LLM:
-            metadata_source = "inline"
+            metadata_source = META_SOURCE_INLINE
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
         if "question" not in question_meta:

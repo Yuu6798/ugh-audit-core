@@ -50,38 +50,6 @@ def _tokenize(text: str) -> set[str]:
     return tokens
 
 
-def _score_overlap(sentence: str, proposition: str) -> tuple[float, list[str]]:
-    sent_tokens = _tokenize(sentence)
-    prop_tokens = _tokenize(proposition)
-    if not sent_tokens or not prop_tokens:
-        return 0.0, []
-    overlap = sorted(sent_tokens & prop_tokens)
-    score = len(overlap) / len(prop_tokens)
-    return score, overlap
-
-
-def _score_phrase_overlap(sentence: str, proposition: str) -> tuple[float, list[str]]:
-    sent_tokens = _tokenize(sentence)
-    phrases = _split_proposition_phrases(proposition)
-    if not sent_tokens or not phrases:
-        return 0.0, []
-
-    matched_phrases: list[str] = []
-    total = 0
-    for phrase in phrases:
-        phrase_tokens = _tokenize(phrase)
-        if not phrase_tokens:
-            continue
-        total += 1
-        overlap_ratio = len(sent_tokens & phrase_tokens) / max(1, len(phrase_tokens))
-        if overlap_ratio >= 0.25:
-            matched_phrases.append(phrase)
-
-    if total == 0:
-        return 0.0, []
-    return len(matched_phrases) / total, matched_phrases
-
-
 def maybe_build_soft_rescue(
     *,
     question: str,
@@ -114,36 +82,31 @@ def maybe_build_soft_rescue(
         return None
 
     best: Optional[dict[str, Any]] = None
-    # 文ごとのトークンを事前計算 (N+M → O(N+M) tokenize 呼び出し)
     sentences = _split_sentences(response)
     sent_cache = [(s, _tokenize(s)) for s in sentences]
     for index, proposition in enumerate(propositions):
         prop_tokens = _tokenize(proposition)
         phrases = _split_proposition_phrases(proposition)
+        phrase_token_list = [_tokenize(p) for p in phrases]
         for sentence, sent_tokens in sent_cache:
-            # _score_overlap inline (事前計算トークンを再利用)
             if not sent_tokens or not prop_tokens:
-                score, overlap = 0.0, []
+                overlap_set: set[str] = set()
             else:
-                overlap_set = sorted(sent_tokens & prop_tokens)
-                score = len(overlap_set) / len(prop_tokens)
-                overlap = overlap_set
+                overlap_set = sent_tokens & prop_tokens
+            score = len(overlap_set) / len(prop_tokens) if prop_tokens else 0.0
 
-            # _score_phrase_overlap inline (sent_tokens 再利用)
             matched_phrases: list[str] = []
             total = 0
-            for phrase in phrases:
-                phrase_tokens = _tokenize(phrase)
+            for phrase, phrase_tokens in zip(phrases, phrase_token_list):
                 if not phrase_tokens:
                     continue
                 total += 1
-                overlap_ratio = len(sent_tokens & phrase_tokens) / max(1, len(phrase_tokens))
-                if overlap_ratio >= 0.25:
+                if len(sent_tokens & phrase_tokens) / max(1, len(phrase_tokens)) >= 0.25:
                     matched_phrases.append(phrase)
             phrase_score = len(matched_phrases) / total if total > 0 else 0.0
 
             combined_score = max(score, phrase_score)
-            if not overlap and not matched_phrases:
+            if not overlap_set and not matched_phrases:
                 continue
             candidate = {
                 "type": "ai_draft_c_floor",
@@ -151,7 +114,7 @@ def maybe_build_soft_rescue(
                 "target_proposition": proposition,
                 "evidence_span": sentence,
                 "confidence": round(combined_score, 4),
-                "overlap_terms": overlap[:6],
+                "overlap_terms": sorted(overlap_set)[:6],
                 "matched_phrases": matched_phrases[:6],
             }
             if best is None or candidate["confidence"] > best["confidence"]:

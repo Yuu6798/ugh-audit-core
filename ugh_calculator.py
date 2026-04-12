@@ -32,6 +32,9 @@ VALID_VERDICTS = frozenset({"accept", "rewrite", "regenerate", "degraded"})
 VALID_MODES = frozenset({"computed", "computed_ai_draft", "degraded"})
 VALID_METADATA_SOURCES = frozenset({"inline", "llm_generated", "none"})
 META_SOURCE_LLM = "llm_generated"
+META_SOURCE_INLINE = "inline"
+META_SOURCE_NONE = "none"
+GATE_FAIL = "fail"
 
 # --- C ビン閾値 ---
 C_BIN_THRESHOLDS = [0.34, 0.67]  # bin1/2境界, bin2/3境界

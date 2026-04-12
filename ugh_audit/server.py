@@ -36,7 +36,10 @@ from .storage.audit_db import AuditDB
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
     Evidence,
+    GATE_FAIL,
+    META_SOURCE_INLINE,
     META_SOURCE_LLM,
+    META_SOURCE_NONE,
     VALID_MODES,
     VALID_VERDICTS,
     calculate,
@@ -53,7 +56,6 @@ except ImportError:
 
 # --- 定数 ---
 SCHEMA_VERSION = "2.0.0"
-GATE_FAIL = "fail"
 
 
 def _gate_verdict_safe(f1: float, f2: float, f3: float, f4: Optional[float]) -> str:
@@ -103,7 +105,7 @@ def _run_pipeline(
     LLM (Claude API) で動的生成を試みる。
     """
     errors: List[str] = []
-    metadata_source = "none"
+    metadata_source = META_SOURCE_NONE
     matched_id: Optional[str] = None
 
     # LLM meta 自動生成（opt-in、detector 利用可能時のみ）
@@ -134,7 +136,7 @@ def _run_pipeline(
     detected = False
     if question_meta and _HAS_DETECTOR:
         if metadata_source != META_SOURCE_LLM:
-            metadata_source = "inline"
+            metadata_source = META_SOURCE_INLINE
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
         if "question" not in question_meta:
@@ -475,7 +477,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         session_id=req.session_id,
         auto_generate_meta=req.auto_generate_meta,
     )
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, pipeline_fn)
 
     # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
