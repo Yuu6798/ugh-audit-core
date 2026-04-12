@@ -873,6 +873,15 @@ _RELAXED_REQUIRED_CHUNKS = {
     "思考言語仮説では言語は表層にすぎない": ("表層", "仮説"),
 }
 
+# disqualifying_shortcuts の否定文脈チェック用キュー
+# check_propositions() と detect() の cascade skip 判定で共有
+_DQ_NEGATION_CUES = [
+    "ではなく", "ではない", "のではなく", "のではない",
+    "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
+    "否定", "不要", "不可能",
+    "とは限らない", "とは言えない",
+]
+
 # 否定極性マーカー: 回答が否定的文脈を含むかの検証に使用
 # 助詞/動詞語幹付きの具体的否定形で定義する
 _NEGATION_POLARITY_FORMS = [
@@ -1001,13 +1010,7 @@ def check_propositions(
     if not core_props:
         return 0, [], []
 
-    negation_cues = [
-        "ではなく", "ではない", "のではなく", "のではない",
-        "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
-        "否定", "不要", "不可能",
-        # 明確な反駁を示すパターンのみ
-        "とは限らない", "とは言えない",
-    ]
+    negation_cues = _DQ_NEGATION_CUES
     if disqualifying:
         for shortcut in disqualifying:
             if not shortcut or shortcut not in response_text:
@@ -1258,12 +1261,6 @@ def detect(
     disqualified = False
     if (hits == 0 and len(miss_ids) == len(core_props)
             and core_props and disqualifying):
-        _DQ_NEGATION_CUES = [
-            "ではなく", "ではない", "のではなく", "のではない",
-            "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
-            "否定", "不要", "不可能",
-            "とは限らない", "とは言えない",
-        ]
         for shortcut in disqualifying:
             if not shortcut or shortcut not in response_text:
                 continue

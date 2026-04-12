@@ -36,6 +36,7 @@ from .storage.audit_db import AuditDB
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
     Evidence,
+    META_SOURCE_LLM,
     VALID_MODES,
     VALID_VERDICTS,
     calculate,
@@ -126,13 +127,13 @@ def _run_pipeline(
             else:
                 question_meta = generated
             if actually_filled:
-                metadata_source = "llm_generated"
+                metadata_source = META_SOURCE_LLM
         except Exception:
             pass  # import 失敗や API エラーは silent に degraded
 
     detected = False
     if question_meta and _HAS_DETECTOR:
-        if metadata_source != "llm_generated":
+        if metadata_source != META_SOURCE_LLM:
             metadata_source = "inline"
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
@@ -499,7 +500,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
             metadata_source=result["metadata_source"],
             generated_meta=_json.dumps(
                 result.get("_question_meta") or {}, ensure_ascii=False,
-            ) if result.get("metadata_source") == "llm_generated" else "",
+            ) if result.get("metadata_source") == META_SOURCE_LLM else "",
             hit_sources=_json.dumps(
                 result.get("_hit_sources", {}), ensure_ascii=False,
             ),

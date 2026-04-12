@@ -29,6 +29,7 @@ from .storage.audit_db import AuditDB
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
     Evidence,
+    META_SOURCE_LLM,
     VALID_MODES,
     VALID_VERDICTS,
     calculate,
@@ -228,7 +229,7 @@ def audit_answer(
             else:
                 question_meta = generated
             if actually_filled:
-                metadata_source = "llm_generated"
+                metadata_source = META_SOURCE_LLM
         except Exception:
             pass  # silent fallback to degraded
     matched_id: Optional[str] = None
@@ -236,7 +237,7 @@ def audit_answer(
     # detect → calculate パイプライン
     detected = False
     if question_meta and _HAS_DETECTOR:
-        if metadata_source != "llm_generated":
+        if metadata_source != META_SOURCE_LLM:
             metadata_source = "inline"
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
@@ -350,7 +351,7 @@ def audit_answer(
             metadata_source=metadata_source,
             generated_meta=_json.dumps(
                 question_meta or {}, ensure_ascii=False,
-            ) if metadata_source == "llm_generated" else "",
+            ) if metadata_source == META_SOURCE_LLM else "",
             hit_sources=_json.dumps(
                 evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
                 ensure_ascii=False,

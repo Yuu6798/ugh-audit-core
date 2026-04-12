@@ -114,10 +114,34 @@ def maybe_build_soft_rescue(
         return None
 
     best: Optional[dict[str, Any]] = None
+    # 文ごとのトークンを事前計算 (N+M → O(N+M) tokenize 呼び出し)
+    sentences = _split_sentences(response)
+    sent_cache = [(s, _tokenize(s)) for s in sentences]
     for index, proposition in enumerate(propositions):
-        for sentence in _split_sentences(response):
-            score, overlap = _score_overlap(sentence, proposition)
-            phrase_score, matched_phrases = _score_phrase_overlap(sentence, proposition)
+        prop_tokens = _tokenize(proposition)
+        phrases = _split_proposition_phrases(proposition)
+        for sentence, sent_tokens in sent_cache:
+            # _score_overlap inline (事前計算トークンを再利用)
+            if not sent_tokens or not prop_tokens:
+                score, overlap = 0.0, []
+            else:
+                overlap_set = sorted(sent_tokens & prop_tokens)
+                score = len(overlap_set) / len(prop_tokens)
+                overlap = overlap_set
+
+            # _score_phrase_overlap inline (sent_tokens 再利用)
+            matched_phrases: list[str] = []
+            total = 0
+            for phrase in phrases:
+                phrase_tokens = _tokenize(phrase)
+                if not phrase_tokens:
+                    continue
+                total += 1
+                overlap_ratio = len(sent_tokens & phrase_tokens) / max(1, len(phrase_tokens))
+                if overlap_ratio >= 0.25:
+                    matched_phrases.append(phrase)
+            phrase_score = len(matched_phrases) / total if total > 0 else 0.0
+
             combined_score = max(score, phrase_score)
             if not overlap and not matched_phrases:
                 continue
