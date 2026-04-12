@@ -209,13 +209,13 @@ def audit_answer(
             from experiments.meta_generator import generate_meta
             generated = generate_meta(question)
             actually_filled = any(
-                fld in generated and generated[fld]
+                fld in generated and generated[fld] is not None
                 for fld in missing_fields
             )
             if question_meta:
                 merged = dict(question_meta)
                 for fld in missing_fields:
-                    if fld in generated and generated[fld]:
+                    if fld in generated and generated[fld] is not None:
                         merged[fld] = generated[fld]
                 question_meta = merged
             else:

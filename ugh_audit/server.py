@@ -116,14 +116,14 @@ def _run_pipeline(
             from experiments.meta_generator import generate_meta
             generated = generate_meta(question)
             actually_filled = any(
-                field in generated and generated[field]
+                field in generated and generated[field] is not None
                 for field in missing_fields
             )
             if question_meta:
                 # inline 提供分を保持し、欠損フィールドのみ LLM 生成値で補完
                 merged = dict(question_meta)
                 for field in missing_fields:
-                    if field in generated and generated[field]:
+                    if field in generated and generated[field] is not None:
                         merged[field] = generated[field]
                 question_meta = merged
             else:
