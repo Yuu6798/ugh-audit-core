@@ -50,13 +50,14 @@ except ImportError:
 
 # --- 定数 ---
 SCHEMA_VERSION = "2.0.0"
+GATE_FAIL = "fail"
 
 
 def _gate_verdict_safe(f1: float, f2: float, f3: float, f4: Optional[float]) -> str:
     vals = [f1, f2, f3] + ([f4] if f4 is not None else [])
     fail_max = max(vals) if vals else 0.0
     if fail_max >= 1.0:
-        return "fail"
+        return GATE_FAIL
     if f4 is None:
         return "incomplete"
     if fail_max == 0.0:
@@ -180,7 +181,7 @@ def _run_pipeline(
     is_reliable = (
         mode == "computed"
         and verdict in {"accept", "rewrite", "regenerate"}
-        and gate_v != "fail"
+        and gate_v != GATE_FAIL
     )
 
     return {
