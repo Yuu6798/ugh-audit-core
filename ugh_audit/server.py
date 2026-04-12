@@ -106,11 +106,21 @@ def _run_pipeline(
     matched_id: Optional[str] = None
 
     # LLM meta 自動生成（opt-in、detector 利用可能時のみ）
+    # 部分的な inline メタデータが提供された場合は欠損フィールドのみ補完する
     missing_fields = detect_missing_metadata(question_meta)
     if missing_fields and auto_generate_meta and _HAS_DETECTOR:
         try:
             from experiments.meta_generator import generate_meta
-            question_meta = generate_meta(question)
+            generated = generate_meta(question)
+            if question_meta:
+                # inline 提供分を保持し、欠損フィールドのみ LLM 生成値で補完
+                merged = {**generated, **question_meta}
+                for field in missing_fields:
+                    if field in generated and generated[field]:
+                        merged[field] = generated[field]
+                question_meta = merged
+            else:
+                question_meta = generated
             metadata_source = "llm_generated"
         except Exception:
             pass  # import 失敗や API エラーは silent に degraded
