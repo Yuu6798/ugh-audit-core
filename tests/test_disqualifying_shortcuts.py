@@ -24,7 +24,7 @@ class TestShortcutRebuttalContext:
         ]
         shortcuts = ["AIは美を理解できない"]
         response = (
-            "AIは美を理解できないという見方は一面的であり、"
+            "AIは美を理解できないというのは正確ではない。"
             "統計的な選好パターンの再現という形で美的判断に関与できる。"
         )
         hits, hit_ids, miss_ids = check_propositions(response, props, shortcuts)

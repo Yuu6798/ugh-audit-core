@@ -220,7 +220,7 @@ def audit_answer(
                 for field in missing_fields
             )
             if question_meta:
-                merged = {**generated, **question_meta}
+                merged = dict(question_meta)
                 for field in missing_fields:
                     if field in generated and generated[field]:
                         merged[field] = generated[field]

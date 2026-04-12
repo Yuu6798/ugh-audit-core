@@ -1006,7 +1006,7 @@ def check_propositions(
         "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
         "否定", "不要", "不可能",
         # 明確な反駁を示すパターンのみ
-        "一面的", "とは限らない", "とは言えない",
+        "とは限らない", "とは言えない",
     ]
     if disqualifying:
         for shortcut in disqualifying:
@@ -1262,7 +1262,7 @@ def detect(
             "ではなく", "ではない", "のではなく", "のではない",
             "じゃない", "誤り", "不適切", "批判", "安易", "短絡",
             "否定", "不要", "不可能",
-            "一面的", "とは限らない", "とは言えない",
+            "とは限らない", "とは言えない",
         ]
         for shortcut in disqualifying:
             if not shortcut or shortcut not in response_text:
