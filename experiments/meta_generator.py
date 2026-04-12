@@ -105,6 +105,12 @@ def _validate_meta(meta: dict, question: str) -> dict:
         dropped = set(raw_shortcuts) - set(filtered_shortcuts)
         logger.warning("メタ言語的ショートカットを除外: %s", dropped)
 
+    # metadata_confidence を保持 (soft_rescue のガード条件で使用)
+    raw_confidence = meta.get("metadata_confidence")
+    confidence: Optional[float] = None
+    if isinstance(raw_confidence, (int, float)):
+        confidence = float(max(0.0, min(1.0, raw_confidence)))
+
     valid = {
         "question": str(question),  # 常に入力値を使用、str に強制
         "core_propositions": _coerce_str_list(meta.get("core_propositions")),
@@ -112,6 +118,8 @@ def _validate_meta(meta: dict, question: str) -> dict:
         "acceptable_variants": _coerce_str_list(meta.get("acceptable_variants")),
         "trap_type": trap_type,
     }
+    if confidence is not None:
+        valid["metadata_confidence"] = confidence
     return valid
 
 
