@@ -234,7 +234,10 @@ def compute_grv(
         prop_vecs = encode_texts(model, propositions)
         for src in prop_sources:
             prop_weights.append(1.0 if src == "manual_core" else meta_scale)
-        collapse, collapse_applicable = compute_collapse(sent_vecs, prop_vecs, prop_weights)
+        collapse_raw, collapse_applicable = compute_collapse(sent_vecs, prop_vecs, prop_weights)
+        # auto-meta 時は collapse 自体を meta_scale で減衰
+        # (均一重みの正規化で打ち消される問題への対処)
+        collapse = _clamp(collapse_raw * meta_scale) if source_key != "manual" else collapse_raw
     else:
         prop_vecs = np.array([])
         collapse = 0.0
