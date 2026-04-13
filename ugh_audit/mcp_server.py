@@ -503,7 +503,8 @@ def get_session_summary(session_id: str) -> Dict:
     """
     remote_api = os.environ.get("UGH_REMOTE_API")
     if remote_api:
-        return _proxy_get(remote_api, f"/api/session/{session_id}")
+        from urllib.parse import quote
+        return _proxy_get(remote_api, f"/api/session/{quote(session_id, safe='')}")
     db = _get_db()
     return db.session_summary(session_id)
 
