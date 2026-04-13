@@ -12,6 +12,7 @@ ChatGPT Settings > Connectors から MCP URL を登録して利用する。
 from __future__ import annotations
 
 import json as _json
+import os
 import sys
 import uuid
 from dataclasses import dataclass, field
@@ -167,6 +168,65 @@ class AuditOutput:
 # ---------------------------------------------------------------------------
 
 
+def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
+    """リモート API に監査リクエストを転送し、結果を AuditOutput に変換する"""
+    import urllib.request
+    import urllib.error
+
+    url = remote_api.rstrip("/") + "/api/audit"
+    payload = {k: v for k, v in kwargs.items() if v is not None}
+    data = _json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = _json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        return AuditOutput(
+            schema_version="2.0.0", S=0.0, C=None, delta_e=None,
+            quality_score=None, verdict="degraded", hit_rate=None,
+            structural_gate={}, saved_id=None, mode="degraded",
+            is_reliable=False, matched_id=None, metadata_source="none",
+            errors=[f"remote_api_error: {e.code} {body[:200]}"],
+            degraded_reason=["remote_api_error"],
+        )
+    except Exception as e:
+        return AuditOutput(
+            schema_version="2.0.0", S=0.0, C=None, delta_e=None,
+            quality_score=None, verdict="degraded", hit_rate=None,
+            structural_gate={}, saved_id=None, mode="degraded",
+            is_reliable=False, matched_id=None, metadata_source="none",
+            errors=[f"remote_api_error: {e}"],
+            degraded_reason=["remote_api_error"],
+        )
+
+    gate = result.get("structural_gate") or {}
+    return AuditOutput(
+        schema_version=result.get("schema_version", "2.0.0"),
+        S=result.get("S", 0.0),
+        C=result.get("C"),
+        delta_e=result.get("delta_e"),
+        quality_score=result.get("quality_score"),
+        verdict=result.get("verdict", "degraded"),
+        hit_rate=result.get("hit_rate"),
+        structural_gate=gate,
+        saved_id=result.get("saved_id"),
+        mode=result.get("mode", "degraded"),
+        is_reliable=result.get("is_reliable", False),
+        matched_id=result.get("matched_id"),
+        metadata_source=result.get("metadata_source", "none"),
+        computed_components=result.get("computed_components", []),
+        missing_components=result.get("missing_components", []),
+        errors=result.get("errors", []),
+        degraded_reason=result.get("degraded_reason", []),
+        soft_rescue=result.get("soft_rescue"),
+    )
+
+
 @mcp.tool()
 def audit_answer(
     question: str,
@@ -194,6 +254,17 @@ def audit_answer(
         question_meta: 問題メタデータ（core_propositions 等を含む dict）
         auto_generate_meta: question_meta 未提供時に LLM で動的生成する (opt-in)
     """
+    # プロキシモード: UGH_REMOTE_API が設定されている場合、リモート API に転送
+    remote_api = os.environ.get("UGH_REMOTE_API")
+    if remote_api:
+        return _proxy_audit(
+            remote_api, question=question, response=response,
+            reference=reference, session_id=session_id,
+            question_meta=question_meta,
+            auto_generate_meta=auto_generate_meta,
+            retry_of=retry_of,
+        )
+
     db = _get_db()
     golden = _get_golden()
 
@@ -375,6 +446,15 @@ def audit_answer(
     )
 
 
+def _proxy_get(remote_api: str, path: str) -> Dict:
+    """リモート API から GET リクエストで取得"""
+    import urllib.request
+    url = remote_api.rstrip("/") + path
+    req = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return _json.loads(resp.read().decode("utf-8"))
+
+
 @mcp.tool()
 def get_audit(audit_id: int) -> Dict:
     """ID指定で監査結果を1件取得する。
@@ -382,6 +462,9 @@ def get_audit(audit_id: int) -> Dict:
     Args:
         audit_id: 監査結果のID
     """
+    remote_api = os.environ.get("UGH_REMOTE_API")
+    if remote_api:
+        return _proxy_get(remote_api, f"/api/audit/{audit_id}")
     db = _get_db()
     row = db.get_by_id(audit_id)
     if row is None:
@@ -396,8 +479,12 @@ def get_history(limit: int = 20) -> List[Dict]:
     Args:
         limit: 取得件数 (デフォルト: 20)
     """
+    limit = max(1, min(limit, 500))
+    remote_api = os.environ.get("UGH_REMOTE_API")
+    if remote_api:
+        return _proxy_get(remote_api, f"/api/history?limit={limit}")
     db = _get_db()
-    return db.list_recent(limit=max(1, min(limit, 500)))
+    return db.list_recent(limit=limit)
 
 
 @mcp.tool()
@@ -407,6 +494,9 @@ def get_session_summary(session_id: str) -> Dict:
     Args:
         session_id: セッションID
     """
+    remote_api = os.environ.get("UGH_REMOTE_API")
+    if remote_api:
+        return _proxy_get(remote_api, f"/api/session/{session_id}")
     db = _get_db()
     return db.session_summary(session_id)
 
@@ -418,8 +508,12 @@ def get_drift_history(limit: int = 100) -> List[Dict]:
     Args:
         limit: 取得件数 (デフォルト: 100)
     """
+    limit = max(1, min(limit, 1000))
+    remote_api = os.environ.get("UGH_REMOTE_API")
+    if remote_api:
+        return _proxy_get(remote_api, f"/api/drift?limit={limit}")
     db = _get_db()
-    return db.drift_history(limit=max(1, min(limit, 1000)))
+    return db.drift_history(limit=limit)
 
 
 # ---------------------------------------------------------------------------
