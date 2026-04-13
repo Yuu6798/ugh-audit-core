@@ -200,8 +200,9 @@ class TestAPIOutput:
 
         # 旧フィールドが存在しない
         assert "por" not in data
-        assert "grv" not in data
         assert "meaning_drift" not in data
+        # grv は新3項式で追加済み (None or dict)
+        assert "grv" in data
 
     def test_audit_output_degraded_without_meta(self, client):
         """question_meta なし → degraded モード"""

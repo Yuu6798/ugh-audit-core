@@ -218,6 +218,42 @@ def _run_pipeline(
         and gate_v != GATE_FAIL
     )
 
+    # grv 計算 (SBert 依存、未導入時は None)
+    try:
+        from grv_calculator import compute_grv
+        grv_result = compute_grv(
+            question=question,
+            response_text=response,
+            question_meta=question_meta,
+            metadata_source=metadata_source,
+        )
+    except ImportError:
+        grv_result = None
+
+    grv_output: Optional[dict] = None
+    if grv_result is not None:
+        grv_output = {
+            "grv": grv_result.grv,
+            "grv_components": {
+                "drift": grv_result.drift,
+                "dispersion": grv_result.dispersion,
+                "collapse": grv_result.collapse,
+            },
+            "grv_meta": {
+                "n_sentences": grv_result.n_sentences,
+                "n_propositions": grv_result.n_propositions,
+                "collapse_applicable": grv_result.collapse_applicable,
+                "meta_source": grv_result.meta_source,
+                "ref_confidence": grv_result.ref_confidence,
+                "meta_scale": grv_result.meta_scale,
+                "prop_weights": grv_result.prop_weights,
+            },
+            "grv_debug": {
+                "prop_affinity": grv_result.prop_affinity,
+                "grv_tag_provisional": grv_result.grv_tag,
+            },
+        }
+
     result = {
         "schema_version": SCHEMA_VERSION,
         "S": state.S,
@@ -245,6 +281,7 @@ def _run_pipeline(
         "missing_components": sorted(missing),
         "errors": errors,
         "degraded_reason": errors if mode == "degraded" else [],
+        "grv": grv_output,
         # DB 保存用メタデータ
         "_session_id": session_id or str(uuid.uuid4()),
         "_question": question,
@@ -335,6 +372,9 @@ class AuditResponse(BaseModel):
     )
     soft_rescue: Optional[dict] = Field(
         None, description="AI草案メタデータの soft-hit rescue 結果 (該当時のみ)"
+    )
+    grv: Optional[dict] = Field(
+        None, description="因果構造損失 (grv) 計算結果 (SBert 未導入時は null)"
     )
 
 
@@ -552,6 +592,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         errors=result["errors"],
         degraded_reason=result["degraded_reason"],
         soft_rescue=result.get("soft_rescue"),
+        grv=result.get("grv"),
     )
 
 
