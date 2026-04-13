@@ -348,6 +348,53 @@ def audit_answer(
     )
 
 
+@mcp.tool()
+def get_audit(audit_id: int) -> Dict:
+    """ID指定で監査結果を1件取得する。
+
+    Args:
+        audit_id: 監査結果のID
+    """
+    db = _get_db()
+    row = db.get_by_id(audit_id)
+    if row is None:
+        return {"error": f"audit_id {audit_id} not found"}
+    return row
+
+
+@mcp.tool()
+def get_history(limit: int = 20) -> List[Dict]:
+    """直近の監査履歴を取得する。
+
+    Args:
+        limit: 取得件数 (デフォルト: 20)
+    """
+    db = _get_db()
+    return db.list_recent(limit=limit)
+
+
+@mcp.tool()
+def get_session_summary(session_id: str) -> Dict:
+    """セッション単位の集計サマリーを取得する。
+
+    Args:
+        session_id: セッションID
+    """
+    db = _get_db()
+    return db.session_summary(session_id)
+
+
+@mcp.tool()
+def get_drift_history(limit: int = 100) -> List[Dict]:
+    """ΔE時系列データを取得する。品質推移の分析に使用。
+
+    Args:
+        limit: 取得件数 (デフォルト: 100)
+    """
+    db = _get_db()
+    return db.drift_history(limit=limit)
+
+
 # ---------------------------------------------------------------------------
 # スタンドアロン起動
 # ---------------------------------------------------------------------------

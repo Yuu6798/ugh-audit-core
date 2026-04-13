@@ -21,7 +21,7 @@ from functools import partial
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -320,6 +320,28 @@ class HistoryItem(BaseModel):
     created_at: str
 
 
+class SessionSummary(BaseModel):
+    """セッション集計"""
+
+    session_id: str
+    total: int
+    avg_delta_e: float
+    min_delta_e: float
+    max_delta_e: float
+    avg_quality_score: float
+
+
+class DriftItem(BaseModel):
+    """ΔE時系列1件"""
+
+    created_at: str
+    S: float
+    C: Optional[float] = None
+    delta_e: Optional[float] = None
+    quality_score: Optional[float] = None
+    verdict: str
+
+
 # ---------------------------------------------------------------------------
 # MCP サーバー準備 + ライフスパン
 # ---------------------------------------------------------------------------
@@ -499,26 +521,72 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
 def get_history(limit: int = 20) -> List[HistoryItem]:
     db = _get_db()
     rows = db.list_recent(limit=limit)
+    return [_row_to_history(r) for r in rows]
+
+
+def _row_to_history(r: dict) -> HistoryItem:
+    return HistoryItem(
+        id=r["id"],
+        question=r["question"],
+        response=r["response"],
+        S=round(r["S"], 4),
+        C=round(r["C"], 4) if r["C"] is not None else None,
+        delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
+        quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
+        verdict=r["verdict"],
+        f1=round(r.get("f1", 0.0), 4),
+        f2=round(r.get("f2", 0.0), 4),
+        f3=round(r.get("f3", 0.0), 4),
+        f4=round(r.get("f4", 0.0), 4),
+        hit_rate=r.get("hit_rate", ""),
+        metadata_source=r.get("metadata_source", "inline"),
+        generated_meta=r.get("generated_meta", ""),
+        hit_sources=r.get("hit_sources", ""),
+        retry_of=r.get("retry_of"),
+        created_at=r["created_at"],
+    )
+
+
+@app.get(
+    "/api/audit/{audit_id}",
+    response_model=HistoryItem,
+    summary="ID指定で監査結果を1件取得",
+)
+def get_audit_by_id(audit_id: int) -> HistoryItem:
+    db = _get_db()
+    r = db.get_by_id(audit_id)
+    if r is None:
+        raise HTTPException(status_code=404, detail=f"audit_id {audit_id} not found")
+    return _row_to_history(r)
+
+
+@app.get(
+    "/api/session/{session_id}",
+    response_model=SessionSummary,
+    summary="セッション単位の集計サマリー",
+)
+def get_session(session_id: str) -> SessionSummary:
+    db = _get_db()
+    summary = db.session_summary(session_id)
+    return SessionSummary(**summary)
+
+
+@app.get(
+    "/api/drift",
+    response_model=List[DriftItem],
+    summary="ΔE時系列データ",
+)
+def get_drift(limit: int = 100) -> List[DriftItem]:
+    db = _get_db()
+    rows = db.drift_history(limit=limit)
     return [
-        HistoryItem(
-            id=r["id"],
-            question=r["question"],
-            response=r["response"],
+        DriftItem(
+            created_at=r["created_at"],
             S=round(r["S"], 4),
             C=round(r["C"], 4) if r["C"] is not None else None,
             delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
             quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
             verdict=r["verdict"],
-            f1=round(r.get("f1", 0.0), 4),
-            f2=round(r.get("f2", 0.0), 4),
-            f3=round(r.get("f3", 0.0), 4),
-            f4=round(r.get("f4", 0.0), 4),
-            hit_rate=r.get("hit_rate", ""),
-            metadata_source=r.get("metadata_source", "inline"),
-            generated_meta=r.get("generated_meta", ""),
-            hit_sources=r.get("hit_sources", ""),
-            retry_of=r.get("retry_of"),
-            created_at=r["created_at"],
         )
         for r in rows
     ]
