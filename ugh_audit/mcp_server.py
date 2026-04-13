@@ -448,11 +448,18 @@ def audit_answer(
 
 def _proxy_get(remote_api: str, path: str) -> Dict:
     """リモート API から GET リクエストで取得"""
+    import urllib.error
     import urllib.request
     url = remote_api.rstrip("/") + path
     req = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return _json.loads(resp.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return _json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        return {"error": f"remote_api_error: {e.code}", "detail": body[:200]}
+    except Exception as e:
+        return {"error": f"remote_api_error: {e}"}
 
 
 @mcp.tool()
