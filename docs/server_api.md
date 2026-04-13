@@ -3,7 +3,23 @@
 `ugh_audit/server.py` は REST API と MCP サーバーを統合した FastAPI
 アプリケーション。`ugh_audit/mcp_server.py` は MCP スタンドアロン版。
 
-## 起動方法
+## 公開URL (Railway)
+
+本番環境は Railway にデプロイ済み。PC を切っても常時稼働。
+
+```
+https://ugh-audit-core-production.up.railway.app
+```
+
+| パス | 用途 |
+|------|------|
+| `/health` | ヘルスチェック |
+| `/docs` | Swagger UI（API ドキュメント、ブラウザで操作可能） |
+| `/api/audit` | POST: 意味監査 |
+| `/api/history` | GET: 監査履歴 |
+| `/mcp` | MCP エンドポイント（ChatGPT Connectors 等から接続） |
+
+## ローカル起動方法
 
 ```bash
 # REST API + MCP 統合サーバー
@@ -178,6 +194,36 @@ python -m ugh_audit.cli drift --limit 50
 
 `UGH_AUDIT_DB` 環境変数で DB パスを指定可能。未指定時は `~/.ugh_audit/audit.db`。
 
+## デプロイ構成 (Railway)
+
+| 項目 | 値 |
+|------|-----|
+| プロバイダ | [Railway](https://railway.app) |
+| プロジェクト | independent-courage |
+| リージョン | us-west2 |
+| ビルド | Dockerfile (python:3.11-slim + PyTorch CPU版) |
+| 永続ボリューム | `/data` (ugh-audit-core-data) |
+| DB パス | `/data/audit.db` |
+| キャッシュ | `/data/embedding_cache.npz`, `/data/meta_cache/` |
+| ヘルスチェック | `GET /health` |
+
+### 環境変数 (Railway Variables)
+
+| 変数 | 設定値 | 備考 |
+|------|--------|------|
+| `ANTHROPIC_API_KEY` | (設定済み) | auto_generate_meta 用 |
+| `UGH_AUDIT_DB` | `/data/audit.db` | Dockerfile で定義 |
+| `UGH_AUDIT_CACHE_DIR` | `/data` | Dockerfile で定義 |
+| `UGH_META_CACHE_DIR` | `/data/meta_cache` | Dockerfile で定義 |
+| `PORT` | (Railway が自動設定) | uvicorn が参照 |
+
+### デプロイの流れ
+
+1. main ブランチに push → Railway が自動検出
+2. Dockerfile でビルド (~3分)
+3. ヘルスチェック (`/health`) 通過 → デプロイ完了
+4. 永続ボリュームにより再デプロイしてもDBは保持
+
 ## 関連ファイル
 
 - `ugh_audit/server.py` — REST + MCP 統合サーバー
@@ -185,4 +231,7 @@ python -m ugh_audit.cli drift --limit 50
 - `ugh_audit/cli.py` — DB 参照 CLI
 - `ugh_audit/collector/audit_collector.py` — audit + save パイプライン
 - `ugh_audit/storage/audit_db.py` — SQLite 永続化
+- `Dockerfile` — Railway デプロイ用
+- `railway.toml` — Railway 設定 (ヘルスチェック等)
+- `.dockerignore` — イメージ軽量化
 - verdict 判定の詳細: [`formulas.md`](formulas.md)

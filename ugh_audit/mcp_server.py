@@ -397,7 +397,7 @@ def get_history(limit: int = 20) -> List[Dict]:
         limit: 取得件数 (デフォルト: 20)
     """
     db = _get_db()
-    return db.list_recent(limit=limit)
+    return db.list_recent(limit=max(1, min(limit, 500)))
 
 
 @mcp.tool()
@@ -419,7 +419,7 @@ def get_drift_history(limit: int = 100) -> List[Dict]:
         limit: 取得件数 (デフォルト: 100)
     """
     db = _get_db()
-    return db.drift_history(limit=limit)
+    return db.drift_history(limit=max(1, min(limit, 1000)))
 
 
 # ---------------------------------------------------------------------------
