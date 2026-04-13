@@ -161,6 +161,7 @@ class AuditOutput:
     errors: List[str] = field(default_factory=list)
     degraded_reason: List[str] = field(default_factory=list)
     soft_rescue: Optional[Dict] = None
+    grv: Optional[Dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +225,7 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         errors=result.get("errors", []),
         degraded_reason=result.get("degraded_reason", []),
         soft_rescue=result.get("soft_rescue"),
+        grv=result.get("grv"),
     )
 
 
@@ -424,6 +426,41 @@ def audit_answer(
 
     degraded_reason = errors if mode == "degraded" else []
 
+    # grv 計算 (SBert 依存、未導入時は None)
+    grv_output: Optional[Dict] = None
+    try:
+        from grv_calculator import compute_grv
+        grv_result = compute_grv(
+            question=question,
+            response_text=response,
+            question_meta=question_meta,
+            metadata_source=metadata_source,
+        )
+        if grv_result is not None:
+            grv_output = {
+                "grv": grv_result.grv,
+                "grv_components": {
+                    "drift": grv_result.drift,
+                    "dispersion": grv_result.dispersion,
+                    "collapse": grv_result.collapse,
+                },
+                "grv_meta": {
+                    "n_sentences": grv_result.n_sentences,
+                    "n_propositions": grv_result.n_propositions,
+                    "collapse_applicable": grv_result.collapse_applicable,
+                    "meta_source": grv_result.meta_source,
+                    "ref_confidence": grv_result.ref_confidence,
+                    "meta_scale": grv_result.meta_scale,
+                    "prop_weights": grv_result.prop_weights,
+                },
+                "grv_debug": {
+                    "prop_affinity": grv_result.prop_affinity,
+                    "grv_tag_provisional": grv_result.grv_tag,
+                },
+            }
+    except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
+        pass
+
     return AuditOutput(
         schema_version=SCHEMA_VERSION,
         S=state.S,
@@ -443,6 +480,7 @@ def audit_answer(
         errors=errors,
         degraded_reason=degraded_reason,
         soft_rescue=rescue,
+        grv=grv_output,
     )
 
 

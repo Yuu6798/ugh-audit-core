@@ -71,7 +71,8 @@ class State:
     delta_e_bin: Optional[int]        # ΔEビン (1-4) / None=未計算
     C_bin: Optional[int]              # Cビン (1-3) / None=未計算
     por_state: str                    # PoR状態 ("inactive" — 本エンジンではPoR非使用)
-    grv_tag: str                      # "none" | "low" | "moderate" | "high"
+    grv: Optional[float] = None        # 因果構造損失 [0,1] / None=SBert未導入
+    grv_tag: str = "none"             # "none" | "low_gravity" | "mid_gravity" | "high_gravity"
 
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -152,13 +153,6 @@ def _bin_c(c: float) -> int:
     return 3
 
 
-def _grv_tag(evidence: Evidence) -> str:
-    """grv_tagを判定する
-
-    本エンジンではgrv計算は後回し。常に "none" を返す。
-    """
-    return "none"
-
 
 def _compute_quality_score(delta_e: float) -> float:
     """品質スコアを計算する
@@ -191,7 +185,8 @@ def calculate(evidence: Evidence) -> State:
             delta_e_bin=delta_e_bin,
             C_bin=c_bin,
             por_state="inactive",
-            grv_tag=_grv_tag(evidence),
+            grv=None,
+            grv_tag="none",
         )
 
     # C=None: 命題未提供のため ΔE 算出不可
@@ -203,7 +198,8 @@ def calculate(evidence: Evidence) -> State:
         delta_e_bin=None,
         C_bin=None,
         por_state="inactive",
-        grv_tag=_grv_tag(evidence),
+        grv=None,
+        grv_tag="none",
     )
 
 
