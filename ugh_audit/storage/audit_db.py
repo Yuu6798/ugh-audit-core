@@ -173,6 +173,15 @@ class AuditDB:
             )
             return cursor.lastrowid
 
+    def get_by_id(self, audit_id: int) -> Optional[dict]:
+        """ID指定で1件取得"""
+        with self._conn() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM audit_runs WHERE id = ?", (audit_id,)
+            ).fetchone()
+            return dict(row) if row else None
+
     def list_recent(self, limit: int = 20) -> List[dict]:
         """最近のスコアリング結果を返す"""
         with self._conn() as conn:

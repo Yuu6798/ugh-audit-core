@@ -18,7 +18,10 @@ python -m ugh_audit.mcp_server --port 8000
 | メソッド | パス | 説明 |
 |---------|------|------|
 | POST | `/api/audit` | AI 回答を意味監査 |
+| GET | `/api/audit/{id}` | ID 指定で監査結果を 1 件取得 |
 | GET | `/api/history` | 直近の監査履歴 |
+| GET | `/api/session/{session_id}` | セッション単位の集計サマリー |
+| GET | `/api/drift` | ΔE 時系列データ |
 | POST | `/mcp` | MCP Streamable HTTP |
 | GET | `/health` | ヘルスチェック (`{"status": "ok"}`) |
 
@@ -87,6 +90,46 @@ python -m ugh_audit.mcp_server --port 8000
 | fail | fail_max ≥ 1.0 | 構造的に破綻 |
 | incomplete | f4 == None | f4 未計算 |
 
+### is_reliable フラグ
+
+消費者（LLM 等）が結果を信頼してよいかを示す bool。
+
+```
+is_reliable = mode == "computed"
+              AND verdict in {"accept", "rewrite", "regenerate"}
+              AND gate_verdict != "fail"
+```
+
+`false` になるケース: degraded モード、gate_verdict=fail（構造的破綻）。
+
+### GET /api/audit/{id}
+
+ID 指定で 1 件取得。存在しない場合は `404`。
+
+### GET /api/session/{session_id}
+
+```json
+{
+  "session_id": "abc-123",
+  "total": 5,
+  "avg_delta_e": 0.1234,
+  "min_delta_e": 0.0,
+  "max_delta_e": 0.35,
+  "avg_quality_score": 4.5
+}
+```
+
+### GET /api/drift?limit=100
+
+ΔE 時系列を `created_at ASC` で返す。品質推移の可視化に使用。
+
+```json
+[
+  {"created_at": "2026-04-08T21:29:37+00:00", "S": 0.9375, "C": 0.667, "delta_e": 0.0396, "quality_score": 4.8414, "verdict": "accept"},
+  ...
+]
+```
+
 ### DB 保存ポリシー
 
 degraded 結果は DB に保存しない (`saved_id=null`)。
@@ -107,10 +150,39 @@ degraded 結果は DB に保存しない (`saved_id=null`)。
 | `generated_meta` | TEXT | LLM 生成メタの JSON（llm_generated 時のみ） |
 | `hit_sources` | TEXT | 命題ごとの判定結果 JSON（`{"0": "tfidf", "1": "miss"}`） |
 
+## MCP ツール一覧
+
+| ツール名 | 説明 |
+|----------|------|
+| `audit_answer` | AI 回答を意味監査する |
+| `get_audit` | ID 指定で監査結果を 1 件取得 |
+| `get_history` | 直近 N 件の監査履歴を取得 |
+| `get_session_summary` | セッション単位の集計サマリー |
+| `get_drift_history` | ΔE 時系列データ |
+
+## CLI
+
+```bash
+# ID 指定で 1 件取得
+python -m ugh_audit.cli get 20
+
+# 直近の監査履歴
+python -m ugh_audit.cli history --limit 5
+
+# セッション集計
+python -m ugh_audit.cli session <session_id>
+
+# ΔE 時系列
+python -m ugh_audit.cli drift --limit 50
+```
+
+`UGH_AUDIT_DB` 環境変数で DB パスを指定可能。未指定時は `~/.ugh_audit/audit.db`。
+
 ## 関連ファイル
 
 - `ugh_audit/server.py` — REST + MCP 統合サーバー
 - `ugh_audit/mcp_server.py` — MCP スタンドアロン
+- `ugh_audit/cli.py` — DB 参照 CLI
 - `ugh_audit/collector/audit_collector.py` — audit + save パイプライン
 - `ugh_audit/storage/audit_db.py` — SQLite 永続化
 - verdict 判定の詳細: [`formulas.md`](formulas.md)
