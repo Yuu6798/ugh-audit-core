@@ -142,7 +142,21 @@ docs/                 # 設計ドキュメント
 analysis/             # 検証・分析スクリプト + 成果物
                       #   self_audit_session.py        — Self-Audit 実験の proxy metric
                       #   extract_claude_transcript.py — Claude Code jsonl → transcript
+
+# デプロイ
+Dockerfile            # Railway デプロイ用 (python:3.11-slim + PyTorch CPU)
+.dockerignore         # イメージ軽量化
+railway.toml          # Railway 設定 (ヘルスチェック)
 ```
+
+### 公開URL
+
+```
+https://ugh-audit-core-production.up.railway.app
+```
+
+Railway にデプロイ済み。main push で自動デプロイ。永続ボリューム `/data` で DB 保持。
+詳細: [`docs/server_api.md`](docs/server_api.md)
 
 ### コンポーネント別設計ドキュメント
 

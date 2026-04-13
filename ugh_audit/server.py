@@ -562,7 +562,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
 )
 def get_history(limit: int = 20) -> List[HistoryItem]:
     db = _get_db()
-    rows = db.list_recent(limit=limit)
+    rows = db.list_recent(limit=max(1, min(limit, 500)))
     return [_row_to_history(r) for r in rows]
 
 
@@ -620,7 +620,7 @@ def get_session(session_id: str) -> SessionSummary:
 )
 def get_drift(limit: int = 100) -> List[DriftItem]:
     db = _get_db()
-    rows = db.drift_history(limit=limit)
+    rows = db.drift_history(limit=max(1, min(limit, 1000)))
     return [
         DriftItem(
             created_at=r["created_at"],
