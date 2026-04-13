@@ -100,7 +100,7 @@ def compute_collapse(
 
     total = sum(a_k)
     if total == 0.0:
-        return 0.0, True
+        return 0.0, False  # 親和度ゼロ = collapse 定義不能 → 2項式にフォールバック
 
     # 正規化エントロピー
     p_dist = [a / total for a in a_k]
