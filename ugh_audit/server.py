@@ -227,7 +227,7 @@ def _run_pipeline(
             question_meta=question_meta,
             metadata_source=metadata_source,
         )
-    except ImportError:
+    except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
         grv_result = None
 
     grv_output: Optional[dict] = None

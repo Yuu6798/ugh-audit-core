@@ -458,7 +458,7 @@ def audit_answer(
                     "grv_tag_provisional": grv_result.grv_tag,
                 },
             }
-    except ImportError:
+    except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
         pass
 
     return AuditOutput(

@@ -40,8 +40,8 @@ def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 
 def _split_sentences(text: str) -> List[str]:
-    """日本語テキストを文単位に分割する"""
-    parts = re.split(r'[。！？!?\n]+', text)
+    """テキストを文単位に分割する (日本語 + 英語対応)"""
+    parts = re.split(r'[。．！？!?.\n]+', text)
     return [p.strip() for p in parts if p.strip()]
 
 
