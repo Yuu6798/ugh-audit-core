@@ -254,6 +254,7 @@ def _run_pipeline(
         mode in ("computed", "computed_ai_draft")
         and verdict in {"accept", "rewrite", "regenerate"}
         and gate_v != GATE_FAIL
+        and metadata_source != META_SOURCE_FALLBACK
     )
 
     # grv 計算 (SBert 依存、未導入時は None)
