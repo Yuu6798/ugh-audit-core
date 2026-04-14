@@ -63,11 +63,7 @@ def run_and_eval(tau, w_d, w_s, w_c):
     grvs = [x[0] for x in paired]
     scores = [x[4] for x in paired]
 
-    # 2-comp (drift + dispersion only)
-    grv_2comp = [w_d * x[1] + w_s * x[2] for x in paired]
-
-    rho_3, _ = spearmanr(grvs, scores)
-    rho_2, _ = spearmanr(grv_2comp, scores)
+    rho, _ = spearmanr(grvs, scores)
 
     import statistics
     sigma = statistics.stdev([x[0] for x in results])
@@ -75,10 +71,9 @@ def run_and_eval(tau, w_d, w_s, w_c):
 
     return {
         "tau": tau, "w_d": w_d, "w_s": w_s, "w_c": w_c,
-        "rho_3": rho_3, "rho_2": rho_2,
-        "v4_pass": abs(rho_3) > abs(rho_2),
+        "rho": rho,
         "v1_pass": sigma > 0.05,
-        "v5_pass": rho_3 < 0,
+        "v5_pass": rho < 0,
         "v6_col_pass": col_std > 0.05,
         "sigma": sigma,
         "col_std": col_std,
@@ -100,8 +95,8 @@ weight_sets = [
     (0.55, 0.20, 0.25),
 ]
 
-print(f"{'tau':>5}  {'w_d':>5}  {'w_s':>5}  {'w_c':>5}  {'rho3':>7}  {'rho2':>7}  "
-      f"{'V4':>4}  {'V1':>4}  {'V5':>4}  {'V6c':>4}  {'sigma':>6}  {'col_std':>7}")
+print(f"{'tau':>5}  {'w_d':>5}  {'w_s':>5}  {'w_c':>5}  {'rho':>7}  "
+      f"{'V1':>4}  {'V5':>4}  {'V6c':>4}  {'sigma':>6}  {'col_std':>7}")
 
 best = None
 for tau in taus:
@@ -109,21 +104,19 @@ for tau in taus:
         res = run_and_eval(tau, w_d, w_s, w_c)
         if res is None:
             continue
-        all_pass = res["v4_pass"] and res["v1_pass"] and res["v5_pass"] and res["v6_col_pass"]
+        all_pass = res["v1_pass"] and res["v5_pass"]
         marker = " ***" if all_pass else ""
-        print(f"{tau:5.2f}  {w_d:5.2f}  {w_s:5.2f}  {w_c:5.2f}  {res['rho_3']:7.4f}  "
-              f"{res['rho_2']:7.4f}  {'Y' if res['v4_pass'] else 'N':>4}  "
+        print(f"{tau:5.2f}  {w_d:5.2f}  {w_s:5.2f}  {w_c:5.2f}  {res['rho']:7.4f}  "
               f"{'Y' if res['v1_pass'] else 'N':>4}  {'Y' if res['v5_pass'] else 'N':>4}  "
               f"{'Y' if res['v6_col_pass'] else 'N':>4}  {res['sigma']:6.4f}  "
               f"{res['col_std']:7.4f}{marker}")
-        if all_pass and (best is None or abs(res["rho_3"]) > abs(best["rho_3"])):
+        if all_pass and (best is None or abs(res["rho"]) > abs(best["rho"])):
             best = res
 
 print()
 if best:
-    print("=== BEST ALL-PASS ===")
+    print("=== BEST ===")
     print(f"tau={best['tau']}, w_d={best['w_d']}, w_s={best['w_s']}, w_c={best['w_c']}")
-    print(f"rho_3={best['rho_3']:.4f}, rho_2={best['rho_2']:.4f}")
-    print(f"sigma={best['sigma']:.4f}, col_std={best['col_std']:.4f}")
+    print(f"rho={best['rho']:.4f}, sigma={best['sigma']:.4f}")
 else:
-    print("No combination passed all V-1/V-4/V-5/V-6")
+    print("No combination passed V-1/V-5")

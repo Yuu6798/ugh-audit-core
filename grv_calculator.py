@@ -127,7 +127,9 @@ def compute_collapse(
     if total_raw == 0.0:
         return 0.0, False, raw_a_k, raw_a_k
 
-    # τ シャープ化
+    # τ シャープ化 (tau は正の値でなければならない)
+    if tau <= 0:
+        tau = TAU
     sharp_a_k = [a ** (1.0 / tau) if a > 0 else 0.0 for a in raw_a_k]
     total_sharp = sum(sharp_a_k)
     if total_sharp == 0.0:
