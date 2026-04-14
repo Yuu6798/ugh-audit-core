@@ -12,6 +12,7 @@ ChatGPT Settings > Connectors から MCP URL を登録して利用する。
 from __future__ import annotations
 
 import json as _json
+import logging
 import os
 import sys
 import uuid
@@ -51,8 +52,23 @@ try:
 except ImportError:
     _HAS_DETECTOR = False
 
+logger = logging.getLogger(__name__)
+
 # --- 定数 ---
 SCHEMA_VERSION = "2.0.0"
+
+
+def _is_field_filled(value: object) -> bool:
+    """自動生成フィールドが有意な値を持つか判定する。
+
+    リスト型は空でないこと、それ以外は None でないことを要求する。
+    trap_type="" は「罠なし」の明示指定として有意。
+    """
+    if value is None:
+        return False
+    if isinstance(value, list):
+        return len(value) > 0
+    return True
 
 
 def _gate_verdict_safe(f1: float, f2: float, f3: float, f4: Optional[float]) -> str:
@@ -271,22 +287,30 @@ def audit_answer(
         try:
             from experiments.meta_generator import generate_meta
             generated = generate_meta(question)
+            # 空リストは unfilled、空文字列は filled（trap_type="" は「罠なし」の明示指定）
             actually_filled = any(
-                fld in generated and generated[fld] is not None
+                fld in generated and _is_field_filled(generated[fld])
                 for fld in missing_fields
             )
             if question_meta:
                 merged = dict(question_meta)
                 for fld in missing_fields:
-                    if fld in generated and generated[fld] is not None:
+                    if fld in generated and _is_field_filled(generated[fld]):
                         merged[fld] = generated[fld]
                 question_meta = merged
             else:
-                question_meta = generated
+                if actually_filled:
+                    question_meta = generated
             if actually_filled:
                 metadata_source = META_SOURCE_LLM
+            else:
+                logger.warning(
+                    "auto meta generation returned empty values for %s", missing_fields
+                )
+                errors.append("auto_generate_empty")
         except Exception:
-            pass  # silent fallback to degraded
+            logger.exception("auto meta generation failed")
+            errors.append("auto_generate_failed")
     matched_id: Optional[str] = None
 
     # detect → calculate パイプライン
