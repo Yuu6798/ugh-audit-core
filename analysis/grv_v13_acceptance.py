@@ -39,7 +39,7 @@ with open("data/phase_c_scored_v1_t0_only.jsonl", encoding="utf-8") as f:
             responses[qid] = rec
 
 
-def run_grv(w_d=0.50, w_s=0.20, w_c=0.30, tau=0.1):
+def run_grv(w_d=0.60, w_s=0.10, tau=0.1):
     results = []
     for qid in sorted(ha48.keys()):
         meta = q_meta[qid]
@@ -52,7 +52,6 @@ def run_grv(w_d=0.50, w_s=0.20, w_c=0.30, tau=0.1):
             tau=tau,
             w_drift=w_d,
             w_dispersion=w_s,
-            w_collapse=w_c,
         )
         if r is None:
             continue
@@ -76,37 +75,11 @@ print("=" * 60)
 print("grv v1.3 Acceptance Test (HA48)")
 print("=" * 60)
 
-# --- Task 4: 重み探索 ---
-print("\n--- Task 4: Weight calibration ---")
-weight_candidates = [
-    (0.50, 0.20, 0.30, "current"),
-    (0.40, 0.20, 0.40, "cand2"),
-    (0.60, 0.10, 0.30, "cand3"),
-    (0.45, 0.15, 0.40, "cand4"),
-]
-
-best_rho = 0
-best_weights = None
-best_results = None
-
-for w_d, w_s, w_c, label in weight_candidates:
-    res = run_grv(w_d=w_d, w_s=w_s, w_c=w_c)
-    grvs = [r["grv"] for r in res]
-    scores = [r["O"] for r in res if r["O"] is not None]
-    grvs_paired = [r["grv"] for r in res if r["O"] is not None]
-    rho = spearman_rho(grvs_paired, scores)
-    print(f"  {label}: w_d={w_d:.2f} w_s={w_s:.2f} w_c={w_c:.2f}  "
-          f"rho={rho:.4f}  mean={statistics.mean(grvs):.4f}  std={statistics.stdev(grvs):.4f}")
-    if abs(rho) > abs(best_rho):
-        best_rho = rho
-        best_weights = (w_d, w_s, w_c, label)
-        best_results = res
-
-print(f"  ** Best: {best_weights[3]} (rho={best_rho:.4f})")
-
-# Use best results
-results = best_results
-w_d, w_s, w_c = best_weights[0], best_weights[1], best_weights[2]
+# --- 確定重み (collapse 除外済み) ---
+print("\n--- Weight: w_d=0.60 w_s=0.10 (collapse excluded) ---")
+results = run_grv()
+grvs_all = [r["grv"] for r in results]
+print(f"  n={len(results)}  mean={statistics.mean(grvs_all):.4f}  std={statistics.stdev(grvs_all):.4f}")
 
 # --- Summary ---
 grv_vals = [r["grv"] for r in results]
@@ -159,21 +132,17 @@ v3 = len(fp_high) == 0
 print(f"high-score short answers: {len(short_high)}, high_gravity tags: {len(fp_high)}"
       f"  {'PASS' if v3 else 'FAIL'}")
 
-# --- V-4: Incremental contribution ---
+# --- V-4: Incremental contribution (N/A — collapse excluded) ---
 print("\n--- V-4: Incremental contribution ---")
-grv_2comp = [w_d * r["drift"] + w_s * r["dispersion"] for r in results]
-grv_3comp = [r["grv"] for r in results]
 scores = [r["O"] for r in results if r["O"] is not None]
-g2_paired = [w_d * r["drift"] + w_s * r["dispersion"] for r in results if r["O"] is not None]
-g3_paired = [r["grv"] for r in results if r["O"] is not None]
-rho_2 = spearman_rho(g2_paired, scores)
-rho_3 = spearman_rho(g3_paired, scores)
-v4 = abs(rho_3) > abs(rho_2)
-print(f"rho(2-comp)={rho_2:.4f}  rho(3-comp)={rho_3:.4f}  {'PASS' if v4 else 'FAIL'}")
+g_paired = [r["grv"] for r in results if r["O"] is not None]
+rho_grv = spearman_rho(g_paired, scores)
+print(f"N/A (collapse excluded from composite; rho(grv)={rho_grv:.4f})")
+print("collapse v2 redesign needed for V-4 to apply")
 
 # --- V-5: Direction ---
 print("\n--- V-5: Direction ---")
-rho_full = spearman_rho(g3_paired, scores)
+rho_full = spearman_rho(g_paired, scores)
 v5 = rho_full < 0
 print(f"rho(grv, human_score) = {rho_full:.4f}  {'PASS' if v5 else 'FAIL'} (should be < 0)")
 
@@ -188,10 +157,11 @@ print(f"col   std={statistics.stdev(col_vals):.4f}  {'PASS' if v6_col else 'FAIL
 
 # --- Summary ---
 print("\n" + "=" * 60)
-all_pass = all([v1_sigma, v1_tags, v2_grv, v3, v5, v6_drift, v6_disp, v6_col])
+all_pass = all([v1_sigma, v1_tags, v2_grv, v3, v5, v6_drift, v6_disp])
+# Note: v6_col と v2_col は collapse が診断出力のみのため informational
 print(f"Overall: {'ALL PASS' if all_pass else 'SOME FAIL'}")
-print(f"Best weights: w_d={w_d:.2f} w_s={w_s:.2f} w_c={w_c:.2f}")
-print(f"tau={0.1}")
+print("Weights: w_d=0.60 w_s=0.10 (collapse excluded)")
+print("tau=0.1")
 print(f"rho(grv, human_score) = {rho_full:.4f}")
 
 # Per-question

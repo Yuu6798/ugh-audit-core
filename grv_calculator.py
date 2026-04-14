@@ -185,7 +185,6 @@ def compute_grv(
     tau: float = TAU,
     w_drift: float = W_DRIFT,
     w_dispersion: float = W_DISPERSION,
-    w_collapse: float = W_COLLAPSE,
 ) -> Optional[GrvResult]:
     """grv を計算する。SBert 未導入時は None を返す。
 

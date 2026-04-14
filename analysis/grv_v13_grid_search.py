@@ -52,7 +52,7 @@ def run_and_eval(tau, w_d, w_s, w_c):
             tau=tau,
             w_drift=w_d,
             w_dispersion=w_s,
-            w_collapse=w_c,
+            # w_collapse removed — collapse excluded from composite
         )
         if r is None:
             return None
