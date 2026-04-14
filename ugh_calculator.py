@@ -30,10 +30,11 @@ DELTA_E_BIN_THRESHOLDS = [VERDICT_ACCEPT, VERDICT_REWRITE]
 # --- 有効な verdict / mode 値 ---
 VALID_VERDICTS = frozenset({"accept", "rewrite", "regenerate", "degraded"})
 VALID_MODES = frozenset({"computed", "computed_ai_draft", "degraded"})
-VALID_METADATA_SOURCES = frozenset({"inline", "llm_generated", "none"})
+VALID_METADATA_SOURCES = frozenset({"inline", "llm_generated", "none", "fallback"})
 META_SOURCE_LLM = "llm_generated"
 META_SOURCE_INLINE = "inline"
 META_SOURCE_NONE = "none"
+META_SOURCE_FALLBACK = "fallback"
 GATE_FAIL = "fail"
 
 # --- C ビン閾値 ---

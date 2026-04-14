@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
     Evidence,
     GATE_FAIL,
+    META_SOURCE_FALLBACK,
     META_SOURCE_INLINE,
     META_SOURCE_LLM,
     META_SOURCE_NONE,
@@ -309,6 +310,7 @@ def audit_answer(
             if actually_filled:
                 if generated.get("_is_fallback"):
                     # LLM 未使用のフォールバック: 設定ミスを隠さない
+                    metadata_source = META_SOURCE_FALLBACK
                     errors.append("auto_generate_fallback")
                 else:
                     metadata_source = META_SOURCE_LLM
@@ -325,7 +327,7 @@ def audit_answer(
     # detect → calculate パイプライン
     detected = False
     if question_meta and _HAS_DETECTOR:
-        if metadata_source != META_SOURCE_LLM:
+        if metadata_source not in (META_SOURCE_LLM, META_SOURCE_FALLBACK):
             metadata_source = META_SOURCE_INLINE
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
