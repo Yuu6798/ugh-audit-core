@@ -157,9 +157,11 @@ def _run_pipeline(
                     question_meta = generated
             if actually_filled:
                 if generated.get("_is_fallback"):
-                    # LLM 未使用のフォールバック: 設定ミスを隠さない
-                    metadata_source = META_SOURCE_FALLBACK
                     errors.append("auto_generate_fallback")
+                    if "core_propositions" in missing_fields:
+                        # core_propositions がフォールバック由来 → degraded
+                        metadata_source = META_SOURCE_FALLBACK
+                    # else: optional フィールドのみ補完 → inline として扱う
                 else:
                     metadata_source = META_SOURCE_LLM
             else:
