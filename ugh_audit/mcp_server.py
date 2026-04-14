@@ -372,6 +372,11 @@ def audit_answer(
     else:
         missing.extend(["delta_e", "quality_score"])
 
+    # フォールバック meta は degraded に強制（analytics 汚染を防止）
+    if metadata_source == META_SOURCE_FALLBACK:
+        mode = "degraded"
+        verdict = "degraded"
+
     # fail-closed: verdict/mode が想定値であることを保証
     assert verdict in VALID_VERDICTS, f"invalid verdict: {verdict}"
     assert mode in VALID_MODES, f"invalid mode: {mode}"
