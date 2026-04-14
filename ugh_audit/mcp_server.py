@@ -17,14 +17,17 @@ import sys
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from mcp.server.fastmcp import FastMCP
 
+from . import dependencies as _deps
 from .metadata_generator import detect_missing_metadata
-from .reference.golden_store import GoldenStore
 from .soft_rescue import maybe_build_soft_rescue
-from .storage.audit_db import AuditDB
+
+if TYPE_CHECKING:
+    from .reference.golden_store import GoldenStore
+    from .storage.audit_db import AuditDB
 
 # パイプライン A のインポート
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -102,24 +105,12 @@ mcp = FastMCP(
 # 共有インスタンス（遅延初期化）
 # ---------------------------------------------------------------------------
 
-_db: Optional[AuditDB] = None
-_golden: Optional[GoldenStore] = None
-
-
 def _get_db() -> AuditDB:
-    global _db
-    if _db is None:
-        import os
-        db_path = os.environ.get("UGH_AUDIT_DB")
-        _db = AuditDB(db_path=Path(db_path) if db_path else None)
-    return _db
+    return _deps.get_db()
 
 
 def _get_golden() -> GoldenStore:
-    global _golden
-    if _golden is None:
-        _golden = GoldenStore()
-    return _golden
+    return _deps.get_golden()
 
 
 def configure(
@@ -127,11 +118,10 @@ def configure(
     golden: Optional[GoldenStore] = None,
 ) -> None:
     """テストやカスタム設定用にグローバルインスタンスを差し替える"""
-    global _db, _golden
-    if db is not None:
-        _db = db
-    if golden is not None:
-        _golden = golden
+    if db is None and golden is None:
+        _deps.reset()
+        return
+    _deps.configure(db=db, golden=golden)
 
 
 # ---------------------------------------------------------------------------
