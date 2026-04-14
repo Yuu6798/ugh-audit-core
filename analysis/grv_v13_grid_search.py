@@ -1,4 +1,8 @@
-"""grv v1.3 グリッドサーチ — τ × w_d × w_s × w_c で V-4 を通す組み合わせを探す"""
+"""grv v1.3 グリッドサーチ — τ × w_d × w_s で最良 ρ を探す
+
+注: collapse は合成値から除外済み (V-4 は N/A)。
+本スクリプトは drift+dispersion の重み配分と τ の最適化に使用する。
+w_c 列は collapse 診断の τ 依存性の記録用に残している。"""
 from __future__ import annotations
 
 import csv
