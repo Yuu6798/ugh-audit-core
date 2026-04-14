@@ -155,7 +155,11 @@ def _run_pipeline(
                 if actually_filled:
                     question_meta = generated
             if actually_filled:
-                metadata_source = META_SOURCE_LLM
+                if generated.get("_is_fallback"):
+                    # LLM 未使用のフォールバック: 設定ミスを隠さない
+                    errors.append("auto_generate_fallback")
+                else:
+                    metadata_source = META_SOURCE_LLM
             else:
                 logger.warning(
                     "auto meta generation returned empty values for %s", missing_fields
