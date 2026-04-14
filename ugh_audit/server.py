@@ -64,6 +64,19 @@ logger = logging.getLogger(__name__)
 SCHEMA_VERSION = "2.0.0"
 
 
+def _is_field_filled(value: object) -> bool:
+    """自動生成フィールドが有意な値を持つか判定する。
+
+    リスト型は空でないこと、それ以外は None でないことを要求する。
+    trap_type="" は「罠なし」の明示指定として有意。
+    """
+    if value is None:
+        return False
+    if isinstance(value, list):
+        return len(value) > 0
+    return True
+
+
 def _gate_verdict_safe(f1: float, f2: float, f3: float, f4: Optional[float]) -> str:
     vals = [f1, f2, f3] + ([f4] if f4 is not None else [])
     fail_max = max(vals) if vals else 0.0
@@ -121,16 +134,16 @@ def _run_pipeline(
         try:
             from experiments.meta_generator import generate_meta
             generated = generate_meta(question)
-            # 空リスト/空文字列は "filled" とみなさない（truthiness で判定）
+            # 空リストは unfilled、空文字列は filled（trap_type="" は「罠なし」の明示指定）
             actually_filled = any(
-                field in generated and generated[field]
+                field in generated and _is_field_filled(generated[field])
                 for field in missing_fields
             )
             if question_meta:
                 # inline 提供分を保持し、欠損フィールドのみ LLM 生成値で補完
                 merged = dict(question_meta)
                 for field in missing_fields:
-                    if field in generated and generated[field]:
+                    if field in generated and _is_field_filled(generated[field]):
                         merged[field] = generated[field]
                 question_meta = merged
             else:
