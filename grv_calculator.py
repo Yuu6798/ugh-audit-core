@@ -127,9 +127,7 @@ def compute_collapse(
     if total_raw == 0.0:
         return 0.0, False, raw_a_k, raw_a_k
 
-    # τ シャープ化 (tau は正の値でなければならない)
-    if tau <= 0:
-        tau = TAU
+    # τ シャープ化 (tau > 0 は呼び出し元で保証)
     sharp_a_k = [a ** (1.0 / tau) if a > 0 else 0.0 for a in raw_a_k]
     total_sharp = sum(sharp_a_k)
     if total_sharp == 0.0:
@@ -200,6 +198,10 @@ def compute_grv(
         w_dispersion: dispersion 重み
         w_collapse: collapse 重み
     """
+    # tau バリデーション (実効値を記録に使用)
+    if tau <= 0:
+        tau = TAU
+
     try:
         from cascade_matcher import encode_texts, get_shared_model
     except ImportError:
