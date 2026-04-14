@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("mcp")
+
 from ugh_audit import dependencies
 from ugh_audit import mcp_server
 from ugh_audit import server
