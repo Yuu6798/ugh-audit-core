@@ -226,6 +226,7 @@ def _run_pipeline(
             response_text=response,
             question_meta=question_meta,
             metadata_source=metadata_source,
+            c_normalized=state.C,
         )
     except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
         grv_result = None

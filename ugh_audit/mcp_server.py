@@ -435,6 +435,7 @@ def audit_answer(
             response_text=response,
             question_meta=question_meta,
             metadata_source=metadata_source,
+            c_normalized=state.C,
         )
         if grv_result is not None:
             grv_output = {

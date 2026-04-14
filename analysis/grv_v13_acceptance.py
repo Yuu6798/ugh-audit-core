@@ -39,7 +39,7 @@ with open("data/phase_c_scored_v1_t0_only.jsonl", encoding="utf-8") as f:
             responses[qid] = rec
 
 
-def run_grv(w_d=0.60, w_s=0.10, tau=0.1):
+def run_grv(w_d=0.60, w_s=0.10):
     results = []
     for qid in sorted(ha48.keys()):
         meta = q_meta[qid]
@@ -49,9 +49,9 @@ def run_grv(w_d=0.60, w_s=0.10, tau=0.1):
             response_text=resp.get("response", ""),
             question_meta=meta,
             metadata_source="inline",
-            tau=tau,
             w_drift=w_d,
             w_dispersion=w_s,
+            w_collapse_v2=0.0,
         )
         if r is None:
             continue

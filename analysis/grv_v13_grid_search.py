@@ -43,7 +43,7 @@ with open("data/phase_c_scored_v1_t0_only.jsonl", encoding="utf-8") as f:
             responses[qid] = rec
 
 
-def run_and_eval(tau, w_d, w_s, w_c):
+def run_and_eval(tau, w_d, w_s, w_c):  # noqa: ARG001 — tau kept for interface compat
     results = []
     for qid in sorted(ha48.keys()):
         meta = q_meta[qid]
@@ -53,10 +53,9 @@ def run_and_eval(tau, w_d, w_s, w_c):
             response_text=resp.get("response", ""),
             question_meta=meta,
             metadata_source="inline",
-            tau=tau,
             w_drift=w_d,
             w_dispersion=w_s,
-            # w_collapse removed — collapse excluded from composite
+            w_collapse_v2=0.0,  # v1.3 互換: collapse 除外
         )
         if r is None:
             return None
