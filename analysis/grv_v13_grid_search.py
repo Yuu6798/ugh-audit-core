@@ -84,43 +84,41 @@ def run_and_eval(tau, w_d, w_s, w_c):
     }
 
 
-# Grid search
-taus = [0.05, 0.08, 0.10, 0.15, 0.20]
+# Grid search (w_d / w_s のみ。τ は合成値に影響しないため固定)
+tau = 0.10  # collapse 診断用に固定
 weight_sets = [
-    (0.50, 0.20, 0.30),
-    (0.60, 0.10, 0.30),
-    (0.40, 0.20, 0.40),
-    (0.45, 0.15, 0.40),
-    (0.70, 0.10, 0.20),
-    (0.55, 0.15, 0.30),
-    (0.65, 0.10, 0.25),
-    (0.50, 0.10, 0.40),
-    (0.60, 0.15, 0.25),
-    (0.55, 0.20, 0.25),
+    (0.50, 0.20),
+    (0.60, 0.10),
+    (0.40, 0.20),
+    (0.70, 0.10),
+    (0.55, 0.15),
+    (0.65, 0.10),
+    (0.50, 0.10),
+    (0.60, 0.15),
+    (0.55, 0.20),
+    (0.45, 0.15),
 ]
 
-print(f"{'tau':>5}  {'w_d':>5}  {'w_s':>5}  {'w_c':>5}  {'rho':>7}  "
-      f"{'V1':>4}  {'V5':>4}  {'V6c':>4}  {'sigma':>6}  {'col_std':>7}")
+print(f"{'w_d':>5}  {'w_s':>5}  {'rho':>7}  "
+      f"{'V1':>4}  {'V5':>4}  {'sigma':>6}")
 
 best = None
-for tau in taus:
-    for w_d, w_s, w_c in weight_sets:
-        res = run_and_eval(tau, w_d, w_s, w_c)
-        if res is None:
-            continue
-        all_pass = res["v1_pass"] and res["v5_pass"]
-        marker = " ***" if all_pass else ""
-        print(f"{tau:5.2f}  {w_d:5.2f}  {w_s:5.2f}  {w_c:5.2f}  {res['rho']:7.4f}  "
-              f"{'Y' if res['v1_pass'] else 'N':>4}  {'Y' if res['v5_pass'] else 'N':>4}  "
-              f"{'Y' if res['v6_col_pass'] else 'N':>4}  {res['sigma']:6.4f}  "
-              f"{res['col_std']:7.4f}{marker}")
-        if all_pass and (best is None or abs(res["rho"]) > abs(best["rho"])):
-            best = res
+for w_d, w_s in weight_sets:
+    res = run_and_eval(tau, w_d, w_s, 0.0)
+    if res is None:
+        continue
+    all_pass = res["v1_pass"] and res["v5_pass"]
+    marker = " ***" if all_pass else ""
+    print(f"{w_d:5.2f}  {w_s:5.2f}  {res['rho']:7.4f}  "
+          f"{'Y' if res['v1_pass'] else 'N':>4}  {'Y' if res['v5_pass'] else 'N':>4}  "
+          f"{res['sigma']:6.4f}{marker}")
+    if all_pass and (best is None or abs(res["rho"]) > abs(best["rho"])):
+        best = res
 
 print()
 if best:
     print("=== BEST ===")
-    print(f"tau={best['tau']}, w_d={best['w_d']}, w_s={best['w_s']}, w_c={best['w_c']}")
+    print(f"w_d={best['w_d']}, w_s={best['w_s']}")
     print(f"rho={best['rho']:.4f}, sigma={best['sigma']:.4f}")
 else:
     print("No combination passed V-1/V-5")
