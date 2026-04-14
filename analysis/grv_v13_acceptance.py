@@ -85,7 +85,7 @@ print(f"  n={len(results)}  mean={statistics.mean(grvs_all):.4f}  std={statistic
 grv_vals = [r["grv"] for r in results]
 drift_vals = [r["drift"] for r in results]
 disp_vals = [r["dispersion"] for r in results]
-col_vals = [r["collapse"] for r in results]
+col_vals = [r["collapse_v2"] for r in results]
 
 print("\n--- Component distributions ---")
 print(f"grv:        mean={statistics.mean(grv_vals):.4f}  std={statistics.stdev(grv_vals):.4f}"
@@ -115,8 +115,8 @@ quasi_pos = {"q067", "q099", "q037", "q086", "q093"}
 control = {"q009", "q063", "q083", "q075", "q088"}
 qp_grv = [r["grv"] for r in results if r["id"] in quasi_pos]
 ctrl_grv = [r["grv"] for r in results if r["id"] in control]
-qp_col = [r["collapse"] for r in results if r["id"] in quasi_pos]
-ctrl_col = [r["collapse"] for r in results if r["id"] in control]
+qp_col = [r["collapse_v2"] for r in results if r["id"] in quasi_pos]
+ctrl_col = [r["collapse_v2"] for r in results if r["id"] in control]
 v2_grv = statistics.mean(qp_grv) > statistics.mean(ctrl_grv) if qp_grv and ctrl_grv else False
 v2_col = statistics.mean(qp_col) > statistics.mean(ctrl_col) if qp_col and ctrl_col else False
 print(f"quasi-pos grv mean={statistics.mean(qp_grv):.4f}  control={statistics.mean(ctrl_grv):.4f}"

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import statistics
 import sys
 from collections import Counter
@@ -110,7 +111,8 @@ for w_d, w_s, w_c, label in weight_candidates:
 print(f"  ** Best: {best_label} (rho={best_rho:.4f})")
 
 # Check incremental contribution
-if best_weights[2] > 0 and baseline_rho is not None and best_rho < baseline_rho:
+_baseline_valid = baseline_rho is not None and not math.isnan(baseline_rho)
+if best_weights[2] > 0 and _baseline_valid and best_rho < baseline_rho:
     print(f"  V-4: collapse_v2 incremental POSITIVE (baseline rho={baseline_rho:.4f})")
     use_collapse = True
 else:
