@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from typing import List, Optional
 
@@ -128,10 +129,14 @@ def _validate_meta(meta: dict, question: str) -> dict:
 
 
 def _fallback_meta(question: str) -> dict:
-    """最小限のフォールバック meta（LLM 不使用時）"""
+    """最小限のフォールバック meta（LLM 不使用時）
+
+    質問文自体を 1 つの命題として使用し、最低限の C 計算を可能にする。
+    LLM 生成に比べ精度は低いが、degraded よりは有用な近似を返す。
+    """
     return {
         "question": str(question),
-        "core_propositions": [],
+        "core_propositions": [str(question)],
         "disqualifying_shortcuts": [],
         "acceptable_variants": [],
         "trap_type": "",
@@ -162,6 +167,10 @@ def generate_meta(
 
     if not _HAS_ANTHROPIC:
         logger.warning("anthropic SDK 未インストール: fallback meta を返します")
+        return _fallback_meta(question)
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        logger.warning("ANTHROPIC_API_KEY 未設定: fallback meta を返します")
         return _fallback_meta(question)
 
     try:

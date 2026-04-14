@@ -292,6 +292,11 @@ def audit_answer(
                 fld in generated and _is_field_filled(generated[fld])
                 for fld in missing_fields
             )
+            # core_propositions が欠損のまま残っていたら detect は無意味
+            if "core_propositions" in missing_fields and not generated.get(
+                "core_propositions"
+            ):
+                actually_filled = False
             if question_meta:
                 merged = dict(question_meta)
                 for fld in missing_fields:
