@@ -439,6 +439,7 @@ def audit_answer(
         if grv_result is not None:
             grv_output = {
                 "grv": grv_result.grv,
+                "grv_tag_provisional": grv_result.grv_tag,
                 "grv_components": {
                     "drift": grv_result.drift,
                     "dispersion": grv_result.dispersion,
@@ -451,11 +452,15 @@ def audit_answer(
                     "meta_source": grv_result.meta_source,
                     "ref_confidence": grv_result.ref_confidence,
                     "meta_scale": grv_result.meta_scale,
-                    "prop_weights": grv_result.prop_weights,
+                    "tau": grv_result.tau,
+                    "embedding_backend": "paraphrase-multilingual-MiniLM-L12-v2",
+                    "grv_version": "v1.3",
                 },
                 "grv_debug": {
-                    "prop_affinity": grv_result.prop_affinity,
-                    "grv_tag_provisional": grv_result.grv_tag,
+                    "prop_affinity_raw": grv_result.prop_affinity_raw,
+                    "prop_affinity_sharp": grv_result.prop_affinity_sharp,
+                    "drift_raw_cosine": grv_result.drift_raw_cosine,
+                    "ref_weights": {"w_q": grv_result.ref_w_q, "w_m": grv_result.ref_w_m},
                 },
             }
     except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
