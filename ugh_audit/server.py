@@ -139,6 +139,11 @@ def _run_pipeline(
                 field in generated and _is_field_filled(generated[field])
                 for field in missing_fields
             )
+            # core_propositions が欠損のまま残っていたら detect は無意味
+            if "core_propositions" in missing_fields and not generated.get(
+                "core_propositions"
+            ):
+                actually_filled = False
             if question_meta:
                 # inline 提供分を保持し、欠損フィールドのみ LLM 生成値で補完
                 merged = dict(question_meta)
