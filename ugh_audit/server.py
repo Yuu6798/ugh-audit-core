@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json as _json
+import logging
 import sys
 import uuid
 from contextlib import asynccontextmanager
@@ -56,6 +57,8 @@ try:
     _HAS_DETECTOR = True
 except ImportError:
     _HAS_DETECTOR = False
+
+logger = logging.getLogger(__name__)
 
 # --- 定数 ---
 SCHEMA_VERSION = "2.0.0"
@@ -118,23 +121,31 @@ def _run_pipeline(
         try:
             from experiments.meta_generator import generate_meta
             generated = generate_meta(question)
+            # 空リスト/空文字列は "filled" とみなさない（truthiness で判定）
             actually_filled = any(
-                field in generated and generated[field] is not None
+                field in generated and generated[field]
                 for field in missing_fields
             )
             if question_meta:
                 # inline 提供分を保持し、欠損フィールドのみ LLM 生成値で補完
                 merged = dict(question_meta)
                 for field in missing_fields:
-                    if field in generated and generated[field] is not None:
+                    if field in generated and generated[field]:
                         merged[field] = generated[field]
                 question_meta = merged
             else:
-                question_meta = generated
+                if actually_filled:
+                    question_meta = generated
             if actually_filled:
                 metadata_source = META_SOURCE_LLM
+            else:
+                logger.warning(
+                    "auto meta generation returned empty values for %s", missing_fields
+                )
+                errors.append("auto_generate_empty")
         except Exception:
-            pass  # import 失敗や API エラーは silent に degraded
+            logger.exception("auto meta generation failed")
+            errors.append("auto_generate_failed")
 
     detected = False
     if question_meta and _HAS_DETECTOR:

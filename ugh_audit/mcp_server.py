@@ -12,6 +12,7 @@ ChatGPT Settings > Connectors から MCP URL を登録して利用する。
 from __future__ import annotations
 
 import json as _json
+import logging
 import os
 import sys
 import uuid
@@ -50,6 +51,8 @@ try:
     _HAS_DETECTOR = True
 except ImportError:
     _HAS_DETECTOR = False
+
+logger = logging.getLogger(__name__)
 
 # --- 定数 ---
 SCHEMA_VERSION = "2.0.0"
@@ -271,22 +274,30 @@ def audit_answer(
         try:
             from experiments.meta_generator import generate_meta
             generated = generate_meta(question)
+            # 空リスト/空文字列は "filled" とみなさない（truthiness で判定）
             actually_filled = any(
-                fld in generated and generated[fld] is not None
+                fld in generated and generated[fld]
                 for fld in missing_fields
             )
             if question_meta:
                 merged = dict(question_meta)
                 for fld in missing_fields:
-                    if fld in generated and generated[fld] is not None:
+                    if fld in generated and generated[fld]:
                         merged[fld] = generated[fld]
                 question_meta = merged
             else:
-                question_meta = generated
+                if actually_filled:
+                    question_meta = generated
             if actually_filled:
                 metadata_source = META_SOURCE_LLM
+            else:
+                logger.warning(
+                    "auto meta generation returned empty values for %s", missing_fields
+                )
+                errors.append("auto_generate_empty")
         except Exception:
-            pass  # silent fallback to degraded
+            logger.exception("auto meta generation failed")
+            errors.append("auto_generate_failed")
     matched_id: Optional[str] = None
 
     # detect → calculate パイプライン
