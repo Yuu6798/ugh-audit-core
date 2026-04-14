@@ -58,11 +58,11 @@ for qid in sorted(ha48.keys()):
         "grv": r.grv,
         "drift": r.drift,
         "dispersion": r.dispersion,
-        "collapse": r.collapse,
+        "collapse_v2": r.collapse_v2,
         "tag": r.grv_tag,
         "n_sent": r.n_sentences,
         "n_props": r.n_propositions,
-        "collapse_applicable": r.collapse_applicable,
+        "collapse_v2_applicable": r.collapse_v2_applicable,
         "O": human_score,
     })
 
@@ -74,7 +74,7 @@ if not results:
 grv_vals = [r["grv"] for r in results]
 drift_vals = [r["drift"] for r in results]
 disp_vals = [r["dispersion"] for r in results]
-col_vals = [r["collapse"] for r in results]
+col_vals = [r["collapse_v2"] for r in results]
 
 print(f"=== grv Non-Degeneracy Check (HA48, n={len(results)}) ===")
 print(f"grv:        mean={statistics.mean(grv_vals):.4f}  std={statistics.stdev(grv_vals):.4f}"
@@ -83,7 +83,7 @@ print(f"drift:      mean={statistics.mean(drift_vals):.4f}  std={statistics.stde
       f"  min={min(drift_vals):.4f}  max={max(drift_vals):.4f}")
 print(f"dispersion: mean={statistics.mean(disp_vals):.4f}  std={statistics.stdev(disp_vals):.4f}"
       f"  min={min(disp_vals):.4f}  max={max(disp_vals):.4f}")
-print(f"collapse:   mean={statistics.mean(col_vals):.4f}  std={statistics.stdev(col_vals):.4f}"
+print(f"collapse_v2: mean={statistics.mean(col_vals):.4f}  std={statistics.stdev(col_vals):.4f}"
       f"  min={min(col_vals):.4f}  max={max(col_vals):.4f}")
 
 # Tag distribution
@@ -91,7 +91,7 @@ tags = Counter(r["tag"] for r in results)
 print(f"\nTag distribution: {dict(tags)}")
 
 # collapse_applicable
-applicable = sum(1 for r in results if r["collapse_applicable"])
+applicable = sum(1 for r in results if r["collapse_v2_applicable"])
 print(f"collapse_applicable: {applicable}/{len(results)}")
 
 # V-1 check
@@ -106,4 +106,4 @@ print(f"{'id':>6}  {'grv':>6}  {'drift':>6}  {'disp':>6}  {'col':>6}  {'tag':<14
 for r in sorted(results, key=lambda x: x["grv"], reverse=True):
     o_str = str(r["O"]) if r["O"] is not None else "-"
     print(f"{r['id']:>6}  {r['grv']:6.4f}  {r['drift']:6.4f}  {r['dispersion']:6.4f}"
-          f"  {r['collapse']:6.4f}  {r['tag']:<14}  {o_str:>2}")
+          f"  {r['collapse_v2']:6.4f}  {r['tag']:<14}  {o_str:>2}")

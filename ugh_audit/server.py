@@ -226,6 +226,7 @@ def _run_pipeline(
             response_text=response,
             question_meta=question_meta,
             metadata_source=metadata_source,
+            c_normalized=state.C,
         )
     except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
         grv_result = None
@@ -238,24 +239,25 @@ def _run_pipeline(
             "grv_components": {
                 "drift": grv_result.drift,
                 "dispersion": grv_result.dispersion,
-                "collapse": grv_result.collapse,
+                "collapse_v2": grv_result.collapse_v2,
             },
+            "cover_soft": grv_result.cover_soft,
+            "wash_index": grv_result.wash_index,
+            "wash_index_c": grv_result.wash_index_c,
             "grv_meta": {
                 "n_sentences": grv_result.n_sentences,
                 "n_propositions": grv_result.n_propositions,
-                "collapse_applicable": grv_result.collapse_applicable,
+                "collapse_v2_applicable": grv_result.collapse_v2_applicable,
                 "meta_source": grv_result.meta_source,
                 "ref_confidence": grv_result.ref_confidence,
-                "meta_scale": grv_result.meta_scale,
-                "tau": grv_result.tau,
                 "embedding_backend": "paraphrase-multilingual-MiniLM-L12-v2",
-                "grv_version": "v1.3",
+                "grv_version": "v1.4",
+                "weights": grv_result.weights,
             },
             "grv_debug": {
-                "prop_affinity_raw": grv_result.prop_affinity_raw,
-                "prop_affinity_sharp": grv_result.prop_affinity_sharp,
+                "prop_affinity_per_sentence": grv_result.prop_affinity_per_sentence,
+                "cover_soft_per_proposition": grv_result.cover_soft_per_proposition,
                 "drift_raw_cosine": grv_result.drift_raw_cosine,
-                "ref_weights": {"w_q": grv_result.ref_w_q, "w_m": grv_result.ref_w_m},
             },
         }
 

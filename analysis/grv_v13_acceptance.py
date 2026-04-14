@@ -39,7 +39,7 @@ with open("data/phase_c_scored_v1_t0_only.jsonl", encoding="utf-8") as f:
             responses[qid] = rec
 
 
-def run_grv(w_d=0.60, w_s=0.10, tau=0.1):
+def run_grv(w_d=0.60, w_s=0.10):
     results = []
     for qid in sorted(ha48.keys()):
         meta = q_meta[qid]
@@ -49,17 +49,17 @@ def run_grv(w_d=0.60, w_s=0.10, tau=0.1):
             response_text=resp.get("response", ""),
             question_meta=meta,
             metadata_source="inline",
-            tau=tau,
             w_drift=w_d,
             w_dispersion=w_s,
+            w_collapse_v2=0.0,
         )
         if r is None:
             continue
         hs = round(float(ha48[qid]["O"])) if ha48[qid]["O"] else None
         results.append({
             "id": qid, "grv": r.grv, "drift": r.drift, "dispersion": r.dispersion,
-            "collapse": r.collapse, "tag": r.grv_tag, "n_sent": r.n_sentences,
-            "n_props": r.n_propositions, "collapse_applicable": r.collapse_applicable, "O": hs,
+            "collapse_v2": r.collapse_v2, "tag": r.grv_tag, "n_sent": r.n_sentences,
+            "n_props": r.n_propositions, "collapse_v2_applicable": r.collapse_v2_applicable, "O": hs,
         })
     return results
 
@@ -85,7 +85,7 @@ print(f"  n={len(results)}  mean={statistics.mean(grvs_all):.4f}  std={statistic
 grv_vals = [r["grv"] for r in results]
 drift_vals = [r["drift"] for r in results]
 disp_vals = [r["dispersion"] for r in results]
-col_vals = [r["collapse"] for r in results]
+col_vals = [r["collapse_v2"] for r in results]
 
 print("\n--- Component distributions ---")
 print(f"grv:        mean={statistics.mean(grv_vals):.4f}  std={statistics.stdev(grv_vals):.4f}"
@@ -115,8 +115,8 @@ quasi_pos = {"q067", "q099", "q037", "q086", "q093"}
 control = {"q009", "q063", "q083", "q075", "q088"}
 qp_grv = [r["grv"] for r in results if r["id"] in quasi_pos]
 ctrl_grv = [r["grv"] for r in results if r["id"] in control]
-qp_col = [r["collapse"] for r in results if r["id"] in quasi_pos]
-ctrl_col = [r["collapse"] for r in results if r["id"] in control]
+qp_col = [r["collapse_v2"] for r in results if r["id"] in quasi_pos]
+ctrl_col = [r["collapse_v2"] for r in results if r["id"] in control]
 v2_grv = statistics.mean(qp_grv) > statistics.mean(ctrl_grv) if qp_grv and ctrl_grv else False
 v2_col = statistics.mean(qp_col) > statistics.mean(ctrl_col) if qp_col and ctrl_col else False
 print(f"quasi-pos grv mean={statistics.mean(qp_grv):.4f}  control={statistics.mean(ctrl_grv):.4f}"
