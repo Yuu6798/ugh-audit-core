@@ -133,6 +133,7 @@ def _fallback_meta(question: str) -> dict:
 
     質問文自体を 1 つの命題として使用し、最低限の C 計算を可能にする。
     LLM 生成に比べ精度は低いが、degraded よりは有用な近似を返す。
+    _is_fallback=True で LLM 未使用であることを明示する。
     """
     return {
         "question": str(question),
@@ -140,6 +141,7 @@ def _fallback_meta(question: str) -> dict:
         "disqualifying_shortcuts": [],
         "acceptable_variants": [],
         "trap_type": "",
+        "_is_fallback": True,
     }
 
 

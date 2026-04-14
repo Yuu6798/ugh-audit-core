@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
     Evidence,
     GATE_FAIL,
+    META_SOURCE_FALLBACK,
     META_SOURCE_INLINE,
     META_SOURCE_LLM,
     META_SOURCE_NONE,
@@ -155,7 +156,14 @@ def _run_pipeline(
                 if actually_filled:
                     question_meta = generated
             if actually_filled:
-                metadata_source = META_SOURCE_LLM
+                if generated.get("_is_fallback"):
+                    errors.append("auto_generate_fallback")
+                    if "core_propositions" in missing_fields:
+                        # core_propositions がフォールバック由来 → degraded
+                        metadata_source = META_SOURCE_FALLBACK
+                    # else: optional フィールドのみ補完 → inline として扱う
+                else:
+                    metadata_source = META_SOURCE_LLM
             else:
                 logger.warning(
                     "auto meta generation returned empty values for %s", missing_fields
@@ -167,7 +175,7 @@ def _run_pipeline(
 
     detected = False
     if question_meta and _HAS_DETECTOR:
-        if metadata_source != META_SOURCE_LLM:
+        if metadata_source not in (META_SOURCE_LLM, META_SOURCE_FALLBACK):
             metadata_source = META_SOURCE_INLINE
         question_id = question_meta.get("id", "unknown")
         matched_id = question_id
@@ -214,6 +222,17 @@ def _run_pipeline(
     else:
         missing.extend(["delta_e", "quality_score"])
 
+    # フォールバック meta は degraded に強制（analytics 汚染を防止）
+    # computed_components/missing_components も degraded 契約に合わせる
+    if metadata_source == META_SOURCE_FALLBACK:
+        mode = "degraded"
+        verdict = "degraded"
+        for fld in ("C", "delta_e", "quality_score"):
+            if fld in computed:
+                computed.remove(fld)
+            if fld not in missing:
+                missing.append(fld)
+
     # fail-closed: verdict/mode が想定値であることを保証
     assert verdict in VALID_VERDICTS, f"invalid verdict: {verdict}"
     assert mode in VALID_MODES, f"invalid mode: {mode}"
@@ -248,6 +267,7 @@ def _run_pipeline(
         mode in ("computed", "computed_ai_draft")
         and verdict in {"accept", "rewrite", "regenerate"}
         and gate_v != GATE_FAIL
+        and metadata_source != META_SOURCE_FALLBACK
     )
 
     # grv 計算 (SBert 依存、未導入時は None)
@@ -296,9 +316,9 @@ def _run_pipeline(
     result = {
         "schema_version": SCHEMA_VERSION,
         "S": state.S,
-        "C": state.C,
-        "delta_e": state.delta_e,
-        "quality_score": state.quality_score,
+        "C": None if metadata_source == META_SOURCE_FALLBACK else state.C,
+        "delta_e": None if metadata_source == META_SOURCE_FALLBACK else state.delta_e,
+        "quality_score": None if metadata_source == META_SOURCE_FALLBACK else state.quality_score,
         "verdict": verdict,
         "hit_rate": hit_rate,
         "structural_gate": {
