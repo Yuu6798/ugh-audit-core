@@ -83,9 +83,10 @@ weight_candidates = [
     (0.60, 0.10, 0.30, "cand5"),
 ]
 
-best_rho = 0
-best_label = None
+best_rho = 0.0
+best_label = "2comp baseline"
 best_results = None
+best_weights = (0.60, 0.10, 0.00)
 baseline_rho = None
 
 for w_d, w_s, w_c, label in weight_candidates:
@@ -99,7 +100,8 @@ for w_d, w_s, w_c, label in weight_candidates:
           f"rho={rho:.4f}  sigma={sigma:.4f}")
     if label == "2comp baseline":
         baseline_rho = rho
-    if abs(rho) > abs(best_rho):
+    # 負の rho のみで比較 (V-5: rho < 0 が必須)
+    if rho < 0 and (best_rho >= 0 or rho < best_rho):
         best_rho = rho
         best_label = label
         best_results = res
@@ -108,7 +110,7 @@ for w_d, w_s, w_c, label in weight_candidates:
 print(f"  ** Best: {best_label} (rho={best_rho:.4f})")
 
 # Check incremental contribution
-if best_weights[2] > 0 and abs(best_rho) > abs(baseline_rho):
+if best_weights[2] > 0 and baseline_rho is not None and best_rho < baseline_rho:
     print(f"  V-4: collapse_v2 incremental POSITIVE (baseline rho={baseline_rho:.4f})")
     use_collapse = True
 else:
