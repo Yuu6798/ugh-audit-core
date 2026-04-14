@@ -1,11 +1,18 @@
-"""grv_calculator.py — 因果構造損失 (grv) 計算モジュール
+"""grv_calculator.py — 因果構造損失 (grv) 計算モジュール v1.3
 
-回答が問いの重力圏からどれだけ逸脱しているかを3成分で計測する:
-  drift      = 1 - cos01(G_res, G_ref)     # 重心逸脱
-  dispersion = mean(1 - cos01(s_i, G_res))  # 内部散漫度
-  collapse   = 1 - H(p_k) / log(K)         # 偏在集中度
+回答が問いの重力圏からどれだけ逸脱しているかを計測する。
 
-grv = clamp(w_d * drift + w_s * dispersion + w_c * collapse, 0, 1)
+合成式 (2成分):
+  grv = normalize(w_d * drift + w_s * dispersion)
+
+成分:
+  drift      = 1 - max(0, raw_cosine(G_res, G_ref))  # 重心逸脱 (生コサイン)
+  dispersion = mean(1 - cos01(s_i, G_res))            # 内部散漫度
+  collapse   = 診断出力のみ (合成値に含めない)         # 偏在集中度
+
+collapse は HA48 で増分寄与マイナス (ρ 悪化) が確認されたため、
+合成値から除外。「良い集中」と「悪い集中」の弁別には質的に異なる
+計測が必要であり、collapse v2 として独立した設計タスクに分離する。
 
 SBert 依存。SBert 未導入時は None を返す (L_sem で L_G=None → 除外)。
 """
@@ -18,14 +25,18 @@ from typing import List, Optional
 
 import numpy as np
 
-# --- 暫定重み (Phase 2 で HA48 実値に基づき再校正) ---
-W_DRIFT = 0.50
-W_DISPERSION = 0.20
-W_COLLAPSE = 0.30
+# --- 確定重み (HA48 ρ=-0.318 で検証済み) ---
+# collapse は増分寄与マイナスのため合成値から除外。診断出力のみ。
+W_DRIFT = 0.60
+W_DISPERSION = 0.10
+W_COLLAPSE = 0.00
 
-# --- 暫定タグ閾値 (Phase 2 で再校正) ---
+# --- 暫定タグ閾値 ---
 TAG_HIGH = 0.66
 TAG_MID = 0.33
+
+# --- collapse シャープ化の温度パラメータ ---
+TAU = 0.1
 
 # --- 参照重心の重み ---
 _REF_WEIGHTS = {
@@ -33,6 +44,9 @@ _REF_WEIGHTS = {
     "auto":     {"w_q": 0.80, "w_m": 0.20, "ref_confidence": 0.70},
     "missing":  {"w_q": 1.00, "w_m": 0.00, "ref_confidence": 0.50},
 }
+
+GRV_VERSION = "v1.3"
+EMBEDDING_BACKEND = "paraphrase-multilingual-MiniLM-L12-v2"
 
 
 def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -59,15 +73,25 @@ def cos01(a: np.ndarray, b: np.ndarray) -> float:
     return (_cos_sim(a, b) + 1.0) / 2.0
 
 
-def compute_drift(G_res: np.ndarray, G_ref: np.ndarray) -> float:
-    """重心逸脱: 0 = 問いの重力圏内, 1 = 逸脱"""
-    return _clamp(1.0 - cos01(G_res, G_ref))
+def compute_drift(G_res: np.ndarray, G_ref: np.ndarray) -> tuple[float, float]:
+    """重心逸脱: 0 = 問いの重力圏内, 1 = 逸脱
+
+    v1.3: 生コサイン [-1,1] を使い、cos01 の圧縮を回避。
+    負のコサインは drift=1.0 にクランプ。
+
+    Returns:
+        (drift, raw_cosine)
+    """
+    raw_cos = _cos_sim(G_res, G_ref)
+    drift = _clamp(1.0 - max(0.0, raw_cos))
+    return drift, raw_cos
 
 
 def compute_dispersion(sentence_vecs: np.ndarray, G_res: np.ndarray) -> float:
     """内部散漫度: 0 = まとまっている, 1 = 散漫
 
     1文以下の場合は 0.0 を返す (散漫さが定義不能)。
+    dispersion は cos01 を維持 (参照非依存の内部指標のため圧縮が問題にならない)。
     """
     n = len(sentence_vecs)
     if n <= 1:
@@ -80,37 +104,44 @@ def compute_collapse(
     sentence_vecs: np.ndarray,
     prop_vecs: np.ndarray,
     prop_weights: List[float],
-) -> tuple[float, bool]:
+    tau: float = TAU,
+) -> tuple[float, bool, List[float], List[float]]:
     """偏在集中度: 0 = 均等分布, 1 = 一点集中
 
-    命題が2未満の場合は (0.0, False) を返す (偏在が定義不能)。
+    v1.3: τ パラメータで親和度をシャープ化してからエントロピーを計算。
 
     Returns:
-        (collapse, collapse_applicable)
+        (collapse, collapse_applicable, raw_affinities, sharp_affinities)
     """
     n_props = len(prop_vecs)
     if n_props < 2:
-        return 0.0, False
+        return 0.0, False, [], []
 
     # 各命題への最大親和度 (重み付き)
-    a_k = []
+    raw_a_k = []
     for k in range(n_props):
         max_sim = max(cos01(s, prop_vecs[k]) for s in sentence_vecs) if len(sentence_vecs) > 0 else 0.0
-        a_k.append(prop_weights[k] * max_sim)
+        raw_a_k.append(prop_weights[k] * max_sim)
 
-    total = sum(a_k)
-    if total == 0.0:
-        return 0.0, False  # 親和度ゼロ = collapse 定義不能 → 2項式にフォールバック
+    total_raw = sum(raw_a_k)
+    if total_raw == 0.0:
+        return 0.0, False, raw_a_k, raw_a_k
+
+    # τ シャープ化
+    sharp_a_k = [a ** (1.0 / tau) if a > 0 else 0.0 for a in raw_a_k]
+    total_sharp = sum(sharp_a_k)
+    if total_sharp == 0.0:
+        return 0.0, False, raw_a_k, sharp_a_k
 
     # 正規化エントロピー
-    p_dist = [a / total for a in a_k]
+    p_dist = [a / total_sharp for a in sharp_a_k]
     entropy = -sum(p * math.log(p) if p > 0 else 0.0 for p in p_dist)
     max_entropy = math.log(len(p_dist))
     if max_entropy == 0.0:
-        return 0.0, True
+        return 0.0, True, raw_a_k, sharp_a_k
 
     collapse = _clamp(1.0 - entropy / max_entropy)
-    return collapse, True
+    return collapse, True, raw_a_k, sharp_a_k
 
 
 @dataclass
@@ -126,13 +157,18 @@ class GrvResult:
     meta_source: str
     ref_confidence: float
     meta_scale: float
+    tau: float
     prop_weights: List[float]
-    prop_affinity: List[float] = field(default_factory=list)
+    prop_affinity_raw: List[float] = field(default_factory=list)
+    prop_affinity_sharp: List[float] = field(default_factory=list)
+    drift_raw_cosine: float = 0.0
+    ref_w_q: float = 0.0
+    ref_w_m: float = 0.0
     grv_tag: str = "low_gravity"
 
 
 def _grv_tag_from_value(grv: float) -> str:
-    """暫定タグ分類 (Phase 2 で再校正)"""
+    """暫定タグ分類"""
     if grv >= TAG_HIGH:
         return "high_gravity"
     if grv >= TAG_MID:
@@ -146,6 +182,10 @@ def compute_grv(
     response_text: str,
     question_meta: Optional[dict] = None,
     metadata_source: str = "missing",
+    tau: float = TAU,
+    w_drift: float = W_DRIFT,
+    w_dispersion: float = W_DISPERSION,
+    w_collapse: float = W_COLLAPSE,
 ) -> Optional[GrvResult]:
     """grv を計算する。SBert 未導入時は None を返す。
 
@@ -153,9 +193,12 @@ def compute_grv(
         question: ユーザーの質問
         response_text: AI の回答
         question_meta: 問題メタデータ (core_propositions 等)
-        metadata_source: メタデータ出所 ("inline"/"manual" → manual, "llm_generated"/"auto" → auto, else → missing)
+        metadata_source: メタデータ出所
+        tau: collapse シャープ化温度 (デフォルト: 0.1)
+        w_drift: drift 重み
+        w_dispersion: dispersion 重み
+        w_collapse: collapse 重み
     """
-    # SBert ロード (cascade_matcher のシングルトンを再利用)
     try:
         from cascade_matcher import encode_texts, get_shared_model
     except ImportError:
@@ -182,21 +225,18 @@ def compute_grv(
     # --- 文分割 ---
     response_sentences = _split_sentences(response_text)
     if not response_sentences:
-        response_sentences = [response_text]  # フォールバック: 全文を1文として扱う
+        response_sentences = [response_text]
 
     # --- 埋め込み計算 ---
-    # 応答文
     sent_vecs = encode_texts(model, response_sentences)
     G_res = np.mean(sent_vecs, axis=0)
 
-    # 質問
     question_units = _split_sentences(question)
     if not question_units:
         question_units = [question]
     q_vecs = encode_texts(model, question_units)
     G_q = np.mean(q_vecs, axis=0)
 
-    # メタデータ (核心命題 + 質問テキスト)
     meta_units: List[str] = []
     propositions: List[str] = []
     prop_sources: List[str] = []
@@ -208,7 +248,6 @@ def compute_grv(
                 propositions.append(p.strip())
                 prop_sources.append("manual_core" if source_key == "manual" else "meta_derived")
                 meta_units.append(p.strip())
-        # acceptable_variants もメタ情報として利用
         for v in question_meta.get("acceptable_variants", []):
             if isinstance(v, str) and v.strip():
                 meta_units.append(v.strip())
@@ -225,41 +264,38 @@ def compute_grv(
     G_ref = G_ref_raw / norm if norm > 1e-10 else G_ref_raw
 
     # --- 3成分計算 ---
-    drift = compute_drift(G_res, G_ref)
+    # drift: v1.3 — 生コサインベース
+    drift, drift_raw_cosine = compute_drift(G_res, G_ref)
+
+    # dispersion: cos01 を維持
     dispersion = compute_dispersion(sent_vecs, G_res)
 
-    # collapse
-    prop_weights: List[float] = []
+    # collapse: v1.3 — τ シャープ化
+    prop_weight_list: List[float] = []
+    prop_affinity_raw: List[float] = []
+    prop_affinity_sharp: List[float] = []
     if propositions:
         prop_vecs = encode_texts(model, propositions)
         for src in prop_sources:
-            prop_weights.append(1.0 if src == "manual_core" else meta_scale)
-        collapse_raw, collapse_applicable = compute_collapse(sent_vecs, prop_vecs, prop_weights)
-        # auto-meta 時は collapse 自体を meta_scale で減衰
-        # (均一重みの正規化で打ち消される問題への対処)
+            prop_weight_list.append(1.0 if src == "manual_core" else meta_scale)
+        collapse_raw, collapse_applicable, aff_raw, aff_sharp = compute_collapse(
+            sent_vecs, prop_vecs, prop_weight_list, tau=tau,
+        )
+        prop_affinity_raw = [round(a, 4) for a in aff_raw]
+        prop_affinity_sharp = [round(a, 4) for a in aff_sharp]
+        # auto-meta 時は collapse を meta_scale で追加減衰
         collapse = _clamp(collapse_raw * meta_scale) if source_key != "manual" else collapse_raw
     else:
-        prop_vecs = np.array([])
         collapse = 0.0
         collapse_applicable = False
 
-    # --- 合成 ---
-    if collapse_applicable:
-        grv = _clamp(W_DRIFT * drift + W_DISPERSION * dispersion + W_COLLAPSE * collapse)
+    # --- 合成 (2成分: drift + dispersion) ---
+    # collapse は HA48 で増分寄与マイナスのため合成値から除外。診断出力のみ。
+    w_total = w_drift + w_dispersion
+    if w_total > 0:
+        grv = _clamp((w_drift / w_total) * drift + (w_dispersion / w_total) * dispersion)
     else:
-        # collapse 非適用時は drift + dispersion のみで重み再配分
-        w_total = W_DRIFT + W_DISPERSION
-        grv = _clamp((W_DRIFT / w_total) * drift + (W_DISPERSION / w_total) * dispersion)
-
-    # --- debug: 命題別親和度 ---
-    prop_affinity: List[float] = []
-    if propositions and len(prop_vecs) > 0:
-        for k in range(len(propositions)):
-            if len(sent_vecs) > 0:
-                max_sim = max(cos01(s, prop_vecs[k]) for s in sent_vecs)
-            else:
-                max_sim = 0.0
-            prop_affinity.append(round(max_sim, 4))
+        grv = 0.0
 
     return GrvResult(
         grv=round(grv, 4),
@@ -272,7 +308,12 @@ def compute_grv(
         meta_source=source_key,
         ref_confidence=ref_confidence,
         meta_scale=round(meta_scale, 4),
-        prop_weights=[round(w, 4) for w in prop_weights],
-        prop_affinity=prop_affinity,
+        tau=tau,
+        prop_weights=[round(w, 4) for w in prop_weight_list],
+        prop_affinity_raw=prop_affinity_raw,
+        prop_affinity_sharp=prop_affinity_sharp,
+        drift_raw_cosine=round(drift_raw_cosine, 4),
+        ref_w_q=w_q,
+        ref_w_m=w_m,
         grv_tag=_grv_tag_from_value(grv),
     )

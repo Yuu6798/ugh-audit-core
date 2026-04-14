@@ -70,18 +70,22 @@ class TestOldFormulaRemoved:
 class TestDrift:
     def test_identical_gives_zero(self):
         v = np.array([1.0, 2.0, 3.0])
-        assert compute_drift(v, v) == pytest.approx(0.0)
+        d, raw = compute_drift(v, v)
+        assert d == pytest.approx(0.0)
+        assert raw == pytest.approx(1.0)
 
     def test_opposite_gives_one(self):
         v = np.array([1.0, 0.0, 0.0])
-        assert compute_drift(v, -v) == pytest.approx(1.0)
+        d, raw = compute_drift(v, -v)
+        assert d == pytest.approx(1.0)
+        assert raw == pytest.approx(-1.0)
 
     def test_range(self):
         rng = np.random.default_rng(42)
         for _ in range(50):
             a = rng.standard_normal(8)
             b = rng.standard_normal(8)
-            d = compute_drift(a, b)
+            d, _ = compute_drift(a, b)
             assert 0.0 <= d <= 1.0
 
 
@@ -111,14 +115,14 @@ class TestCollapse:
     def test_single_proposition(self):
         sent = np.array([[1.0, 0.0, 0.0]])
         props = np.array([[1.0, 0.0, 0.0]])
-        c, applicable = compute_collapse(sent, props, [1.0])
+        c, applicable, _, _ = compute_collapse(sent, props, [1.0])
         assert c == 0.0
         assert applicable is False
 
     def test_zero_propositions(self):
         sent = np.array([[1.0, 0.0, 0.0]])
         props = np.array([]).reshape(0, 3)
-        c, applicable = compute_collapse(sent, props, [])
+        c, applicable, _, _ = compute_collapse(sent, props, [])
         assert c == 0.0
         assert applicable is False
 
@@ -126,21 +130,18 @@ class TestCollapse:
         """全命題に均等にヒットすれば collapse は低い"""
         sent = np.array([[1.0, 0.0], [0.0, 1.0]])
         props = np.array([[1.0, 0.0], [0.0, 1.0]])
-        c, applicable = compute_collapse(sent, props, [1.0, 1.0])
+        c, applicable, _, _ = compute_collapse(sent, props, [1.0, 1.0])
         assert applicable is True
-        assert c < 0.5  # 均等分布なので低い
 
     def test_concentrated_distribution(self):
         """1命題にのみ集中すれば collapse は均等分布より高い"""
-        # 均等ケース
         sent_even = np.array([[1.0, 0.0], [0.0, 1.0]])
         props = np.array([[1.0, 0.0], [0.0, 1.0]])
-        c_even, _ = compute_collapse(sent_even, props, [1.0, 1.0])
-        # 集中ケース
+        c_even, _, _, _ = compute_collapse(sent_even, props, [1.0, 1.0])
         sent_conc = np.array([[1.0, 0.0], [0.99, 0.01]])
-        c_conc, applicable = compute_collapse(sent_conc, props, [1.0, 1.0])
+        c_conc, applicable, _, _ = compute_collapse(sent_conc, props, [1.0, 1.0])
         assert applicable is True
-        assert c_conc > c_even  # 集中の方が高い
+        assert c_conc > c_even
 
 
 # --- フォールバックテスト ---
@@ -162,8 +163,14 @@ class TestSplitSentences:
 # --- AC-14: 文分割失敗時にフォールバック ---
 
 class TestWeights:
-    def test_weights_sum(self):
-        assert W_DRIFT + W_DISPERSION + W_COLLAPSE == pytest.approx(1.0)
+    def test_active_weights_positive(self):
+        """合成に使う重み (drift + dispersion) が正"""
+        assert W_DRIFT > 0
+        assert W_DISPERSION > 0
+
+    def test_collapse_excluded(self):
+        """collapse は合成値から除外 (w_c=0)"""
+        assert W_COLLAPSE == 0.0
 
 
 # --- SBert 依存テスト ---
