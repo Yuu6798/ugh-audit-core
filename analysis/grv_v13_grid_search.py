@@ -60,7 +60,7 @@ def run_and_eval(tau, w_d, w_s, w_c):  # noqa: ARG001 — tau kept for interface
         if r is None:
             return None
         hs = round(float(ha48[qid]["O"])) if ha48[qid]["O"] else None
-        results.append((r.grv, r.drift, r.dispersion, r.collapse, hs))
+        results.append((r.grv, r.drift, r.dispersion, r.collapse_v2, hs))
 
     paired = [(g, d, disp, c, h) for g, d, disp, c, h in results if h is not None]
     grvs = [x[0] for x in paired]

@@ -58,8 +58,8 @@ def run_grv(w_d=0.60, w_s=0.10):
         hs = round(float(ha48[qid]["O"])) if ha48[qid]["O"] else None
         results.append({
             "id": qid, "grv": r.grv, "drift": r.drift, "dispersion": r.dispersion,
-            "collapse": r.collapse, "tag": r.grv_tag, "n_sent": r.n_sentences,
-            "n_props": r.n_propositions, "collapse_applicable": r.collapse_applicable, "O": hs,
+            "collapse_v2": r.collapse_v2, "tag": r.grv_tag, "n_sent": r.n_sentences,
+            "n_props": r.n_propositions, "collapse_v2_applicable": r.collapse_v2_applicable, "O": hs,
         })
     return results
 
