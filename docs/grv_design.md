@@ -157,8 +157,9 @@ grv=None 時は L_G が除外され、残り6項で正規化。
 
 ## 次ステップ: 判定層ロードマップ
 
-Phase B〜E で mode_affordance + response_mode_signal + 判定層を構築予定。
-詳細: grv_judgment_layer_roadmap.md (設計確定済み)
+Phase B (mode_affordance v1) 実装済み。response_mode_signal として非破壊信号を提供。
+詳細: [`mode_affordance.md`](mode_affordance.md), [`addendum`](mode_affordance_v1_addendum.md)
+Phase C〜E (mode_conditioned_grv + 判定層合成) は v1 の 48件以上較正後に着手予定。
 
 ## 関連ファイル
 

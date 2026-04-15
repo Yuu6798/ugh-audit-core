@@ -2,7 +2,10 @@
 scripts/label_mode_affordance.py
 One-time labeling script: add mode_affordance to all 102 reviewed questions.
 
-Run: python scripts/label_mode_affordance.py
+STATUS: ALREADY EXECUTED (2026-04-15). Output committed to
+  data/question_sets/q_metadata_structural_reviewed_102q.jsonl
+Re-running overwrites JSONL with identical data (idempotent but unnecessary).
+Kept as audit trail for the 102 label decisions.
 """
 from __future__ import annotations
 

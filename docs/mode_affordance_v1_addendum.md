@@ -1,6 +1,6 @@
 # mode_affordance v1 追加仕様 (追いプロンプト)
 
-`docs/mode_affordance_v1_task.md` の実装中に追加確定した設計判断。
+mode_affordance v1 タスク仕様の実装中に追加確定した設計判断。
 既存仕様と矛盾する場合はこちらを優先せよ。
 
 ---

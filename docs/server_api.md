@@ -66,7 +66,29 @@ python -m ugh_audit.mcp_server --port 8000
   "computed_components": ["C", "S", "delta_e", "f1", "f2", "f3", "f4", "quality_score"],
   "missing_components": [],
   "errors": [],
-  "degraded_reason": []
+  "degraded_reason": [],
+  "mode_affordance": {
+    "primary": "critical",
+    "secondary": ["analytical"],
+    "closure": "qualified",
+    "action_required": false
+  },
+  "response_mode_signal": {
+    "status": "available",
+    "primary_mode": "critical",
+    "primary_score": 1.0,
+    "secondary_scores": {"analytical": 0.5},
+    "closure_expected": "qualified",
+    "closure_score": 1.0,
+    "action_required": false,
+    "action_score": null,
+    "overall_score": 0.8889,
+    "matched_moves": ["inspect_premise", "reframe_if_needed"],
+    "missing_moves": ["identify_mechanism_or_condition"],
+    "evidence": ["primary(critical): matched inspect_premise, reframe_if_needed"],
+    "signal_version": "v1.0"
+  },
+  "grv": null
 }
 ```
 
@@ -93,9 +115,21 @@ python -m ugh_audit.mcp_server --port 8000
   "computed_components": ["S"],
   "missing_components": ["C", "delta_e", "f1", "f2", "f3", "f4", "quality_score"],
   "errors": ["question_meta_missing", "detection_skipped"],
-  "degraded_reason": ["question_meta_missing", "detection_skipped"]
+  "degraded_reason": ["question_meta_missing", "detection_skipped"],
+  "mode_affordance": null,
+  "response_mode_signal": {"status": "not_available"},
+  "grv": null
 }
 ```
+
+### mode_affordance / response_mode_signal
+
+`mode_affordance` は質問が期待する応答形式。`response_mode_signal` は回答の適合度信号。
+詳細: [`mode_affordance.md`](mode_affordance.md)
+
+- canonical reviewed (102問) にある question_id では自動的に `status: "available"` が返る
+- metadata 不在時は `status: "not_available"` (既存監査は継続)
+- verdict / S / C / delta_e / quality_score には影響しない非破壊信号
 
 ### gate_verdict の値
 
