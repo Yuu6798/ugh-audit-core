@@ -331,6 +331,19 @@ class TestDetector:
         evidence = detect("t", "テスト回答", meta)
         assert evidence.f4_premise is None
 
+    @pytest.mark.parametrize("bad_value", [[], {}, 123, True])
+    def test_f4_non_string_trap_type_returns_none(self, bad_value):
+        """trap_type が非文字列 → f4=None (TypeError 防止)"""
+        meta = {
+            "question": "テスト質問",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": bad_value,
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.f4_premise is None
+
 
 # --- E2Eパイプラインテスト ---
 

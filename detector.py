@@ -1216,6 +1216,8 @@ def detect(
     disqualifying = question_meta.get("disqualifying_shortcuts", [])
     acceptable_variants = question_meta.get("acceptable_variants", [])
     trap_type = question_meta.get("trap_type", None)
+    if not isinstance(trap_type, str):
+        trap_type = None
 
     # f1: 主題逸脱
     f1 = check_f1_anchor(question_text, response_text, reserved_terms)
