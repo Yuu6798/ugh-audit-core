@@ -430,7 +430,9 @@ def _weighted_overall(
 # ---------------------------------------------------------------------------
 
 
-_NOT_AVAILABLE = ModeSignalResult(status="not_available")
+def _not_available() -> ModeSignalResult:
+    """Construct a fresh not_available result (avoids shared mutable state)."""
+    return ModeSignalResult(status="not_available")
 
 
 def compute_mode_signal(
@@ -449,7 +451,7 @@ def compute_mode_signal(
     Deterministic: same inputs → same outputs. No LLM/embedding calls.
     """
     if not mode_affordance_primary or mode_affordance_primary not in VALID_MODES_6:
-        return _NOT_AVAILABLE
+        return _not_available()
 
     secondary = mode_affordance_secondary or []
 

@@ -184,8 +184,10 @@ def _run_pipeline(
         evidence = _detect(question_id, response, question_meta)
         detected = True
     else:
-        question_id = "unknown"
-        evidence = Evidence(question_id="unknown", f4_premise=None)
+        question_id = (
+            question_meta.get("id", "unknown") if question_meta else "unknown"
+        )
+        evidence = Evidence(question_id=question_id, f4_premise=None)
         if not question_meta:
             errors.append("question_meta_missing")
 
