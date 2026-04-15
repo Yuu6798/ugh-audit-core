@@ -295,6 +295,55 @@ class TestDetector:
         e2 = detect("t", response, meta)
         assert asdict(e1) == asdict(e2)
 
+    def test_f4_no_trap_returns_zero(self):
+        """trap_type="" (罠なし) → f4=0.0"""
+        meta = {
+            "question": "テスト質問",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.f4_premise == 0.0
+        assert evidence.f4_detail == "no_trap"
+
+    def test_f4_missing_trap_type_returns_none(self):
+        """trap_type キー不在 → f4=None"""
+        meta = {
+            "question": "テスト質問",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.f4_premise is None
+
+    def test_f4_none_trap_type_returns_none(self):
+        """trap_type=None → f4=None"""
+        meta = {
+            "question": "テスト質問",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": None,
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.f4_premise is None
+
+    @pytest.mark.parametrize("bad_value", [[], {}, 123, True])
+    def test_f4_non_string_trap_type_returns_none(self, bad_value):
+        """trap_type が非文字列 → f4=None (TypeError 防止)"""
+        meta = {
+            "question": "テスト質問",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": bad_value,
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.f4_premise is None
+
 
 # --- E2Eパイプラインテスト ---
 

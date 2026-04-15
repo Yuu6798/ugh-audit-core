@@ -27,7 +27,7 @@ def default_output_template() -> dict[str, Any]:
         "core_propositions": [
             "回答で満たすべき核心命題を 1 文ずつ列挙",
         ],
-        "trap_type": "binary_reduction | premise_acceptance | none",
+        "trap_type": "binary_reduction | premise_acceptance | (空文字列=罠なし)",
         "disqualifying_shortcuts": [],
         "acceptable_variants": [],
         "metadata_confidence": 0.0,
@@ -49,7 +49,7 @@ def build_metadata_request(
         "あなたは監査用メタデータ生成器です。",
         "入力質問に対して、監査に必要な最小メタデータだけを JSON で返してください。",
         "core_propositions は短く独立した命題として 2〜4 個に抑えてください。",
-        "trap_type は binary_reduction, premise_acceptance, none のいずれかを優先してください。",
+        "trap_type は binary_reduction, premise_acceptance, 空文字列(\"\") のいずれかを優先してください。",
         "不明な場合は推測しすぎず、metadata_confidence を下げてください。",
         "JSON 以外の文章は返さないでください。",
     ]
