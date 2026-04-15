@@ -14,3 +14,4 @@
 - 2026-04-14-2: auto_generate_meta 不具合の根本原因特定・修正。`.dockerignore` が `experiments/` を除外していたのが真因。PR #72〜#75 (6件のレビュー対応含む)。`META_SOURCE_FALLBACK` 新設、フォールバック degraded 強制、`is_reliable=false`、`core_propositions` 由来ゲート。本番 LLM メタ生成 + キャッシュ動作確認済み
 - 2026-04-15: Phase B mode_affordance v1 完全実装。6 modes + response_mode_signal (cue-list 決定的 scorer) + 102問ラベル + canonical lookup。PR #77 マージ (Codex レビュー計11件対応)。docs/schema 整備。565 tests passed
 - 2026-04-15-2: f4_trap_type_missing 常時発火バグ修正 (PR #76)。mode_affordance v1 設計統合 (GPT アドバイザー活用)。evaluative/critical 分離・procedural 延期・lookup 優先順位・grv 合成禁止を確定。SessionStart hook (doc_consistency_check.sh) 導入。PR #77 レビュー完了 (マージ可)
+- 2026-04-15-3: SVP/RPE 音楽生成ツール概念設計。ugh-audit-core の PoR/ΔE/grv パターンを音楽ドメインに射影し統合実装プランを完成。結論: RPE の第一消費先は「ユーザーの好みの構造化」。既存競合分析 (Essentia 等) で新規価値は SVP 変換層+評価統合層と特定。実装は意味監査基盤が固まってから
