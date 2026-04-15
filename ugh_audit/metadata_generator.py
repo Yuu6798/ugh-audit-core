@@ -18,10 +18,10 @@ def detect_missing_metadata(question_meta: Optional[dict[str, Any]]) -> list[str
     # trap_type が未設定 or None の場合のみ欠損
     if "trap_type" not in meta or meta["trap_type"] is None:
         missing.append("trap_type")
-    # mode_affordance: dict (primary 必須) または未設定で欠損
-    _ma = meta.get("mode_affordance")
-    if not isinstance(_ma, dict) or not _ma.get("primary"):
-        missing.append("mode_affordance")
+    # mode_affordance is NOT checked here — it is resolved via canonical lookup
+    # in mode_signal.lookup_mode_affordance(), not via the auto-generation path.
+    # Including it here would cause an unresolvable loop because
+    # experiments/meta_generator._validate_meta() strips unknown fields.
     return missing
 
 

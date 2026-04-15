@@ -15,94 +15,43 @@ from ugh_audit.metadata_generator import (
 class TestDetectMissingMetadata:
     def test_none_meta(self):
         assert detect_missing_metadata(None) == [
-            "core_propositions", "trap_type", "mode_affordance",
+            "core_propositions", "trap_type",
         ]
 
     def test_empty_dict(self):
         assert detect_missing_metadata({}) == [
-            "core_propositions", "trap_type", "mode_affordance",
+            "core_propositions", "trap_type",
         ]
 
     def test_full_meta(self):
-        meta = {
-            "core_propositions": ["命題A"],
-            "trap_type": "none",
-            "mode_affordance": {"primary": "definitional"},
-        }
+        meta = {"core_propositions": ["命題A"], "trap_type": "none"}
         assert detect_missing_metadata(meta) == []
 
     def test_missing_trap_type(self):
-        meta = {
-            "core_propositions": ["命題A"],
-            "mode_affordance": {"primary": "analytical"},
-        }
+        meta = {"core_propositions": ["命題A"]}
         assert detect_missing_metadata(meta) == ["trap_type"]
 
     def test_missing_core_propositions(self):
-        meta = {
-            "trap_type": "none",
-            "mode_affordance": {"primary": "evaluative"},
-        }
+        meta = {"trap_type": "none"}
         assert detect_missing_metadata(meta) == ["core_propositions"]
 
     def test_empty_core_propositions(self):
-        meta = {
-            "core_propositions": [],
-            "trap_type": "none",
-            "mode_affordance": {"primary": "definitional"},
-        }
+        meta = {"core_propositions": [], "trap_type": "none"}
         assert detect_missing_metadata(meta) == ["core_propositions"]
 
     def test_empty_trap_type_is_not_missing(self):
-        """trap_type="" は「罠なし」の明示指定であり欠損ではない"""
-        meta = {
-            "core_propositions": ["命題A"],
-            "trap_type": "",
-            "mode_affordance": {"primary": "definitional"},
-        }
+        """trap_type="" is explicit no-trap, not missing"""
+        meta = {"core_propositions": ["命題A"], "trap_type": ""}
         assert detect_missing_metadata(meta) == []
 
     def test_null_trap_type_is_missing(self):
-        """trap_type=None は欠損として扱う"""
-        meta = {
-            "core_propositions": ["命題A"],
-            "trap_type": None,
-            "mode_affordance": {"primary": "definitional"},
-        }
+        """trap_type=None is missing"""
+        meta = {"core_propositions": ["命題A"], "trap_type": None}
         assert detect_missing_metadata(meta) == ["trap_type"]
 
-    # --- mode_affordance 固有テスト ---
-
-    def test_missing_mode_affordance(self):
-        """mode_affordance キー不在 → 欠損"""
+    def test_mode_affordance_not_checked(self):
+        """mode_affordance is resolved via canonical lookup, not auto-generation"""
         meta = {"core_propositions": ["命題A"], "trap_type": "none"}
-        assert "mode_affordance" in detect_missing_metadata(meta)
-
-    def test_mode_affordance_none_is_missing(self):
-        """mode_affordance=None → 欠損"""
-        meta = {
-            "core_propositions": ["命題A"],
-            "trap_type": "none",
-            "mode_affordance": None,
-        }
-        assert "mode_affordance" in detect_missing_metadata(meta)
-
-    def test_mode_affordance_empty_primary_is_missing(self):
-        """mode_affordance.primary="" → 欠損"""
-        meta = {
-            "core_propositions": ["命題A"],
-            "trap_type": "none",
-            "mode_affordance": {"primary": ""},
-        }
-        assert "mode_affordance" in detect_missing_metadata(meta)
-
-    def test_mode_affordance_valid(self):
-        """mode_affordance が正常値 → 欠損でない"""
-        meta = {
-            "core_propositions": ["命題A"],
-            "trap_type": "none",
-            "mode_affordance": {"primary": "comparative", "secondary": None},
-        }
         assert "mode_affordance" not in detect_missing_metadata(meta)
 
 
