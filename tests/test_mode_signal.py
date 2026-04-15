@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from mode_signal import (
     compute_mode_signal,
+    lookup_mode_affordance,
 )
 
 
@@ -375,3 +376,43 @@ class TestSecondaryScoring:
         )
         # "critical" is primary, so it should not appear in secondary_scores
         assert "critical" not in result.secondary_scores
+
+
+# ---------------------------------------------------------------------------
+# Canonical lookup tests
+# ---------------------------------------------------------------------------
+
+
+class TestLookupModeAffordance:
+    def test_canonical_question_id_returns_label(self):
+        result = lookup_mode_affordance("q031", inline_mode_affordance=None)
+        assert result is not None
+        assert result["primary"] == "definitional"
+
+    def test_canonical_overrides_inline(self):
+        inline = {"primary": "exploratory", "secondary": [], "closure": "open",
+                  "action_required": False}
+        result = lookup_mode_affordance("q031", inline_mode_affordance=inline)
+        # canonical wins over inline
+        assert result["primary"] == "definitional"
+
+    def test_override_flag_allows_inline(self):
+        inline = {"primary": "exploratory", "secondary": [], "closure": "open",
+                  "action_required": False}
+        result = lookup_mode_affordance("q031", inline_mode_affordance=inline,
+                                        override=True)
+        assert result["primary"] == "exploratory"
+
+    def test_unknown_id_falls_back_to_inline(self):
+        inline = {"primary": "analytical", "secondary": [], "closure": "qualified",
+                  "action_required": False}
+        result = lookup_mode_affordance("unknown_q999", inline_mode_affordance=inline)
+        assert result["primary"] == "analytical"
+
+    def test_no_id_no_inline_returns_none(self):
+        result = lookup_mode_affordance(None, inline_mode_affordance=None)
+        assert result is None
+
+    def test_unknown_str_id_falls_back_to_inline(self):
+        result = lookup_mode_affordance("unknown", inline_mode_affordance=None)
+        assert result is None

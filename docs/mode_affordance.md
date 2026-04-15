@@ -8,6 +8,15 @@ specifies what a correct response looks like (what should be present).
 
 The two axes are orthogonal: a question can have both a trap and a mode expectation.
 
+### Direction contrast with f4
+
+- **f4 (trap_type)** = negative detector. Measures "did the response fall into a trap?"
+  High score = problem detected.
+- **response_mode_signal** = positive detector. Measures "did the response satisfy the
+  expected form?" High score = good compliance.
+
+Both use cue-list/regex detection per mode/trap, but scoring polarity is inverted.
+
 ## 6 Modes
 
 | Mode | Description | Required Moves |
@@ -96,6 +105,26 @@ All detection is regex/cue-list based on Japanese text patterns. No LLM or embed
 ```
 
 When mode_affordance is not available: `{"status": "not_available", ...all null...}`
+
+### Runtime lookup priority
+
+```
+canonical reviewed (102q JSONL)  >  inline explicit  >  not_available
+```
+
+1. If `question_id` matches a canonical reviewed record, use its `mode_affordance`
+2. If canonical miss, use `question_meta.mode_affordance` from the request
+3. If neither available, return `status="not_available"`
+
+Canonical is always preferred unless `mode_affordance_override=true` is set.
+
+## Non-goals (v1)
+
+- Do NOT merge grv and response_mode_signal into a single score (Phase E)
+- Do NOT implement mode_conditioned_grv in v1
+- Do NOT use response_mode_signal to adjust grv weights
+- grv measures lexical gravity distortion; mode_affordance measures response form.
+  Keep them as separate outputs until calibrated with 48+ human annotations.
 
 ## Schema
 

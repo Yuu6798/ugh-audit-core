@@ -314,15 +314,37 @@ def _run_pipeline(
         }
 
     # response_mode_signal (deterministic, non-binding — fails silently)
+    # Lookup priority: canonical reviewed > inline explicit > not_available
     mode_signal_output: Optional[dict] = None
     try:
-        from mode_signal import compute_mode_signal, MODE_SIGNAL_VERSION
+        from mode_signal import (
+            MODE_SIGNAL_VERSION,
+            compute_mode_signal,
+            lookup_mode_affordance,
+        )
+        _inline_ma = (
+            question_meta.get("mode_affordance") if question_meta else None
+        )
+        _resolved_ma = lookup_mode_affordance(
+            question_id=question_id,
+            inline_mode_affordance=_inline_ma,
+        )
+        if _resolved_ma:
+            _ma_p = _resolved_ma.get("primary", "")
+            _ma_s = _resolved_ma.get("secondary") or []
+            _ma_cl = _resolved_ma.get("closure", "")
+            _ma_ar = _resolved_ma.get("action_required")
+        else:
+            _ma_p = evidence.mode_affordance_primary
+            _ma_s = evidence.mode_affordance_secondary
+            _ma_cl = evidence.mode_affordance_closure
+            _ma_ar = evidence.mode_affordance_action_required
         _ms = compute_mode_signal(
             response_text=response,
-            mode_affordance_primary=evidence.mode_affordance_primary,
-            mode_affordance_secondary=evidence.mode_affordance_secondary,
-            mode_affordance_closure=evidence.mode_affordance_closure,
-            mode_affordance_action_required=evidence.mode_affordance_action_required,
+            mode_affordance_primary=_ma_p,
+            mode_affordance_secondary=_ma_s if isinstance(_ma_s, list) else [],
+            mode_affordance_closure=_ma_cl if isinstance(_ma_cl, str) else "",
+            mode_affordance_action_required=_ma_ar if isinstance(_ma_ar, bool) else None,
         )
         mode_signal_output = {
             "status": _ms.status,

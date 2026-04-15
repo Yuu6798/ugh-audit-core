@@ -11,8 +11,10 @@ No LLM, no embeddings, no external APIs. All detection is regex/cue-list based.
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional
 
 MODE_SIGNAL_VERSION = "v1.0"
@@ -179,6 +181,72 @@ WEIGHT_PRIMARY = 0.60
 WEIGHT_SECONDARY = 0.20
 WEIGHT_CLOSURE = 0.10
 WEIGHT_ACTION = 0.10
+
+# ---------------------------------------------------------------------------
+# Canonical reviewed metadata lookup (102q JSONL)
+# Lookup priority: canonical reviewed > inline explicit > not_available
+# ---------------------------------------------------------------------------
+
+_CANONICAL_JSONL = Path(__file__).parent / "data" / "question_sets" / \
+    "q_metadata_structural_reviewed_102q.jsonl"
+
+_canonical_cache: Optional[Dict[str, dict]] = None
+
+
+def _load_canonical() -> Dict[str, dict]:
+    """Lazy-load canonical reviewed metadata. Returns {question_id: mode_affordance}."""
+    global _canonical_cache
+    if _canonical_cache is not None:
+        return _canonical_cache
+    result: Dict[str, dict] = {}
+    try:
+        for line in _CANONICAL_JSONL.read_text(encoding="utf-8").strip().split("\n"):
+            rec = json.loads(line)
+            ma = rec.get("mode_affordance")
+            if ma and isinstance(ma, dict) and ma.get("primary"):
+                result[rec["id"]] = ma
+    except Exception:
+        pass  # file missing or corrupt — return empty, fall back to inline
+    _canonical_cache = result
+    return result
+
+
+def lookup_mode_affordance(
+    question_id: Optional[str],
+    inline_mode_affordance: Optional[dict],
+    *,
+    override: bool = False,
+) -> Optional[dict]:
+    """Resolve mode_affordance using canonical > inline > None priority.
+
+    Args:
+        question_id: question identifier (may be None or "unknown")
+        inline_mode_affordance: mode_affordance from request question_meta
+        override: if True, inline takes priority even when canonical exists
+
+    Returns:
+        Resolved mode_affordance dict, or None if unavailable.
+    """
+    canonical = _load_canonical()
+
+    # Step 1: canonical reviewed (unless override)
+    if question_id and question_id != "unknown" and not override:
+        canonical_ma = canonical.get(question_id)
+        if canonical_ma:
+            return canonical_ma
+
+    # Step 2: inline explicit
+    if inline_mode_affordance and isinstance(inline_mode_affordance, dict):
+        if inline_mode_affordance.get("primary"):
+            return inline_mode_affordance
+
+    # Step 3: canonical (with override — still try canonical as fallback)
+    if override and question_id and question_id != "unknown":
+        canonical_ma = canonical.get(question_id)
+        if canonical_ma:
+            return canonical_ma
+
+    return None
 
 # ---------------------------------------------------------------------------
 # Result dataclass
