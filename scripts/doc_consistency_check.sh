@@ -1,22 +1,14 @@
 #!/usr/bin/env bash
 # scripts/doc_consistency_check.sh
-# SessionStart hook: detect doc/code inconsistencies and instruct Claude to fix them.
+# SessionStart hook: detect README.md vs code/docs inconsistencies.
 # Output is fed to Claude as context. No output = no issues.
+# Scope: README.md only (CLAUDE.md is manually maintained under 400-line limit).
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 issues=()
 
-# --- 1. Top-level .py files missing from CLAUDE.md Architecture tree ---
-for py in "$ROOT"/*.py; do
-    [ -f "$py" ] || continue
-    base="$(basename "$py")"
-    if ! grep -qF "$base" "$ROOT/CLAUDE.md"; then
-        issues+=("CLAUDE.md Architecture tree missing: $base")
-    fi
-done
-
-# --- 2. Top-level .py files missing from README.md directory tree ---
+# --- 1. Top-level .py files missing from README.md directory tree ---
 for py in "$ROOT"/*.py; do
     [ -f "$py" ] || continue
     base="$(basename "$py")"
@@ -25,23 +17,11 @@ for py in "$ROOT"/*.py; do
     fi
 done
 
-# --- 3. docs/*.md files missing from CLAUDE.md index table ---
+# --- 2. docs/*.md files missing from README.md ---
 for doc in "$ROOT"/docs/*.md; do
     [ -f "$doc" ] || continue
     base="$(basename "$doc")"
     # skip task specs and addendums (not permanent docs)
-    case "$base" in
-        *_task.md|*_addendum.md) continue ;;
-    esac
-    if ! grep -qF "$base" "$ROOT/CLAUDE.md"; then
-        issues+=("CLAUDE.md doc index missing: docs/$base")
-    fi
-done
-
-# --- 4. docs/*.md files missing from README.md ---
-for doc in "$ROOT"/docs/*.md; do
-    [ -f "$doc" ] || continue
-    base="$(basename "$doc")"
     case "$base" in
         *_task.md|*_addendum.md) continue ;;
     esac
@@ -50,7 +30,7 @@ for doc in "$ROOT"/docs/*.md; do
     fi
 done
 
-# --- 5. README.md outdated markers ---
+# --- 3. README.md outdated markers ---
 if grep -q 'grv.*未着手\|grv.*未実装' "$ROOT/README.md"; then
     issues+=("README.md: grv is marked as unimplemented but grv_calculator.py exists (v1.4)")
 fi
@@ -59,26 +39,12 @@ if ! grep -q 'mode_affordance\|mode_signal\|response_mode_signal' "$ROOT/README.
     issues+=("README.md: no mention of mode_affordance / response_mode_signal")
 fi
 
-if ! grep -q 'semantic_loss\|L_sem' "$ROOT/README.md" 2>/dev/null; then
-    # L_sem is already mentioned, skip if found
-    :
-fi
-
 if ! grep -q 'grv_calculator' "$ROOT/README.md"; then
     issues+=("README.md: grv_calculator.py not in directory structure")
 fi
 
 if ! grep -q 'fallback\|computed_ai_draft' "$ROOT/README.md"; then
     issues+=("README.md: metadata_source table missing fallback/computed_ai_draft")
-fi
-
-# --- 6. Key thresholds: spot-check a few constants ---
-# Check grv weights in CLAUDE.md match grv_calculator.py
-if [ -f "$ROOT/grv_calculator.py" ]; then
-    code_wd=$(grep -oP 'W_DRIFT\s*=\s*\K[0-9.]+' "$ROOT/grv_calculator.py" 2>/dev/null || echo "")
-    if [ -n "$code_wd" ] && ! grep -qF "$code_wd" "$ROOT/CLAUDE.md"; then
-        issues+=("CLAUDE.md: grv W_DRIFT=$code_wd not found in Key Thresholds")
-    fi
 fi
 
 # --- Output ---
@@ -92,8 +58,8 @@ for issue in "${issues[@]}"; do
     echo "- $issue"
 done
 echo ""
-echo "Please fix these inconsistencies:"
-echo "1. Update CLAUDE.md Architecture tree and doc index table"
-echo "2. Update README.md directory structure, feature descriptions, and metadata_source table"
-echo "3. Commit changes to the current branch"
-echo "4. Follow CLAUDE.md doc management policy (minimal additions, details in docs/)"
+echo "Please fix these inconsistencies in README.md:"
+echo "1. Update directory structure section"
+echo "2. Update design docs index table"
+echo "3. Fix outdated feature descriptions"
+echo "4. Commit changes to the current branch"
