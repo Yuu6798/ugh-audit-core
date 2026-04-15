@@ -167,8 +167,10 @@ class AuditOutput:
     missing_components: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     degraded_reason: List[str] = field(default_factory=list)
+    mode_affordance: Optional[Dict] = None
     soft_rescue: Optional[Dict] = None
     grv: Optional[Dict] = None
+    response_mode_signal: Optional[Dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -231,8 +233,10 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         missing_components=result.get("missing_components", []),
         errors=result.get("errors", []),
         degraded_reason=result.get("degraded_reason", []),
+        mode_affordance=result.get("mode_affordance"),
         soft_rescue=result.get("soft_rescue"),
         grv=result.get("grv"),
+        response_mode_signal=result.get("response_mode_signal"),
     )
 
 
@@ -507,6 +511,45 @@ def audit_answer(
     except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
         pass
 
+    # mode_affordance: build from Evidence
+    _ma_out = None
+    if evidence.mode_affordance_primary:
+        _ma_out = {
+            "primary": evidence.mode_affordance_primary,
+            "secondary": evidence.mode_affordance_secondary or [],
+            "closure": evidence.mode_affordance_closure or None,
+            "action_required": evidence.mode_affordance_action_required,
+        }
+
+    # response_mode_signal (deterministic, non-binding — fails silently)
+    _ms_output: Optional[Dict] = None
+    try:
+        from mode_signal import compute_mode_signal, MODE_SIGNAL_VERSION
+        _ms = compute_mode_signal(
+            response_text=response,
+            mode_affordance_primary=evidence.mode_affordance_primary,
+            mode_affordance_secondary=evidence.mode_affordance_secondary,
+            mode_affordance_closure=evidence.mode_affordance_closure,
+            mode_affordance_action_required=evidence.mode_affordance_action_required,
+        )
+        _ms_output = {
+            "status": _ms.status,
+            "primary_mode": _ms.primary_mode,
+            "primary_score": _ms.primary_score,
+            "secondary_scores": _ms.secondary_scores,
+            "closure_expected": _ms.closure_expected,
+            "closure_score": _ms.closure_score,
+            "action_required": _ms.action_required,
+            "action_score": _ms.action_score,
+            "overall_score": _ms.overall_score,
+            "matched_moves": _ms.matched_moves,
+            "missing_moves": _ms.missing_moves,
+            "evidence": _ms.evidence,
+            "signal_version": MODE_SIGNAL_VERSION,
+        }
+    except Exception:
+        _ms_output = None
+
     return AuditOutput(
         schema_version=SCHEMA_VERSION,
         S=state.S,
@@ -527,8 +570,10 @@ def audit_answer(
         missing_components=sorted(missing),
         errors=errors,
         degraded_reason=degraded_reason,
+        mode_affordance=_ma_out,
         soft_rescue=rescue,
         grv=grv_output,
+        response_mode_signal=_ms_output,
     )
 
 

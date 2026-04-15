@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mode_affordance_schema_v1",
+  "title": "mode_affordance v1",
+  "description": "Question-level mode affordance annotation for UGH Audit Engine",
+  "type": "object",
+  "required": ["primary", "secondary", "closure", "action_required"],
+  "additionalProperties": false,
+  "properties": {
+    "primary": {
+      "type": "string",
+      "enum": ["definitional", "analytical", "evaluative", "comparative", "critical", "exploratory"],
+      "description": "Primary expected response mode"
+    },
+    "secondary": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["definitional", "analytical", "evaluative", "comparative", "critical", "exploratory"]
+      },
+      "minItems": 0,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "description": "Secondary modes (0-2). Must not duplicate primary or each other."
+    },
+    "closure": {
+      "type": "string",
+      "enum": ["closed", "qualified", "open"],
+      "description": "Expected closure type: closed (conclusion required), qualified (conclusion + caveats), open (exploration ok)"
+    },
+    "action_required": {
+      "type": "boolean",
+      "description": "Whether the response should include actionable recommendations/steps"
+    }
+  },
+  "definitions": {
+    "modes": {
+      "definitional": {
+        "description": "Definition or explanation expected",
+        "required_moves": ["define_target", "set_boundary"]
+      },
+      "analytical": {
+        "description": "Causal/structural/mechanism analysis expected",
+        "required_moves": ["show_structure_or_causality", "identify_mechanism_or_condition"]
+      },
+      "evaluative": {
+        "description": "Criteria-based judgment/evaluation expected",
+        "required_moves": ["state_criteria", "give_judgment"]
+      },
+      "comparative": {
+        "description": "Comparison/contrast expected",
+        "required_moves": ["name_both_targets", "compare_on_shared_axis"]
+      },
+      "critical": {
+        "description": "Premise inspection/reframing expected",
+        "required_moves": ["inspect_premise", "reframe_if_needed"]
+      },
+      "exploratory": {
+        "description": "Possibility mapping/open exploration expected",
+        "required_moves": ["map_options", "keep_open_if_needed"]
+      }
+    }
+  }
+}

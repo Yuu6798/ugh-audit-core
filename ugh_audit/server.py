@@ -313,6 +313,35 @@ def _run_pipeline(
             },
         }
 
+    # response_mode_signal (deterministic, non-binding — fails silently)
+    mode_signal_output: Optional[dict] = None
+    try:
+        from mode_signal import compute_mode_signal, MODE_SIGNAL_VERSION
+        _ms = compute_mode_signal(
+            response_text=response,
+            mode_affordance_primary=evidence.mode_affordance_primary,
+            mode_affordance_secondary=evidence.mode_affordance_secondary,
+            mode_affordance_closure=evidence.mode_affordance_closure,
+            mode_affordance_action_required=evidence.mode_affordance_action_required,
+        )
+        mode_signal_output = {
+            "status": _ms.status,
+            "primary_mode": _ms.primary_mode,
+            "primary_score": _ms.primary_score,
+            "secondary_scores": _ms.secondary_scores,
+            "closure_expected": _ms.closure_expected,
+            "closure_score": _ms.closure_score,
+            "action_required": _ms.action_required,
+            "action_score": _ms.action_score,
+            "overall_score": _ms.overall_score,
+            "matched_moves": _ms.matched_moves,
+            "missing_moves": _ms.missing_moves,
+            "evidence": _ms.evidence,
+            "signal_version": MODE_SIGNAL_VERSION,
+        }
+    except Exception:
+        mode_signal_output = None
+
     result = {
         "schema_version": SCHEMA_VERSION,
         "S": state.S,
@@ -332,6 +361,12 @@ def _run_pipeline(
                 evidence.f3_operator, evidence.f4_premise,
             ),
         },
+        "mode_affordance": {
+            "primary": evidence.mode_affordance_primary or None,
+            "secondary": evidence.mode_affordance_secondary or [],
+            "closure": evidence.mode_affordance_closure or None,
+            "action_required": evidence.mode_affordance_action_required,
+        } if evidence.mode_affordance_primary else None,
         "mode": mode,
         "is_reliable": is_reliable,
         "matched_id": matched_id,
@@ -341,6 +376,7 @@ def _run_pipeline(
         "errors": errors,
         "degraded_reason": errors if mode == "degraded" else [],
         "grv": grv_output,
+        "response_mode_signal": mode_signal_output,
         # DB 保存用メタデータ
         "_session_id": session_id or str(uuid.uuid4()),
         "_question": question,
@@ -432,8 +468,14 @@ class AuditResponse(BaseModel):
     soft_rescue: Optional[dict] = Field(
         None, description="AI草案メタデータの soft-hit rescue 結果 (該当時のみ)"
     )
+    mode_affordance: Optional[dict] = Field(
+        None, description="質問の応答形式 {primary, secondary} (未設定時は null)"
+    )
     grv: Optional[dict] = Field(
         None, description="因果構造損失 (grv) 計算結果 (SBert 未導入時は null)"
+    )
+    response_mode_signal: Optional[dict] = Field(
+        None, description="応答モード適合度信号 (deterministic, non-binding)"
     )
 
 
@@ -637,8 +679,10 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         missing_components=result["missing_components"],
         errors=result["errors"],
         degraded_reason=result["degraded_reason"],
+        mode_affordance=result.get("mode_affordance"),
         soft_rescue=result.get("soft_rescue"),
         grv=result.get("grv"),
+        response_mode_signal=result.get("response_mode_signal"),
     )
 
 

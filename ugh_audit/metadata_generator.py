@@ -18,6 +18,10 @@ def detect_missing_metadata(question_meta: Optional[dict[str, Any]]) -> list[str
     # trap_type が未設定 or None の場合のみ欠損
     if "trap_type" not in meta or meta["trap_type"] is None:
         missing.append("trap_type")
+    # mode_affordance: dict (primary 必須) または未設定で欠損
+    _ma = meta.get("mode_affordance")
+    if not isinstance(_ma, dict) or not _ma.get("primary"):
+        missing.append("mode_affordance")
     return missing
 
 
@@ -30,8 +34,15 @@ def default_output_template() -> dict[str, Any]:
         "trap_type": "binary_reduction | premise_acceptance | (空文字列=罠なし)",
         "disqualifying_shortcuts": [],
         "acceptable_variants": [],
+        "mode_affordance": {
+            "primary": "definitional | analytical | evaluative | comparative"
+                       " | critical | exploratory",
+            "secondary": "[] or list of up to 2 from the 6 modes above",
+            "closure": "closed | qualified | open",
+            "action_required": False,
+        },
         "metadata_confidence": 0.0,
-        "rationale": "なぜこの命題群と trap_type を選んだか",
+        "rationale": "なぜこの命題群と trap_type と mode_affordance を選んだか",
     }
 
 
@@ -50,6 +61,9 @@ def build_metadata_request(
         "入力質問に対して、監査に必要な最小メタデータだけを JSON で返してください。",
         "core_propositions は短く独立した命題として 2〜4 個に抑えてください。",
         "trap_type は binary_reduction, premise_acceptance, 空文字列(\"\") のいずれかを優先してください。",
+        "mode_affordance は質問が期待する応答形式です。primary は必須、secondary は 0-2 個のリスト。",
+        "6種: definitional, analytical, evaluative, comparative, critical, exploratory",
+        "closure は closed/qualified/open、action_required は true/false。",
         "不明な場合は推測しすぎず、metadata_confidence を下げてください。",
         "JSON 以外の文章は返さないでください。",
     ]
