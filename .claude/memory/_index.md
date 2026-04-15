@@ -13,3 +13,4 @@
 - 2026-04-14: grv v1.2→v1.3→v1.4 を1セッションで完走。v1.2: entropy型collapse死亡 (σ=0.002)。v1.3: 2comp確定 (ρ=-0.318)、collapse方向逆転で除外。v1.4: residual型collapse_v2 + cover_soft + wash_index で ρ=-0.357 に改善、V-4 PASS。確定重み w_d=0.70/w_s=0.05/w_c=0.25。PR #68/#69/#70 マージ。Codex レビュー計23件対応。判定層ロードマップ Phase B〜E 設計確定
 - 2026-04-14-2: auto_generate_meta 不具合の根本原因特定・修正。`.dockerignore` が `experiments/` を除外していたのが真因。PR #72〜#75 (6件のレビュー対応含む)。`META_SOURCE_FALLBACK` 新設、フォールバック degraded 強制、`is_reliable=false`、`core_propositions` 由来ゲート。本番 LLM メタ生成 + キャッシュ動作確認済み
 - 2026-04-15: Phase B mode_affordance v1 完全実装。6 modes + response_mode_signal (cue-list 決定的 scorer) + 102問ラベル + canonical lookup。PR #77 マージ (Codex レビュー計11件対応)。docs/schema 整備。565 tests passed
+- 2026-04-15-2: f4_trap_type_missing 常時発火バグ修正 (PR #76)。mode_affordance v1 設計統合 (GPT アドバイザー活用)。evaluative/critical 分離・procedural 延期・lookup 優先順位・grv 合成禁止を確定。SessionStart hook (doc_consistency_check.sh) 導入。PR #77 レビュー完了 (マージ可)
