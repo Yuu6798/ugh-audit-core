@@ -497,12 +497,16 @@ def run_mode_signal(
     evidence_secondary: Optional[List[str]] = None,
     evidence_closure: str = "",
     evidence_action_required: Optional[bool] = None,
-) -> Optional[dict]:
-    """Convenience helper: lookup + compute + serialize to dict.
+    override: bool = False,
+) -> tuple:
+    """Convenience helper: lookup + compute + serialize.
 
-    Performs canonical lookup, falls back to inline/evidence, computes signal,
-    and returns a JSON-serializable dict (or None on any error).
-    Used by server.py and mcp_server.py to avoid code duplication.
+    Returns (signal_dict, resolved_mode_affordance_dict) or (None, None).
+    The resolved_mode_affordance_dict is the effective mode_affordance used
+    for scoring, so callers can emit it in the API response alongside the signal.
+
+    Args:
+        override: if True, inline mode_affordance takes priority over canonical.
     """
     try:
         inline_ma = (
@@ -511,6 +515,7 @@ def run_mode_signal(
         resolved = lookup_mode_affordance(
             question_id=question_id,
             inline_mode_affordance=inline_ma,
+            override=override,
         )
         if resolved:
             _p = resolved.get("primary", "")
@@ -523,6 +528,16 @@ def run_mode_signal(
             _cl = evidence_closure
             _ar = evidence_action_required
 
+        # Build the effective mode_affordance dict for API output
+        effective_ma: Optional[dict] = None
+        if _p:
+            effective_ma = {
+                "primary": _p,
+                "secondary": _s if isinstance(_s, list) else [],
+                "closure": _cl if isinstance(_cl, str) else None,
+                "action_required": _ar if isinstance(_ar, bool) else None,
+            }
+
         ms = compute_mode_signal(
             response_text=response_text,
             mode_affordance_primary=_p,
@@ -530,7 +545,7 @@ def run_mode_signal(
             mode_affordance_closure=_cl if isinstance(_cl, str) else "",
             mode_affordance_action_required=_ar if isinstance(_ar, bool) else None,
         )
-        return {
+        signal_dict = {
             "status": ms.status,
             "primary_mode": ms.primary_mode,
             "primary_score": ms.primary_score,
@@ -545,6 +560,7 @@ def run_mode_signal(
             "evidence": ms.evidence,
             "signal_version": MODE_SIGNAL_VERSION,
         }
+        return signal_dict, effective_ma
     except Exception:
         logger.exception("run_mode_signal failed")
-        return None
+        return None, None

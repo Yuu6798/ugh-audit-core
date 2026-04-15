@@ -512,22 +512,14 @@ def audit_answer(
     except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
         pass
 
-    # mode_affordance: build from Evidence
-    _ma_out = None
-    if evidence.mode_affordance_primary:
-        _ma_out = {
-            "primary": evidence.mode_affordance_primary,
-            "secondary": evidence.mode_affordance_secondary or [],
-            "closure": evidence.mode_affordance_closure or None,
-            "action_required": evidence.mode_affordance_action_required,
-        }
-
     # response_mode_signal (deterministic, non-binding — fails silently)
     # Lookup priority: canonical reviewed > inline explicit > not_available
+    # _ma_out is populated from the resolved source (same as signal scoring)
     _ms_output: Optional[Dict] = None
+    _ma_out: Optional[Dict] = None
     try:
         from mode_signal import run_mode_signal
-        _ms_output = run_mode_signal(
+        _ms_output, _ma_out = run_mode_signal(
             response_text=response,
             question_id=question_id,
             question_meta=question_meta,

@@ -316,10 +316,12 @@ def _run_pipeline(
 
     # response_mode_signal (deterministic, non-binding — fails silently)
     # Lookup priority: canonical reviewed > inline explicit > not_available
+    # resolved_ma is the effective mode_affordance used for scoring
     mode_signal_output: Optional[dict] = None
+    resolved_ma: Optional[dict] = None
     try:
         from mode_signal import run_mode_signal
-        mode_signal_output = run_mode_signal(
+        mode_signal_output, resolved_ma = run_mode_signal(
             response_text=response,
             question_id=question_id,
             question_meta=question_meta,
@@ -350,12 +352,7 @@ def _run_pipeline(
                 evidence.f3_operator, evidence.f4_premise,
             ),
         },
-        "mode_affordance": {
-            "primary": evidence.mode_affordance_primary or None,
-            "secondary": evidence.mode_affordance_secondary or [],
-            "closure": evidence.mode_affordance_closure or None,
-            "action_required": evidence.mode_affordance_action_required,
-        } if evidence.mode_affordance_primary else None,
+        "mode_affordance": resolved_ma,
         "mode": mode,
         "is_reliable": is_reliable,
         "matched_id": matched_id,
