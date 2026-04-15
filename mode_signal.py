@@ -12,10 +12,13 @@ No LLM, no embeddings, no external APIs. All detection is regex/cue-list based.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 MODE_SIGNAL_VERSION = "v1.0"
 
@@ -206,7 +209,7 @@ def _load_canonical() -> Dict[str, dict]:
             if ma and isinstance(ma, dict) and ma.get("primary"):
                 result[rec["id"]] = ma
     except Exception:
-        pass  # file missing or corrupt — return empty, fall back to inline
+        logger.exception("failed to load canonical mode_affordance from %s", _CANONICAL_JSONL)
     _canonical_cache = result
     return result
 
@@ -465,3 +468,65 @@ def compute_mode_signal(
         missing_moves=unique_missing,
         evidence=evidence_list,
     )
+
+
+def run_mode_signal(
+    *,
+    response_text: str,
+    question_id: Optional[str] = None,
+    question_meta: Optional[dict] = None,
+    evidence_primary: str = "",
+    evidence_secondary: Optional[List[str]] = None,
+    evidence_closure: str = "",
+    evidence_action_required: Optional[bool] = None,
+) -> Optional[dict]:
+    """Convenience helper: lookup + compute + serialize to dict.
+
+    Performs canonical lookup, falls back to inline/evidence, computes signal,
+    and returns a JSON-serializable dict (or None on any error).
+    Used by server.py and mcp_server.py to avoid code duplication.
+    """
+    try:
+        inline_ma = (
+            question_meta.get("mode_affordance") if question_meta else None
+        )
+        resolved = lookup_mode_affordance(
+            question_id=question_id,
+            inline_mode_affordance=inline_ma,
+        )
+        if resolved:
+            _p = resolved.get("primary", "")
+            _s = resolved.get("secondary") or []
+            _cl = resolved.get("closure", "")
+            _ar = resolved.get("action_required")
+        else:
+            _p = evidence_primary
+            _s = evidence_secondary or []
+            _cl = evidence_closure
+            _ar = evidence_action_required
+
+        ms = compute_mode_signal(
+            response_text=response_text,
+            mode_affordance_primary=_p,
+            mode_affordance_secondary=_s if isinstance(_s, list) else [],
+            mode_affordance_closure=_cl if isinstance(_cl, str) else "",
+            mode_affordance_action_required=_ar if isinstance(_ar, bool) else None,
+        )
+        return {
+            "status": ms.status,
+            "primary_mode": ms.primary_mode,
+            "primary_score": ms.primary_score,
+            "secondary_scores": ms.secondary_scores,
+            "closure_expected": ms.closure_expected,
+            "closure_score": ms.closure_score,
+            "action_required": ms.action_required,
+            "action_score": ms.action_score,
+            "overall_score": ms.overall_score,
+            "matched_moves": ms.matched_moves,
+            "missing_moves": ms.missing_moves,
+            "evidence": ms.evidence,
+            "signal_version": MODE_SIGNAL_VERSION,
+        }
+    except Exception:
+        logger.exception("run_mode_signal failed")
+        return None

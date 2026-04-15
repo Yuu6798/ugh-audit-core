@@ -317,50 +317,16 @@ def _run_pipeline(
     # Lookup priority: canonical reviewed > inline explicit > not_available
     mode_signal_output: Optional[dict] = None
     try:
-        from mode_signal import (
-            MODE_SIGNAL_VERSION,
-            compute_mode_signal,
-            lookup_mode_affordance,
-        )
-        _inline_ma = (
-            question_meta.get("mode_affordance") if question_meta else None
-        )
-        _resolved_ma = lookup_mode_affordance(
-            question_id=question_id,
-            inline_mode_affordance=_inline_ma,
-        )
-        if _resolved_ma:
-            _ma_p = _resolved_ma.get("primary", "")
-            _ma_s = _resolved_ma.get("secondary") or []
-            _ma_cl = _resolved_ma.get("closure", "")
-            _ma_ar = _resolved_ma.get("action_required")
-        else:
-            _ma_p = evidence.mode_affordance_primary
-            _ma_s = evidence.mode_affordance_secondary
-            _ma_cl = evidence.mode_affordance_closure
-            _ma_ar = evidence.mode_affordance_action_required
-        _ms = compute_mode_signal(
+        from mode_signal import run_mode_signal
+        mode_signal_output = run_mode_signal(
             response_text=response,
-            mode_affordance_primary=_ma_p,
-            mode_affordance_secondary=_ma_s if isinstance(_ma_s, list) else [],
-            mode_affordance_closure=_ma_cl if isinstance(_ma_cl, str) else "",
-            mode_affordance_action_required=_ma_ar if isinstance(_ma_ar, bool) else None,
+            question_id=question_id,
+            question_meta=question_meta,
+            evidence_primary=evidence.mode_affordance_primary,
+            evidence_secondary=evidence.mode_affordance_secondary,
+            evidence_closure=evidence.mode_affordance_closure,
+            evidence_action_required=evidence.mode_affordance_action_required,
         )
-        mode_signal_output = {
-            "status": _ms.status,
-            "primary_mode": _ms.primary_mode,
-            "primary_score": _ms.primary_score,
-            "secondary_scores": _ms.secondary_scores,
-            "closure_expected": _ms.closure_expected,
-            "closure_score": _ms.closure_score,
-            "action_required": _ms.action_required,
-            "action_score": _ms.action_score,
-            "overall_score": _ms.overall_score,
-            "matched_moves": _ms.matched_moves,
-            "missing_moves": _ms.missing_moves,
-            "evidence": _ms.evidence,
-            "signal_version": MODE_SIGNAL_VERSION,
-        }
     except Exception:
         mode_signal_output = None
 

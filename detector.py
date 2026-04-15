@@ -1220,11 +1220,17 @@ def detect(
         trap_type = None
 
     # mode_affordance: expected response form for this question
-    _VALID_MODES = {
-        "definitional", "analytical", "evaluative", "comparative",
-        "critical", "exploratory",
-    }
-    _VALID_CLOSURE = {"closed", "qualified", "open"}
+    # Import canonical mode set from mode_signal to avoid duplication
+    try:
+        from mode_signal import VALID_CLOSURE, VALID_MODES_6
+        _VALID_MODES = VALID_MODES_6
+        _VALID_CLOSURE = VALID_CLOSURE
+    except ImportError:
+        _VALID_MODES = {
+            "definitional", "analytical", "evaluative", "comparative",
+            "critical", "exploratory",
+        }
+        _VALID_CLOSURE = frozenset({"closed", "qualified", "open"})
     _ma_raw = question_meta.get("mode_affordance", None)
     if isinstance(_ma_raw, dict):
         _ma_primary = _ma_raw.get("primary", "")
