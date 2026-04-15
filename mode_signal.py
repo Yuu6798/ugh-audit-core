@@ -258,15 +258,15 @@ def _normalize_mode_affordance(raw: dict) -> Optional[dict]:
         if len(secondary) >= 2:
             break
 
-    # closure
+    # closure: default to "qualified" (schema requires enum, not null)
     closure = raw.get("closure", "")
     if not isinstance(closure, str) or closure not in VALID_CLOSURE:
-        closure = None
+        closure = "qualified"
 
-    # action_required
+    # action_required: default to False (schema requires bool, not null)
     action_required = raw.get("action_required")
     if not isinstance(action_required, bool):
-        action_required = None
+        action_required = False
 
     return {
         "primary": primary,
@@ -580,13 +580,16 @@ def run_mode_signal(
             _ar = evidence_action_required
 
         # Build the effective mode_affordance dict for API output
+        # Defaults ensure schema compliance (closure=qualified, action_required=false)
         effective_ma: Optional[dict] = None
         if _p:
+            _eff_cl = _cl if (isinstance(_cl, str) and _cl in VALID_CLOSURE) else "qualified"
+            _eff_ar = _ar if isinstance(_ar, bool) else False
             effective_ma = {
                 "primary": _p,
                 "secondary": _s if isinstance(_s, list) else [],
-                "closure": _cl if isinstance(_cl, str) else None,
-                "action_required": _ar if isinstance(_ar, bool) else None,
+                "closure": _eff_cl,
+                "action_required": _eff_ar,
             }
 
         ms = compute_mode_signal(
