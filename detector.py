@@ -1219,6 +1219,60 @@ def detect(
     if not isinstance(trap_type, str):
         trap_type = None
 
+    # mode_affordance: expected response form for this question
+    # Import canonical mode set from mode_signal to avoid duplication
+    try:
+        from mode_signal import VALID_CLOSURE, VALID_MODES_6
+        _VALID_MODES = VALID_MODES_6
+        _VALID_CLOSURE = VALID_CLOSURE
+    except ImportError:
+        _VALID_MODES = {
+            "definitional", "analytical", "evaluative", "comparative",
+            "critical", "exploratory",
+        }
+        _VALID_CLOSURE = frozenset({"closed", "qualified", "open"})
+    _ma_raw = question_meta.get("mode_affordance", None)
+    if isinstance(_ma_raw, dict):
+        _ma_primary = _ma_raw.get("primary", "")
+        # secondary: accept list or string (string → wrap in list)
+        _ma_sec_raw = _ma_raw.get("secondary") or []
+        if isinstance(_ma_sec_raw, str):
+            _ma_sec_raw = [_ma_sec_raw] if _ma_sec_raw else []
+        elif not isinstance(_ma_sec_raw, list):
+            _ma_sec_raw = []
+        # closure & action_required
+        _ma_closure = _ma_raw.get("closure", "")
+        _ma_action = _ma_raw.get("action_required", None)
+    elif isinstance(_ma_raw, str):
+        _ma_primary = _ma_raw
+        _ma_sec_raw = []
+        _ma_closure = ""
+        _ma_action = None
+    else:
+        _ma_primary = ""
+        _ma_sec_raw = []
+        _ma_closure = ""
+        _ma_action = None
+    # validate primary
+    if _ma_primary not in _VALID_MODES:
+        _ma_primary = ""
+    # validate secondary: filter invalid, deduplicate, remove primary, cap at 2
+    _ma_secondary = []
+    _seen = set()
+    for _s in _ma_sec_raw:
+        if (isinstance(_s, str) and _s in _VALID_MODES
+                and _s != _ma_primary and _s not in _seen):
+            _ma_secondary.append(_s)
+            _seen.add(_s)
+        if len(_ma_secondary) >= 2:
+            break
+    # validate closure
+    if not isinstance(_ma_closure, str) or _ma_closure not in _VALID_CLOSURE:
+        _ma_closure = ""
+    # validate action_required
+    if not isinstance(_ma_action, bool):
+        _ma_action = None
+
     # f1: 主題逸脱
     f1 = check_f1_anchor(question_text, response_text, reserved_terms)
 
@@ -1329,6 +1383,10 @@ def detect(
         f4_detail=f4_detail or "",
         f3_operator_family=f3_family,
         f4_trap_type=trap_type if f4 and f4 > 0 else "",
+        mode_affordance_primary=_ma_primary,
+        mode_affordance_secondary=_ma_secondary,
+        mode_affordance_closure=_ma_closure,
+        mode_affordance_action_required=_ma_action,
         propositions_hit=hits,
         propositions_total=len(core_props),
         hit_ids=hit_ids,

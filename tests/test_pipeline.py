@@ -344,6 +344,192 @@ class TestDetector:
         evidence = detect("t", "テスト回答", meta)
         assert evidence.f4_premise is None
 
+    # --- mode_affordance tests ---
+
+    def test_mode_affordance_dict_primary_only(self):
+        meta = {
+            "question": "PoRとは何か？",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {"primary": "definitional"},
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_primary == "definitional"
+        assert evidence.mode_affordance_secondary == []
+
+    def test_mode_affordance_dict_with_secondary_list(self):
+        meta = {
+            "question": "XとYの違いは？Xは有効か？",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {
+                "primary": "comparative",
+                "secondary": ["evaluative"],
+            },
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_primary == "comparative"
+        assert evidence.mode_affordance_secondary == ["evaluative"]
+
+    def test_mode_affordance_secondary_string_wrapped_to_list(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {"primary": "comparative", "secondary": "evaluative"},
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_secondary == ["evaluative"]
+
+    def test_mode_affordance_missing(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_primary == ""
+        assert evidence.mode_affordance_secondary == []
+        assert evidence.mode_affordance_closure == ""
+        assert evidence.mode_affordance_action_required is None
+
+    def test_mode_affordance_invalid_primary(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {"primary": "invalid_mode"},
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_primary == ""
+
+    def test_mode_affordance_invalid_secondary_filtered(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {
+                "primary": "analytical",
+                "secondary": ["bogus", "critical"],
+            },
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_primary == "analytical"
+        assert evidence.mode_affordance_secondary == ["critical"]
+
+    def test_mode_affordance_secondary_dedup_and_exclude_primary(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {
+                "primary": "analytical",
+                "secondary": ["analytical", "critical", "critical"],
+            },
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_secondary == ["critical"]
+
+    def test_mode_affordance_secondary_max_2(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {
+                "primary": "analytical",
+                "secondary": ["critical", "evaluative", "exploratory"],
+            },
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert len(evidence.mode_affordance_secondary) == 2
+
+    def test_mode_affordance_string_shorthand(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": "exploratory",
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_primary == "exploratory"
+        assert evidence.mode_affordance_secondary == []
+
+    def test_mode_affordance_closure_and_action_required(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {
+                "primary": "evaluative",
+                "secondary": [],
+                "closure": "qualified",
+                "action_required": True,
+            },
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_closure == "qualified"
+        assert evidence.mode_affordance_action_required is True
+
+    def test_mode_affordance_invalid_closure_ignored(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {"primary": "analytical", "closure": "bogus"},
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_closure == ""
+
+    def test_mode_affordance_procedural_rejected(self):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {"primary": "procedural"},
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_primary == ""
+
+    @pytest.mark.parametrize("mode", [
+        "definitional", "analytical", "evaluative", "comparative",
+        "critical", "exploratory",
+    ])
+    def test_mode_affordance_all_6_modes_accepted(self, mode):
+        meta = {
+            "question": "テスト",
+            "core_propositions": ["命題A"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+            "mode_affordance": {"primary": mode},
+        }
+        evidence = detect("t", "テスト回答", meta)
+        assert evidence.mode_affordance_primary == mode
+
 
 # --- E2Eパイプラインテスト ---
 

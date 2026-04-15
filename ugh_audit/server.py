@@ -184,7 +184,10 @@ def _run_pipeline(
         evidence = _detect(question_id, response, question_meta)
         detected = True
     else:
-        evidence = Evidence(question_id="unknown", f4_premise=None)
+        question_id = (
+            question_meta.get("id", "unknown") if question_meta else "unknown"
+        )
+        evidence = Evidence(question_id=question_id, f4_premise=None)
         if not question_meta:
             errors.append("question_meta_missing")
 
@@ -313,6 +316,25 @@ def _run_pipeline(
             },
         }
 
+    # response_mode_signal (deterministic, non-binding — fails silently)
+    # Lookup priority: canonical reviewed > inline explicit > not_available
+    # resolved_ma is the effective mode_affordance used for scoring
+    mode_signal_output: Optional[dict] = None
+    resolved_ma: Optional[dict] = None
+    try:
+        from mode_signal import run_mode_signal
+        mode_signal_output, resolved_ma = run_mode_signal(
+            response_text=response,
+            question_id=question_id,
+            question_meta=question_meta,
+            evidence_primary=evidence.mode_affordance_primary,
+            evidence_secondary=evidence.mode_affordance_secondary,
+            evidence_closure=evidence.mode_affordance_closure,
+            evidence_action_required=evidence.mode_affordance_action_required,
+        )
+    except Exception:
+        mode_signal_output = None
+
     result = {
         "schema_version": SCHEMA_VERSION,
         "S": state.S,
@@ -332,6 +354,7 @@ def _run_pipeline(
                 evidence.f3_operator, evidence.f4_premise,
             ),
         },
+        "mode_affordance": resolved_ma,
         "mode": mode,
         "is_reliable": is_reliable,
         "matched_id": matched_id,
@@ -341,6 +364,7 @@ def _run_pipeline(
         "errors": errors,
         "degraded_reason": errors if mode == "degraded" else [],
         "grv": grv_output,
+        "response_mode_signal": mode_signal_output,
         # DB 保存用メタデータ
         "_session_id": session_id or str(uuid.uuid4()),
         "_question": question,
@@ -432,8 +456,14 @@ class AuditResponse(BaseModel):
     soft_rescue: Optional[dict] = Field(
         None, description="AI草案メタデータの soft-hit rescue 結果 (該当時のみ)"
     )
+    mode_affordance: Optional[dict] = Field(
+        None, description="質問の応答形式 {primary, secondary} (未設定時は null)"
+    )
     grv: Optional[dict] = Field(
         None, description="因果構造損失 (grv) 計算結果 (SBert 未導入時は null)"
+    )
+    response_mode_signal: Optional[dict] = Field(
+        None, description="応答モード適合度信号 (deterministic, non-binding)"
     )
 
 
@@ -637,8 +667,10 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         missing_components=result["missing_components"],
         errors=result["errors"],
         degraded_reason=result["degraded_reason"],
+        mode_affordance=result.get("mode_affordance"),
         soft_rescue=result.get("soft_rescue"),
         grv=result.get("grv"),
+        response_mode_signal=result.get("response_mode_signal"),
     )
 
 

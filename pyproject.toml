@@ -64,7 +64,7 @@ experiment = [
 where = ["."]
 
 [tool.setuptools]
-py-modules = ["audit", "detector", "decider", "ugh_calculator", "cascade_matcher", "semantic_loss", "grv_calculator"]
+py-modules = ["audit", "detector", "decider", "ugh_calculator", "cascade_matcher", "semantic_loss", "grv_calculator", "mode_signal"]
 
 [tool.setuptools.package-data]
 registry = ["*.yaml"]

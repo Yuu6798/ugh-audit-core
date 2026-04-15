@@ -167,8 +167,10 @@ class AuditOutput:
     missing_components: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     degraded_reason: List[str] = field(default_factory=list)
+    mode_affordance: Optional[Dict] = None
     soft_rescue: Optional[Dict] = None
     grv: Optional[Dict] = None
+    response_mode_signal: Optional[Dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -231,8 +233,10 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         missing_components=result.get("missing_components", []),
         errors=result.get("errors", []),
         degraded_reason=result.get("degraded_reason", []),
+        mode_affordance=result.get("mode_affordance"),
         soft_rescue=result.get("soft_rescue"),
         grv=result.get("grv"),
+        response_mode_signal=result.get("response_mode_signal"),
     )
 
 
@@ -338,7 +342,10 @@ def audit_answer(
         evidence = _detect(question_id, response, question_meta)
         detected = True
     else:
-        evidence = Evidence(question_id="unknown", f4_premise=None)
+        question_id = (
+            question_meta.get("id", "unknown") if question_meta else "unknown"
+        )
+        evidence = Evidence(question_id=question_id, f4_premise=None)
         if not question_meta:
             errors.append("question_meta_missing")
 
@@ -507,6 +514,25 @@ def audit_answer(
     except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
         pass
 
+    # response_mode_signal (deterministic, non-binding — fails silently)
+    # Lookup priority: canonical reviewed > inline explicit > not_available
+    # _ma_out is populated from the resolved source (same as signal scoring)
+    _ms_output: Optional[Dict] = None
+    _ma_out: Optional[Dict] = None
+    try:
+        from mode_signal import run_mode_signal
+        _ms_output, _ma_out = run_mode_signal(
+            response_text=response,
+            question_id=question_id,
+            question_meta=question_meta,
+            evidence_primary=evidence.mode_affordance_primary,
+            evidence_secondary=evidence.mode_affordance_secondary,
+            evidence_closure=evidence.mode_affordance_closure,
+            evidence_action_required=evidence.mode_affordance_action_required,
+        )
+    except Exception:
+        _ms_output = None
+
     return AuditOutput(
         schema_version=SCHEMA_VERSION,
         S=state.S,
@@ -527,8 +553,10 @@ def audit_answer(
         missing_components=sorted(missing),
         errors=errors,
         degraded_reason=degraded_reason,
+        mode_affordance=_ma_out,
         soft_rescue=rescue,
         grv=grv_output,
+        response_mode_signal=_ms_output,
     )
 
 

@@ -58,6 +58,30 @@ binning:
     2: "0.34 ≤ C < 0.67"
     3: "C ≥ 0.67"
 
+# mode_affordance (question-level annotation)
+mode_affordance:
+  primary: "str — 6 modes: definitional/analytical/evaluative/comparative/critical/exploratory"
+  secondary: "list[str] — 0-2 secondary modes"
+  closure: "str — closed/qualified/open"
+  action_required: "bool — whether response needs actionable steps"
+
+# response_mode_signal (non-binding compliance signal)
+# Schema: schema/mode_affordance_schema_v1.json
+response_mode_signal:
+  status: "str — available | not_available"
+  primary_mode: "str | null — primary mode label"
+  primary_score: "float | null — 0.0-1.0 primary move coverage"
+  secondary_scores: "dict[str, float] — per-secondary-mode scores"
+  closure_expected: "str | null — expected closure type"
+  closure_score: "float | null — 0.0/0.5/1.0"
+  action_required: "bool | null"
+  action_score: "float | null — 0.0/0.5/1.0 (null if action_required=false)"
+  overall_score: "float | null — weighted average 0.0-1.0"
+  matched_moves: "list[str] — detected moves"
+  missing_moves: "list[str] — undetected moves"
+  evidence: "list[str] — detection evidence"
+  signal_version: "str — e.g. v1.0"
+
 # grv_tag定義
 grv_tag:
   none: "grv情報なし"
