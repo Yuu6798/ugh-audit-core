@@ -342,6 +342,7 @@ def audit_answer(
         evidence = _detect(question_id, response, question_meta)
         detected = True
     else:
+        question_id = "unknown"
         evidence = Evidence(question_id="unknown", f4_premise=None)
         if not question_meta:
             errors.append("question_meta_missing")

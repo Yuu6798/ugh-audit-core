@@ -190,10 +190,23 @@ WEIGHT_ACTION = 0.10
 # Lookup priority: canonical reviewed > inline explicit > not_available
 # ---------------------------------------------------------------------------
 
-_CANONICAL_JSONL = Path(__file__).parent / "data" / "question_sets" / \
-    "q_metadata_structural_reviewed_102q.jsonl"
+_CANONICAL_JSONL_NAME = (
+    "data/question_sets/q_metadata_structural_reviewed_102q.jsonl"
+)
 
 _canonical_cache: Optional[Dict[str, dict]] = None
+
+
+def _find_canonical_jsonl() -> Optional[Path]:
+    """Locate the canonical JSONL. Searches relative to module, then CWD."""
+    candidates = [
+        Path(__file__).parent / _CANONICAL_JSONL_NAME,
+        Path.cwd() / _CANONICAL_JSONL_NAME,
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    return None
 
 
 def _load_canonical() -> Dict[str, dict]:
@@ -202,14 +215,19 @@ def _load_canonical() -> Dict[str, dict]:
     if _canonical_cache is not None:
         return _canonical_cache
     result: Dict[str, dict] = {}
+    jsonl_path = _find_canonical_jsonl()
+    if jsonl_path is None:
+        logger.info("canonical mode_affordance JSONL not found, lookup disabled")
+        _canonical_cache = result
+        return result
     try:
-        for line in _CANONICAL_JSONL.read_text(encoding="utf-8").strip().split("\n"):
+        for line in jsonl_path.read_text(encoding="utf-8").strip().split("\n"):
             rec = json.loads(line)
             ma = rec.get("mode_affordance")
             if ma and isinstance(ma, dict) and ma.get("primary"):
                 result[rec["id"]] = ma
     except Exception:
-        logger.exception("failed to load canonical mode_affordance from %s", _CANONICAL_JSONL)
+        logger.exception("failed to load canonical mode_affordance from %s", jsonl_path)
     _canonical_cache = result
     return result
 
