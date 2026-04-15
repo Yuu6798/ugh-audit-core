@@ -301,10 +301,14 @@ def lookup_mode_affordance(
             return canonical_ma  # canonical is pre-validated
 
     # Step 2: inline explicit (normalize to strip invalid values)
-    if inline_mode_affordance and isinstance(inline_mode_affordance, dict):
-        normalized = _normalize_mode_affordance(inline_mode_affordance)
-        if normalized:
-            return normalized
+    # Accept string shorthand: "exploratory" → {"primary": "exploratory", ...}
+    if inline_mode_affordance:
+        if isinstance(inline_mode_affordance, str):
+            inline_mode_affordance = {"primary": inline_mode_affordance}
+        if isinstance(inline_mode_affordance, dict):
+            normalized = _normalize_mode_affordance(inline_mode_affordance)
+            if normalized:
+                return normalized
 
     # Step 3: canonical (with override — still try canonical as fallback)
     if override and question_id and question_id != "unknown":
