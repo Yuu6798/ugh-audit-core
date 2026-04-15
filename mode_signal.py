@@ -232,6 +232,50 @@ def _load_canonical() -> Dict[str, dict]:
     return result
 
 
+def _normalize_mode_affordance(raw: dict) -> Optional[dict]:
+    """Validate and normalize a mode_affordance dict.
+
+    Strips invalid values so the API response always conforms to the schema.
+    Returns None if primary is invalid (nothing to score against).
+    """
+    primary = raw.get("primary", "")
+    if not isinstance(primary, str) or primary not in VALID_MODES_6:
+        return None
+
+    # secondary: filter to valid, deduplicate, exclude primary, cap at 2
+    sec_raw = raw.get("secondary") or []
+    if isinstance(sec_raw, str):
+        sec_raw = [sec_raw] if sec_raw else []
+    elif not isinstance(sec_raw, list):
+        sec_raw = []
+    seen: set = set()
+    secondary: list = []
+    for s in sec_raw:
+        if (isinstance(s, str) and s in VALID_MODES_6
+                and s != primary and s not in seen):
+            secondary.append(s)
+            seen.add(s)
+        if len(secondary) >= 2:
+            break
+
+    # closure
+    closure = raw.get("closure", "")
+    if not isinstance(closure, str) or closure not in VALID_CLOSURE:
+        closure = None
+
+    # action_required
+    action_required = raw.get("action_required")
+    if not isinstance(action_required, bool):
+        action_required = None
+
+    return {
+        "primary": primary,
+        "secondary": secondary,
+        "closure": closure,
+        "action_required": action_required,
+    }
+
+
 def lookup_mode_affordance(
     question_id: Optional[str],
     inline_mode_affordance: Optional[dict],
@@ -246,7 +290,7 @@ def lookup_mode_affordance(
         override: if True, inline takes priority even when canonical exists
 
     Returns:
-        Resolved mode_affordance dict, or None if unavailable.
+        Resolved and validated mode_affordance dict, or None if unavailable.
     """
     canonical = _load_canonical()
 
@@ -254,12 +298,13 @@ def lookup_mode_affordance(
     if question_id and question_id != "unknown" and not override:
         canonical_ma = canonical.get(question_id)
         if canonical_ma:
-            return canonical_ma
+            return canonical_ma  # canonical is pre-validated
 
-    # Step 2: inline explicit
+    # Step 2: inline explicit (normalize to strip invalid values)
     if inline_mode_affordance and isinstance(inline_mode_affordance, dict):
-        if inline_mode_affordance.get("primary"):
-            return inline_mode_affordance
+        normalized = _normalize_mode_affordance(inline_mode_affordance)
+        if normalized:
+            return normalized
 
     # Step 3: canonical (with override — still try canonical as fallback)
     if override and question_id and question_id != "unknown":
