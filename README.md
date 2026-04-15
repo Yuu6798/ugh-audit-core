@@ -15,7 +15,7 @@ AIの回答が「意味的に誠実だったか」を定量的に評価・記録
 |------|---------|---------|
 | **PoR = (S, C)** | 問いの核心に対する回答の位置座標 | 「答えた」のか「それっぽいことを言った」かの違い |
 | **ΔE** | PoR 座標上における理想回答からの距離 | バイアス・回避・過剰一般化 |
-| **grv** | 回答内の語彙重力分布 | どの概念に引っ張られて回答が歪んだか（操作化は未着手） |
+| **grv** | 回答内の語彙重力分布 | どの概念に引っ張られて回答が歪んだか |
 
 ### 計算式
 
@@ -217,23 +217,28 @@ print(resp.json()["metadata_source"])  # "llm_generated"
 ## ディレクトリ構成
 
 ```
-# Audit Engine（構造的意味監査）
+# Audit Engine（構造的意味監査パイプライン）
 audit.py              # パイプライン統合 (detect → calculate → decide)
 detector.py           # 検出層 — テキスト → Evidence
 ugh_calculator.py     # 電卓層 — Evidence → State (S, C, ΔE, quality_score)
 decider.py            # 判定層 — State + Evidence → Policy
 cascade_matcher.py    # 回収補助 — SBert Tier 2 + 多条件 Tier 3
+grv_calculator.py     # 因果構造損失 grv — 3項式 (drift/dispersion/collapse)
+mode_signal.py        # 応答モード適合度信号 response_mode_signal
+semantic_loss.py      # 意味損失関数 L_sem — 診断用分解指標
+batch_audit_102.py    # 102問一括監査スクリプト
 registry/             # YAML辞書（予約語・演算子・前提フレーム）
 opcodes/              # 修復opcode定義
 
 # UGH Audit Layer（REST/MCP サーバー + 永続化）
 ugh_audit/
-├── storage/          # SQLite永続化 (audit_runs table)
-├── reference/        # referenceセット管理（golden store）
-├── collector/        # ログ収集ユーティリティ
-├── report/           # Phase Mapレポート生成
+├── collector/        # 監査+保存パイプライン
+├── storage/          # SQLite永続化
+├── reference/        # リファレンスセット管理
+├── report/           # テキスト/CSVレポート生成
 ├── engine/           # Phase 2 エンジン (calculator, decision, runtime)
-├── server.py         # REST API + MCP 統合サーバー (FastAPI, async)
+├── metadata_generator.py  # メタデータ欠損検出 + LLM 生成リクエスト構築
+├── server.py         # REST API + MCP 統合サーバー
 └── mcp_server.py     # MCP スタンドアロンサーバー
 
 # 実験基盤（LLM オーケストレーション）
@@ -346,6 +351,8 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 |---|---|
 | `inline` | リクエストに question_meta が含まれていた |
 | `llm_generated` | LLM (Claude API) が動的生成した |
+| `computed_ai_draft` | LLM 生成メタ + soft_rescue で部分回収 |
+| `fallback` | LLM 不使用のヒューリスティック結果（degraded 強制） |
 | `none` | question_meta なし、auto_generate_meta も off |
 
 ### 環境変数
@@ -392,9 +399,37 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 - **Phase 3**: referenceセット設計（Human-golden / Cross-model / Self-baseline）
 - **Phase 4**: Phase Map可視化 + パターン分析
 
-### 未実装
+### grv (因果構造損失) — v1.4 実装済み
 
-- **grv**: 語彙重力分布の操作化（理論式は定義済み、実装は中期タスク）
+`grv = clamp(w_d × drift + w_s × dispersion + w_c × collapse_v2)`
+
+確定重み: w_d=0.70, w_s=0.05, w_c=0.25 (HA48 ρ=-0.357)。
+SBert 依存。詳細: [`docs/grv_design.md`](docs/grv_design.md)
+
+### response_mode_signal — v1 実装済み
+
+質問が期待する応答形式 (`mode_affordance`) に対する回答の適合度を測る非破壊信号。
+6 modes: definitional / analytical / evaluative / comparative / critical / exploratory。
+cue-list ベースの決定的 scorer。verdict に影響しない。
+詳細: [`docs/mode_affordance.md`](docs/mode_affordance.md)
+
+---
+
+## 設計ドキュメント
+
+| コンポーネント | ドキュメント |
+|---|---|
+| 検出層 (演算子フレーム + Relaxed Tier1) | [`docs/detector_design.md`](docs/detector_design.md) |
+| Cascade Matcher (SBert Tier 2/3) | [`docs/cascade_design.md`](docs/cascade_design.md) |
+| GoldenStore リファレンス検索 | [`docs/golden_store.md`](docs/golden_store.md) |
+| 計算式 (PoR / ΔE / verdict) | [`docs/formulas.md`](docs/formulas.md) |
+| 意味損失関数 L_sem | [`docs/semantic_loss.md`](docs/semantic_loss.md) |
+| grv 因果構造損失 | [`docs/grv_design.md`](docs/grv_design.md) |
+| mode_affordance / response_mode_signal | [`docs/mode_affordance.md`](docs/mode_affordance.md) |
+| メタデータパイプライン | [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md) |
+| REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
+| 検証結果 (HA48 / HA20) | [`docs/validation.md`](docs/validation.md) |
+| Self-Audit 実験 | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
 
 ---
 
