@@ -43,8 +43,12 @@ if ! grep -q 'grv_calculator' "$ROOT/README.md"; then
     issues+=("README.md: grv_calculator.py not in directory structure")
 fi
 
-if ! grep -q 'fallback\|computed_ai_draft' "$ROOT/README.md"; then
-    issues+=("README.md: metadata_source table missing fallback/computed_ai_draft")
+if ! grep -q 'fallback' "$ROOT/README.md"; then
+    issues+=("README.md: metadata_source table missing 'fallback'")
+fi
+
+if ! grep -q 'computed_ai_draft' "$ROOT/README.md"; then
+    issues+=("README.md: metadata_source table missing 'computed_ai_draft'")
 fi
 
 # --- Output ---
