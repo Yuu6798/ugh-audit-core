@@ -55,8 +55,8 @@ class TestTypeStability:
         # question_meta なしでは f4 も未計算
         assert data["structural_gate"]["f4"] is None
 
-    def test_no_trap_type_returns_f4_null(self, client):
-        """2. trap_type なし → f4=None, S は f4 除外で算出"""
+    def test_no_trap_returns_f4_zero(self, client):
+        """2. trap_type="" (罠なし) → f4=0.0, S は f4 込みで算出"""
         resp = client.post("/api/audit", json={
             "question": "テスト質問",
             "response": "テスト回答",
@@ -71,9 +71,27 @@ class TestTypeStability:
         assert resp.status_code == 200
         data = resp.json()
         gate = data["structural_gate"]
+        assert gate["f4"] == 0.0
+        assert isinstance(data["S"], float)
+        assert data["S"] > 0
+
+    def test_missing_trap_type_returns_f4_null(self, client):
+        """2b. trap_type キー不在 → f4=None, S は f4 除外で算出 (分母35)"""
+        resp = client.post("/api/audit", json={
+            "question": "テスト質問",
+            "response": "テスト回答",
+            "question_meta": {
+                "question": "テスト質問",
+                "core_propositions": ["命題A"],
+                "disqualifying_shortcuts": [],
+                "acceptable_variants": [],
+            },
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        gate = data["structural_gate"]
         assert gate["f4"] is None
         assert isinstance(data["S"], float)
-        # S は f4 なしで算出されている (分母35)
         assert data["S"] > 0
 
     def test_full_computation_returns_computed(self, client):

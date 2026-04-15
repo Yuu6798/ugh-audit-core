@@ -503,8 +503,11 @@ def check_f4_premise(
 
     trap_typeに基づき、質問の前提に対する回答の態度を判定。
     """
-    if not trap_type:
+    if trap_type is None:
         return None, None
+    if trap_type == "":
+        # 罠なし — 前提受容リスクがないためペナルティ 0
+        return 0.0, "no_trap"
     frame = frames.get(trap_type)
     if not frame:
         return 0.0, ""
@@ -1212,7 +1215,7 @@ def detect(
     core_props = question_meta.get("core_propositions", [])
     disqualifying = question_meta.get("disqualifying_shortcuts", [])
     acceptable_variants = question_meta.get("acceptable_variants", [])
-    trap_type = question_meta.get("trap_type", "")
+    trap_type = question_meta.get("trap_type", None)
 
     # f1: 主題逸脱
     f1 = check_f1_anchor(question_text, response_text, reserved_terms)
