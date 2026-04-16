@@ -331,7 +331,11 @@ def main() -> None:
 
     # --- Step 6: グリッドサーチ (戦略的) ---
     # L_A=全零, L_Q/L_R/L_X=弱信号 → コア3項 (L_P, L_F, L_G) を軸に探索
-    data_all = [(c, o) for _, c, o in full_data]
+    # Phase 5 探索は L_G が利用可能な行のみ使用 (混在すると renormalize で歪む)
+    data_all = [(c, o) for _, c, o in full_data if c["L_G"] is not None]
+    n_excluded = len(full_data) - len(data_all)
+    if n_excluded:
+        print(f"  (L_G=None の {n_excluded} 件を Phase 5 探索から除外)")
 
     # 6a: コア3項 (L_P, L_F, L_G) — step=0.025 (高精度)
     print("\n--- Step 6a: Grid Search (コア3項: L_P, L_F, L_G) step=0.025 ---")
