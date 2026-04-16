@@ -127,16 +127,13 @@ G_ref = normalize(w_q × G_q + meta_scale × w_m × G_m)
 }
 ```
 
-## タグ閾値 (HA48 校正済み)
+## 暫定タグ
 
-| grv | タグ | 旧値 (暫定) |
-|-----|------|------------|
-| >= 0.30 | high_gravity | >= 0.66 |
-| >= 0.20 | mid_gravity | >= 0.33 |
-| < 0.20 | low_gravity | < 0.33 |
-
-HA48 分布: mean=0.185, σ=0.051, range=[0.10, 0.31]。
-旧暫定値では全48件が low_gravity に分類され、タグ分類が機能していなかった。
+| grv | タグ |
+|-----|------|
+| >= 0.66 | high_gravity |
+| >= 0.33 | mid_gravity |
+| < 0.33 | low_gravity |
 
 ## L_sem との接続
 
@@ -158,40 +155,11 @@ grv=None 時は L_G が除外され、残り6項で正規化。
 | v1.3 | 2成分確定 (collapse 除外) | -0.318 |
 | v1.4 | collapse_v2 (residual型) + cover_soft + wash_index | **-0.357** |
 
-## mode_conditioned_grv v2 (Phase C) — 実装済み
-
-grv_raw と mode_affordance を組み合わせ、モード固有の 4 成分解釈ベクトルを生成する。
-grv_raw を置き換えない。説明用ベクトルとして併走。
-
-### 4 成分
-
-| 成分 | 意味 | 方向 | HA48 ρ(vs O) |
-|------|------|------|-------------|
-| anchor_alignment | 問いの核 + 命題への到達度 | 高=良 | **+0.4063** (p=0.004) |
-| balance | 命題カバレッジの均等性 | 高=良 | n=5 (データ不足) |
-| boilerplate_risk | ボイラープレート密度 | 高=危 | 信号なし (HA48 低密度) |
-| collapse_risk | 論点の 1 塊集中度 | 高=危 | **-0.3191** (p=0.027) |
-
-### モード別の重要成分
-
-| mode | focus_components |
-|------|-----------------|
-| definitional | anchor_alignment |
-| analytical | anchor_alignment |
-| evaluative | anchor_alignment, boilerplate_risk |
-| comparative | balance, anchor_alignment |
-| critical | anchor_alignment, boilerplate_risk |
-| exploratory | collapse_risk, balance |
-
-実装: `mode_grv.py`
-検証: `analysis/mode_grv_ha48_check.py`
-
 ## 次ステップ: 判定層ロードマップ
 
 Phase B (mode_affordance v1) 実装済み。response_mode_signal として非破壊信号を提供。
-Phase C (mode_conditioned_grv v2) 実装済み。4成分解釈ベクトルを併走出力。
-Phase D〜E (support_signal + 判定層合成) は anchor_alignment の HA48 ρ=+0.41 を踏まえて設計予定。
 詳細: [`mode_affordance.md`](mode_affordance.md), [`addendum`](mode_affordance_v1_addendum.md)
+Phase C〜E (mode_conditioned_grv + 判定層合成) は v1 の 48件以上較正後に着手予定。
 
 ## 関連ファイル
 
