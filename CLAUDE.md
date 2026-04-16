@@ -82,6 +82,21 @@ Agent({ subagent_type: "Explore", prompt: "..." })
 この原則は、本リポジトリが測る「意味的誠実性」を Claude 自身の出力にも
 適用するという単純な一貫性要請に由来する。
 
+### Goal-Driven Execution（成功基準先行）
+
+曖昧なタスクは検証可能なゴールに変換してから着手する。「動かす」ではなく
+「何が満たされれば完了か」を先に宣言し、各ステップに verify 手順を付ける
+（例: 「修正する」→「失敗を再現するテストを書き、それを pass させる」）。
+強い成功基準があれば Claude は自走でループできるが、弱い基準（"make it work"）
+は都度確認を要求して C 軸（次の判断に必要な情報）を削る。詳細:
+[`.claude/skills/karpathy-guidelines/SKILL.md`](.claude/skills/karpathy-guidelines/SKILL.md) §4。
+
+### 外部参照原則
+
+| スキル | 用途 |
+|---|---|
+| [karpathy-guidelines](.claude/skills/karpathy-guidelines/SKILL.md) | LLM コーディング 4 原則 (Think Before Coding / Simplicity First / Surgical Changes / Goal-Driven Execution) |
+
 ## Session Memory（永続記憶ワークフロー）
 
 セッション間の記憶喪失を防ぐため、`.claude/memory/` にセッションサマリーを蓄積する。
