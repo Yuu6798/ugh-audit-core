@@ -66,10 +66,10 @@ def por_state(s: float, c: float) -> str:
 
 
 def grv_tag(grv: float) -> str:
-    from grv_calculator import TAG_HIGH, TAG_MID
-    if grv >= TAG_HIGH:
+    # HA48 校正値。grv_calculator.TAG_HIGH / TAG_MID と同期すること。
+    if grv >= 0.30:
         return "high_gravity"
-    if grv >= TAG_MID:
+    if grv >= 0.20:
         return "mid_gravity"
     return "low_gravity"
 

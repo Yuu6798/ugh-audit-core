@@ -92,8 +92,9 @@ def _compute_balance(grv: GrvResult) -> Optional[float]:
     if len(per_prop) < 2:
         return None
 
-    std = statistics.stdev(per_prop)
-    # std の理論最大値は 0.5 (0 と 1 が半々)。
+    std = statistics.pstdev(per_prop)
+    # pstdev (母集団標準偏差) を使用。命題群は標本ではなく全数。
+    # 理論最大値は 0.5 (0 と 1 が半々)。
     # std=0 → balance=1.0 (完全均等)
     # std≥0.3 → balance≈0.0
     return _clamp(1.0 - std / 0.3)
