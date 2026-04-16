@@ -196,8 +196,11 @@ Phase D〜E (support_signal + 判定層合成) は anchor_alignment の HA48 ρ=
 ## 関連ファイル
 
 - `grv_calculator.py` — 3成分計算エンジン
+- `mode_grv.py` — mode_conditioned_grv v2 (4成分解釈ベクトル)
 - `ugh_calculator.py` — State.grv フィールド
 - `semantic_loss.py` — L_G 統合
 - `cascade_matcher.py` — SBert シングルトン + 埋め込みキャッシュ
-- `ugh_audit/server.py` / `mcp_server.py` — API レスポンスの grv フィールド
+- `ugh_audit/server.py` / `mcp_server.py` — API レスポンスの grv + mode_conditioned_grv
 - `analysis/grv_v14_acceptance.py` — HA48 受け入れ試験
+- `analysis/calibrate_grv_lsem.py` — grv/L_sem Phase 5 統合校正
+- `analysis/mode_grv_ha48_check.py` — mode_conditioned_grv HA48 検証

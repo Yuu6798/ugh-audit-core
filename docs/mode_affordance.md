@@ -118,13 +118,15 @@ canonical reviewed (102q JSONL)  >  inline explicit  >  not_available
 
 Canonical is always preferred unless `mode_affordance_override=true` is set.
 
-## Non-goals (v1)
+## Non-goals (現行)
 
-- Do NOT merge grv and response_mode_signal into a single score (Phase E)
-- Do NOT implement mode_conditioned_grv in v1
+- Do NOT merge grv and response_mode_signal into a single verdict score (Phase E)
 - Do NOT use response_mode_signal to adjust grv weights
-- grv measures lexical gravity distortion; mode_affordance measures response form.
-  Keep them as separate outputs until calibrated with 48+ human annotations.
+- verdict 判定への合成は 48 件以上で較正後 (Phase E)
+
+**Phase C 完了**: `mode_conditioned_grv` v2 を実装し、
+4 成分解釈ベクトル (anchor_alignment, balance, boilerplate_risk, collapse_risk) として
+API に統合。verdict には影響しない説明用出力。詳細: [`grv_design.md`](grv_design.md)
 
 ## Schema
 

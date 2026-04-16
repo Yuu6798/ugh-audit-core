@@ -381,7 +381,7 @@ HA48 検証済み閾値を破壊しない。
 | $L_F$ | 0.16 | 3項最適化 |
 | $L_X$ | 0.05 | n=17 信号弱、理論保持 |
 
-分析スクリプト: `analysis/calibrate_grv_lsem.py` (Phase 5), `analysis/optimize_semantic_loss_weights.py` (Phase 4)
+分析スクリプト: `analysis/calibrate_grv_lsem.py` (Phase 5)
 結果 CSV: `analysis/grv_lsem_calibration_result.csv`
 
 ### 制約と今後の課題

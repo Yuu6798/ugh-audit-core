@@ -144,5 +144,4 @@ HA48 grv 分布: mean=0.185, σ=0.051, range=[0.10, 0.31]
 - `analysis/pipeline_a_correlation/` — ΔE 相関分析 (n=20, n=48)
 - `analysis/ha48_regression_check.csv` — 回帰検証データ
 - `analysis/n48_verification/` — HA48 マージ検証
-- `analysis/semantic_loss_optimization_result.csv` — L_sem Phase 4 校正成果物
 - `analysis/grv_lsem_calibration_result.csv` — grv/L_sem Phase 5 統合校正成果物
