@@ -121,8 +121,8 @@ def main() -> None:
         train = [(c, o) for j, (_, c, o) in enumerate(data) if j != i]
         test_id, test_comp, test_o = data[i]
 
-        # find optimal weights on training set
-        w_opt, train_rho = grid_search_3(train, step=0.05)  # coarser for speed
+        # find optimal weights on training set (same step as full-sample to avoid quantization bias)
+        w_opt, train_rho = grid_search_3(train, step=0.025)
 
         # predict on held-out item
         pred = weighted_sum(test_comp, w_opt)
