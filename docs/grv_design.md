@@ -127,13 +127,16 @@ G_ref = normalize(w_q × G_q + meta_scale × w_m × G_m)
 }
 ```
 
-## 暫定タグ
+## タグ閾値 (HA48 校正済み)
 
-| grv | タグ |
-|-----|------|
-| >= 0.66 | high_gravity |
-| >= 0.33 | mid_gravity |
-| < 0.33 | low_gravity |
+| grv | タグ | 旧値 (暫定) |
+|-----|------|------------|
+| >= 0.30 | high_gravity | >= 0.66 |
+| >= 0.20 | mid_gravity | >= 0.33 |
+| < 0.20 | low_gravity | < 0.33 |
+
+HA48 分布: mean=0.185, σ=0.051, range=[0.10, 0.31]。
+旧暫定値では全48件が low_gravity に分類され、タグ分類が機能していなかった。
 
 ## L_sem との接続
 
