@@ -491,6 +491,9 @@ class AuditResponse(BaseModel):
     response_mode_signal: Optional[dict] = Field(
         None, description="応答モード適合度信号 (deterministic, non-binding)"
     )
+    mode_conditioned_grv: Optional[dict] = Field(
+        None, description="モード条件付き grv 解釈ベクトル (grv + mode_affordance)"
+    )
 
 
 class HistoryItem(BaseModel):
