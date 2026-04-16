@@ -226,6 +226,7 @@ decider.py            # 判定層 — State + Evidence → Policy
 cascade_matcher.py    # 回収補助 — SBert Tier 2 + 多条件 Tier 3
 grv_calculator.py     # 因果構造損失 grv — 3項式 (drift/dispersion/collapse)
 mode_signal.py        # 応答モード適合度信号 response_mode_signal
+mode_grv.py           # mode_conditioned_grv v2 — モード条件付き grv 解釈ベクトル
 semantic_loss.py      # 意味損失関数 L_sem — 診断用分解指標
 batch_audit_102.py    # 102問一括監査スクリプト
 registry/             # YAML辞書（予約語・演算子・前提フレーム）
