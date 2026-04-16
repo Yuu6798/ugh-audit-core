@@ -239,9 +239,9 @@ class TestTotal:
                 f4_premise=None, propositions_total=0,
             )
         )
-        # 有効: L_Q=0.8 (w=0.02), L_A=0.4 (w=0.02), L_F=1.0 (w=0.16)
-        w_sum = 0.02 + 0.02 + 0.16
-        expected = (0.02 / w_sum) * 0.8 + (0.02 / w_sum) * 0.4 + (0.16 / w_sum) * 1.0
+        # 有効: L_Q=0.8 (w=0.02), L_A=0.4 (w=0.02), L_F=1.0 (w=0.21)
+        w_sum = 0.02 + 0.02 + 0.21
+        expected = (0.02 / w_sum) * 0.8 + (0.02 / w_sum) * 0.4 + (0.21 / w_sum) * 1.0
         assert loss.L_total == pytest.approx(expected, abs=1e-4)
 
     def test_six_components_without_grv_x(self):
@@ -252,13 +252,13 @@ class TestTotal:
         )
         loss = compute_semantic_loss(ev)
         # L_P=0.5, L_Q=0.5, L_R=0.5, L_A=1.0, L_F=0.0
-        w_sum = 0.24 + 0.02 + 0.03 + 0.02 + 0.16
+        w_sum = 0.27 + 0.02 + 0.03 + 0.02 + 0.21
         expected = (
-            (0.24 / w_sum) * 0.5
+            (0.27 / w_sum) * 0.5
             + (0.02 / w_sum) * 0.5
             + (0.03 / w_sum) * 0.5
             + (0.02 / w_sum) * 1.0
-            + (0.16 / w_sum) * 0.0
+            + (0.21 / w_sum) * 0.0
         )
         assert loss.L_total == pytest.approx(expected, abs=1e-4)
 
@@ -270,14 +270,14 @@ class TestTotal:
         )
         loss = compute_semantic_loss(ev, grv=0.4)
         # L_P=0.5, L_Q=0.5, L_R=0.5, L_A=0.0, L_G=0.4, L_F=0.5
-        w_sum = 0.24 + 0.02 + 0.03 + 0.02 + 0.48 + 0.16
+        w_sum = 0.27 + 0.02 + 0.03 + 0.02 + 0.35 + 0.21
         expected = (
-            (0.24 / w_sum) * 0.5
+            (0.27 / w_sum) * 0.5
             + (0.02 / w_sum) * 0.5
             + (0.03 / w_sum) * 0.5
             + (0.02 / w_sum) * 0.0
-            + (0.48 / w_sum) * 0.4
-            + (0.16 / w_sum) * 0.5
+            + (0.35 / w_sum) * 0.4
+            + (0.21 / w_sum) * 0.5
         )
         assert loss.L_total == pytest.approx(expected, abs=1e-4)
 
@@ -337,7 +337,7 @@ class TestLF:
         assert compute_semantic_loss(_ev(f2_unknown=0.5)).L_F == pytest.approx(0.5)
 
     def test_L_G_dominates_default_weight(self):
-        """L_G のデフォルト重み (0.48) が最大であることを確認 (Phase 5 校正)"""
+        """L_G のデフォルト重み (0.35) が最大であることを確認 (Phase 5 + LOO-CV 補正)"""
         from semantic_loss import DEFAULT_WEIGHTS
         assert DEFAULT_WEIGHTS["L_G"] == max(DEFAULT_WEIGHTS.values())
 
