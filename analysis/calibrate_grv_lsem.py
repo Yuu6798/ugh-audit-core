@@ -102,8 +102,10 @@ def compute_L_X(propositions: List[str], miss_ids_str: str) -> Optional[float]:
     """polarity-bearing 命題の miss 率を計算"""
     try:
         from detector import detect_operator, OPERATOR_CATALOG
-    except ImportError:
-        return None
+    except ModuleNotFoundError as _err:
+        if _err.name == "detector":
+            return None
+        raise
 
     if not propositions:
         return None

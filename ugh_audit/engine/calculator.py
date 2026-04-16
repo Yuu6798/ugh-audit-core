@@ -66,9 +66,10 @@ def por_state(s: float, c: float) -> str:
 
 
 def grv_tag(grv: float) -> str:
-    if grv >= 0.66:
+    from grv_calculator import TAG_HIGH, TAG_MID
+    if grv >= TAG_HIGH:
         return "high_gravity"
-    if grv >= 0.33:
+    if grv >= TAG_MID:
         return "mid_gravity"
     return "low_gravity"
 
