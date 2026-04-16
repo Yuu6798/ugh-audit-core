@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import csv
 import itertools
-import json
 import math
 import statistics
 import sys
@@ -141,7 +140,7 @@ def main() -> None:
     actuals = [p[2] for p in loo_predictions]
     loo_rho, loo_p = spearmanr(preds, actuals)
 
-    print(f"\n--- Results ---")
+    print("\n--- Results ---")
     print(f"  Full-sample ρ:  {full_rho:.4f}")
     print(f"  LOO-CV ρ:       {loo_rho:.4f} (p={loo_p:.4f})")
     print(f"  差分 (shrinkage): {abs(full_rho) - abs(loo_rho):.4f}")
