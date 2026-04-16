@@ -171,7 +171,6 @@ class AuditOutput:
     soft_rescue: Optional[Dict] = None
     grv: Optional[Dict] = None
     response_mode_signal: Optional[Dict] = None
-    mode_conditioned_grv: Optional[Dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +237,6 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         soft_rescue=result.get("soft_rescue"),
         grv=result.get("grv"),
         response_mode_signal=result.get("response_mode_signal"),
-        mode_conditioned_grv=result.get("mode_conditioned_grv"),
     )
 
 
@@ -475,7 +473,6 @@ def audit_answer(
     degraded_reason = errors if mode == "degraded" else []
 
     # grv 計算 (SBert 依存、未導入時は None)
-    grv_result = None
     grv_output: Optional[Dict] = None
     try:
         from grv_calculator import compute_grv
@@ -536,31 +533,6 @@ def audit_answer(
     except Exception:
         _ms_output = None
 
-    # mode_conditioned_grv (grv + mode_affordance → 4成分解釈ベクトル)
-    mcg_output: Optional[Dict] = None
-    if grv_result is not None and _ma_out and _ma_out.get("primary"):
-        try:
-            from mode_grv import compute_mode_conditioned_grv
-            mcg = compute_mode_conditioned_grv(
-                grv_result=grv_result,
-                response_text=response,
-                mode_affordance_primary=_ma_out["primary"],
-                action_required=_ma_out.get("action_required", False),
-            )
-            if mcg is not None:
-                mcg_output = {
-                    "anchor_alignment": mcg.anchor_alignment,
-                    "balance": mcg.balance,
-                    "boilerplate_risk": mcg.boilerplate_risk,
-                    "collapse_risk": mcg.collapse_risk,
-                    "mode": mcg.mode,
-                    "focus_components": mcg.focus_components,
-                    "grv_raw": mcg.grv_raw,
-                    "version": mcg.version,
-                }
-        except Exception:
-            mcg_output = None
-
     return AuditOutput(
         schema_version=SCHEMA_VERSION,
         S=state.S,
@@ -585,7 +557,6 @@ def audit_answer(
         soft_rescue=rescue,
         grv=grv_output,
         response_mode_signal=_ms_output,
-        mode_conditioned_grv=mcg_output,
     )
 
 
