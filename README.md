@@ -236,8 +236,10 @@ ugh_audit/
 ├── storage/          # SQLite永続化
 ├── reference/        # リファレンスセット管理
 ├── report/           # テキスト/CSVレポート生成
-├── engine/           # Phase 2 エンジン (calculator, decision, runtime)
+├── engine/           # Phase 2 エンジン (calculator, decision, runtime, metapatch)
 ├── metadata_generator.py  # メタデータ欠損検出 + LLM 生成リクエスト構築
+├── metadata_policy.py     # AI草案メタデータの昇格ポリシー
+├── soft_rescue.py    # AI草案メタデータ向け soft-hit rescue (C=0 部分回収)
 ├── server.py         # REST API + MCP 統合サーバー
 └── mcp_server.py     # MCP スタンドアロンサーバー
 
@@ -425,11 +427,13 @@ cue-list ベースの決定的 scorer。verdict に影響しない。
 | 計算式 (PoR / ΔE / verdict) | [`docs/formulas.md`](docs/formulas.md) |
 | 意味損失関数 L_sem | [`docs/semantic_loss.md`](docs/semantic_loss.md) |
 | grv 因果構造損失 | [`docs/grv_design.md`](docs/grv_design.md) |
-| mode_affordance / response_mode_signal | [`docs/mode_affordance.md`](docs/mode_affordance.md) |
+| LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
+| mode_affordance / response_mode_signal | [`docs/mode_affordance.md`](docs/mode_affordance.md), [`addendum`](docs/mode_affordance_v1_addendum.md) |
 | メタデータパイプライン | [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md) |
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 検証結果 (HA48 / HA20) | [`docs/validation.md`](docs/validation.md) |
 | Self-Audit 実験 | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
+| SVP/RPE 統合実装プラン | [`docs/svp_rpe_implementation_plan.md`](docs/svp_rpe_implementation_plan.md) |
 
 ---
 
