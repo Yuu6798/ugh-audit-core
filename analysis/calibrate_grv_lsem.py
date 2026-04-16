@@ -411,7 +411,7 @@ def main() -> None:
 
     # 閾値候補ごとの verdict 精度
     print("\n  閾値候補ごとの区分:")
-    for t_mid, t_high in [(0.25, 0.50), (0.30, 0.60), (0.33, 0.66), (0.35, 0.70)]:
+    for t_mid, t_high in [(0.20, 0.30), (0.25, 0.50), (0.30, 0.60), (0.33, 0.66), (0.35, 0.70)]:
         low = [o for g, o, _ in grv_o_pairs if g < t_mid]
         mid = [o for g, o, _ in grv_o_pairs if t_mid <= g < t_high]
         high = [o for g, o, _ in grv_o_pairs if g >= t_high]

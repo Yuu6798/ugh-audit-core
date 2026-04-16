@@ -68,7 +68,7 @@ def grid_search_3(
     levels = [round(v * step, 4) for v in range(int(1.0 / step) + 1)]
 
     best_w = {"L_P": 0.25, "L_F": 0.15, "L_G": 0.50}
-    best_rho = 0.0
+    best_rho = float("inf")  # 最も負の ρ を探索するため +inf で初期化
 
     for combo in itertools.product(levels, repeat=3):
         if sum(combo) == 0.0:
