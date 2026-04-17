@@ -700,6 +700,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         soft_rescue=result.get("soft_rescue"),
         grv=result.get("grv"),
         response_mode_signal=result.get("response_mode_signal"),
+        mode_conditioned_grv=result.get("mode_conditioned_grv"),
     )
 
 
