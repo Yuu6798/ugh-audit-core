@@ -250,35 +250,60 @@ def test_verdict_advisory_is_valid_verdict_value(client):
 
 
 def test_verdict_advisory_downgrades_on_extreme_collapse(
-    client, monkeypatch, tmp_db, tmp_golden,
+    monkeypatch, tmp_db, tmp_golden,
 ):
-    """collapse_risk が閾値を超えると accept → rewrite に downgrade される"""
+    """collapse_risk が閾値を超えると accept → rewrite に downgrade される
+
+    Codex P3 対応: 前提 (verdict=accept, mcg 計算済み) は必ず成立させる。
+    成立しないときは fixture バグとして test を失敗させる（silent no-op 禁止）。
+    """
     import mode_grv
 
-    # 閾値を下げ、accept に発火するようにする
+    # 閾値を下げ、accept + 非 None mcg なら必ず両ルール発火するようにする。
+    # _TAU_ANCHOR_LOW=1.0 で anchor ルールは常に発火、_TAU_COLLAPSE_HIGH=0.0
+    # で collapse ルールは非 None のとき常に発火。
     monkeypatch.setattr(mode_grv, "_TAU_COLLAPSE_HIGH", 0.0)
-    monkeypatch.setattr(mode_grv, "_TAU_ANCHOR_LOW", 0.0)
+    monkeypatch.setattr(mode_grv, "_TAU_ANCHOR_LOW", 1.0)
 
     configure(db=tmp_db, golden=tmp_golden)
     with TestClient(app) as c:
         resp = c.post("/api/audit", json={
+            # accept を確実にするため命題と回答を高マッチにする。
+            # mcg の collapse_risk を None にしないよう命題 2 本 (>=2 で applicable)。
+            # exploratory primary mode は collapse_risk を focus に含む。
             "question": "PoRとは何か？",
-            "response": "PoRは共鳴度である。",
+            "response": "PoRは共鳴度である。意味との共振プロセスでもある。",
             "question_meta": {
                 "question": "PoRとは何か？",
-                "core_propositions": ["PoRは共鳴度"],
+                "core_propositions": ["PoRは共鳴度", "PoRは共振プロセス"],
                 "disqualifying_shortcuts": [],
                 "acceptable_variants": [],
                 "trap_type": "",
+                "mode_affordance": {"primary": "exploratory"},
             },
         })
     configure(db=None, golden=None)
-
     data = resp.json()
-    # primary verdict が accept なら advisory downgrade が発生する
-    if data["verdict"] == "accept" and data.get("mode_conditioned_grv") is not None:
-        assert data["verdict_advisory"] == "rewrite"
-        assert "mcg_collapse_downgrade" in data["advisory_flags"]
+
+    # --- 前提条件を必ず満たすことをハード assert する（silent no-op 禁止）---
+    assert data["verdict"] == "accept", (
+        f"fixture precondition failed: primary verdict must be accept "
+        f"to exercise downgrade, got {data['verdict']!r}"
+    )
+    assert data.get("mode_conditioned_grv") is not None, (
+        "fixture precondition failed: mode_conditioned_grv must be computed "
+        "(SBert + mode_affordance='exploratory' with >=2 propositions)"
+    )
+    mcg = data["mode_conditioned_grv"]
+    assert mcg["collapse_risk"] is not None, (
+        "fixture precondition failed: collapse_risk must be non-None "
+        "(needs n_propositions>=2)"
+    )
+
+    # --- 目標挙動: downgrade 発生 + 両フラグ発火 ---
+    assert data["verdict_advisory"] == "rewrite"
+    assert "mcg_collapse_downgrade" in data["advisory_flags"]
+    assert "mcg_anchor_missing" in data["advisory_flags"]
 
 
 def test_verdict_advisory_rewrite_passthrough(client):
