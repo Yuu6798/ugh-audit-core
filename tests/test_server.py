@@ -256,7 +256,15 @@ def test_verdict_advisory_downgrades_on_extreme_collapse(
 
     Codex P3 対応: 前提 (verdict=accept, mcg 計算済み) は必ず成立させる。
     成立しないときは fixture バグとして test を失敗させる（silent no-op 禁止）。
+
+    mcg 計算には sentence-transformers (SBert) + grv_calculator が必要。
+    CI の `[dev]` extra では未インストールのため skip する。
     """
+    try:
+        import sentence_transformers  # noqa: F401
+    except ImportError:
+        pytest.skip("sentence-transformers not installed (mcg computation unavailable)")
+
     import mode_grv
 
     # 閾値を下げ、accept + 非 None mcg なら必ず両ルール発火するようにする。
