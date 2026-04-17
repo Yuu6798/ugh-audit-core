@@ -233,7 +233,7 @@ def write_csv(rows: List[dict], path: Path) -> None:
     fieldnames = [
         "id", "source", "question_id", "question", "response",
         "core_propositions", "O", "rater", "annotated_at", "comment",
-        "blind_check", "hits_total",
+        "blind_check", "hits_total", "delta_e",
     ]
     with open(path, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -253,6 +253,7 @@ def write_csv(rows: List[dict], path: Path) -> None:
                     "comment": "",
                     "blind_check": "",
                     "hits_total": r.get("hits_total", ""),
+                    "delta_e": r.get("delta_e", ""),
                 }
             )
 
@@ -301,7 +302,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     fieldnames = [
         "id", "source", "question_id", "question", "response",
         "core_propositions", "O", "rater", "annotated_at", "comment",
-        "blind_check", "hits_total",
+        "blind_check", "hits_total", "delta_e",
     ]
     if args.append and existing_rows:
         OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
@@ -321,6 +322,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     "O": "", "rater": "", "annotated_at": "",
                     "comment": "", "blind_check": "",
                     "hits_total": r.get("hits_total", ""),
+                    "delta_e": r.get("delta_e", ""),
                 })
     else:
         write_csv(assigned, OUT_CSV)

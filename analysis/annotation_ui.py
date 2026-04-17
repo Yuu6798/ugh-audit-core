@@ -87,7 +87,7 @@ def _write_output(rows: List[dict], path: Path) -> None:
     fieldnames = [
         "id", "source", "question_id", "question", "response",
         "core_propositions", "O", "rater", "annotated_at", "comment",
-        "blind_check", "hits_total",
+        "blind_check", "hits_total", "delta_e",
     ]
     with open(path, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -388,6 +388,22 @@ def run_session(
     # 保つため、事前フィルタは行わない — これをすると batch 内 index が
     # ズレて未アノテート行を飛ばす resume バグの原因になる)。
     ha48_for_blind = _load_ha48_for_blind()
+
+    # batch_sizes と blind_counts の長さ不整合補正 (zip truncate 回避)
+    if len(blind_counts) < len(batch_sizes):
+        pad = len(batch_sizes) - len(blind_counts)
+        outfile.write(
+            f"[warn] blind_counts {len(blind_counts)} 件が batch_sizes "
+            f"{len(batch_sizes)} 件より短い。後続 {pad} batch を blind=0 で埋める。\n"
+        )
+        blind_counts = list(blind_counts) + [0] * pad
+    elif len(blind_counts) > len(batch_sizes):
+        pad = len(blind_counts) - len(batch_sizes)
+        outfile.write(
+            f"[warn] blind_counts {len(blind_counts)} 件が batch_sizes "
+            f"{len(batch_sizes)} 件より長い。余剰 {pad} 件を truncate する。\n"
+        )
+        blind_counts = list(blind_counts)[: len(batch_sizes)]
 
     # batch に分割
     batches: List[List[dict]] = []

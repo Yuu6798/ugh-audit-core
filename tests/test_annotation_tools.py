@@ -637,3 +637,232 @@ def test_ui_incremental_cal_does_not_pass_no_run_full(monkeypatch):
         f"--no-run-full が渡っている (P2 回帰): {args}"
     )
     assert "--acc40" in args and "/tmp/fake.csv" in args
+
+
+# ---------------------------------------------------------------------------
+# Codex PR #85 第 3 ラウンド回帰テスト
+# ---------------------------------------------------------------------------
+
+
+def test_run_incremental_cal_passes_ha48_path_override(tmp_path, monkeypatch):
+    """P1 回帰: full-run 時に calibrate に --ha48-path を渡す."""
+    import analysis.run_incremental_calibration as rc_mod
+
+    acc40 = tmp_path / "acc40.csv"
+    merged = tmp_path / "merged.csv"
+    ha48_src = tmp_path / "ha48.csv"
+    _write_csv(
+        ha48_src,
+        [{"id": "q001", "category": "x", "S": "4", "C": "4", "O": "5",
+          "propositions_hit": "3/3", "notes": ""}],
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_csv(
+        acc40,
+        [{"id": "acc40_001", "source": "v5_unannotated",
+          "question_id": "q020", "question": "q", "response": "r",
+          "core_propositions": "[]", "O": "5", "rater": "t",
+          "annotated_at": "", "comment": "", "blind_check": "",
+          "hits_total": "", "delta_e": "0.05"}],
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total", "delta_e"],
+    )
+    monkeypatch.setattr(rc_mod, "HA48_SRC_PATH", ha48_src)
+    monkeypatch.setattr(rc_mod, "ACCEPT_SUBSET_TARGET", 1)
+    monkeypatch.setattr(rc_mod, "MERGED_FOR_CAL", merged)
+    monkeypatch.setattr(rc_mod, "ACC40_DEFAULT", acc40)
+    monkeypatch.setattr(rc_mod, "CAL_SCRIPT", tmp_path / "fake_cal.py")
+    # CAL_SCRIPT が exists 扱いになるよう空ファイル作成
+    (tmp_path / "fake_cal.py").write_text("")
+
+    captured: List[List[str]] = []
+
+    class _Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured.append(list(cmd))
+        return _Result()
+
+    monkeypatch.setattr(rc_mod.subprocess, "run", fake_run)
+    # filter_accept_subset が v5 を読めるよう merge_mod 側 fixture を流用
+    monkeypatch.setattr(merge_mod, "HA48_PATH", ha48_src)
+    # v5 に q020 を含める
+    v5 = tmp_path / "v5.csv"
+    _write_csv(
+        v5,
+        [{"id": "q020", "category": "x", "trap_type": "", "f1": "0",
+          "f2": "0", "f3": "0", "f4": "0", "hits": "3", "total": "3",
+          "hit_ids": "", "miss_ids": "", "hit_sources": "",
+          "S": "1.0", "C": "1.0", "dE": "0", "decision": "accept"}],
+        ["id", "category", "trap_type", "f1", "f2", "f3", "f4", "hits",
+         "total", "hit_ids", "miss_ids", "hit_sources", "S", "C", "dE",
+         "decision"],
+    )
+    monkeypatch.setattr(merge_mod, "V5_PATH", v5)
+
+    rc = rc_mod.main(["--acc40", str(acc40)])
+    assert rc == 0
+    assert captured, "subprocess.run が呼ばれていない"
+    cmd = captured[0]
+    assert "--ha48-path" in cmd, f"--ha48-path が渡されていない: {cmd}"
+    idx = cmd.index("--ha48-path")
+    assert Path(cmd[idx + 1]) == merged, (
+        f"ha48-path が MERGED_FOR_CAL でない: {cmd[idx + 1]}"
+    )
+
+
+def test_build_merged_for_calibration_remaps_question_id(tmp_path, monkeypatch):
+    """acc40 priority A 行で id が question_id に置き換わる."""
+    import analysis.run_incremental_calibration as rc_mod
+
+    acc40 = tmp_path / "acc40.csv"
+    merged = tmp_path / "merged.csv"
+    ha48_src = tmp_path / "ha48.csv"
+    _write_csv(
+        ha48_src,
+        [{"id": "q001", "category": "x", "S": "4", "C": "4", "O": "5",
+          "propositions_hit": "3/3", "notes": ""}],
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_csv(
+        acc40,
+        [
+            {"id": "acc40_001", "source": "v5_unannotated",
+             "question_id": "q020", "question": "q", "response": "r",
+             "core_propositions": "[]", "O": "5", "rater": "t",
+             "annotated_at": "", "comment": "", "blind_check": "",
+             "hits_total": "", "delta_e": "0.05"},
+            {"id": "acc40_002", "source": "orchestrator_claude",
+             "question_id": "q077", "question": "q", "response": "r",
+             "core_propositions": "[]", "O": "4", "rater": "t",
+             "annotated_at": "", "comment": "", "blind_check": "",
+             "hits_total": "", "delta_e": "0.08"},
+        ],
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total", "delta_e"],
+    )
+    monkeypatch.setattr(rc_mod, "HA48_SRC_PATH", ha48_src)
+
+    stats = rc_mod.build_merged_for_calibration(acc40, merged)
+    assert stats["ha48"] == 1
+    assert stats["acc40_accept"] == 1  # v5_unannotated のみ
+    assert stats["orchestrator_excluded"] == 1
+
+    with open(merged, encoding="utf-8") as f:
+        out_rows = list(csv.DictReader(f))
+    ids = {r["id"] for r in out_rows}
+    assert "q001" in ids  # HA48
+    assert "q020" in ids  # acc40 priority A が question_id にリマップされている
+    assert "acc40_001" not in ids  # acc40_NNN 形式はリマップ後に残らない
+    assert "q077" not in ids  # orchestrator は除外
+
+
+def test_ui_pads_blind_counts_shorter(tmp_path, monkeypatch):
+    """P2 回帰: blind_counts が短くても後続 batch が drop されない."""
+    stub = tmp_path / "stub.csv"
+    out = tmp_path / "out.csv"
+    rows = []
+    for i in range(1, 6):
+        rows.append({
+            "id": f"acc40_{i:03d}", "source": "v5_unannotated",
+            "question_id": f"q{i:03d}", "question": "Q",
+            "response": "R", "core_propositions": "[]",
+            "O": "", "rater": "", "annotated_at": "",
+            "comment": "", "blind_check": "", "hits_total": "",
+            "delta_e": "0.05",
+        })
+    _write_csv(
+        stub, rows,
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total", "delta_e"],
+    )
+    monkeypatch.setattr(ui_mod, "ACC40_STUB", stub)
+    monkeypatch.setattr(ui_mod, "ACC40_OUT", out)
+    monkeypatch.setattr(ui_mod, "INCREMENTAL_CAL", Path("/nonexistent"))
+    monkeypatch.setattr(ui_mod, "_load_ha48_for_blind", lambda: [])
+    monkeypatch.setattr(ui_mod, "PROGRESS_PATH", tmp_path / "progress.json")
+
+    # 2 batches (3+2) と blind_counts=[0] (短い, pad される想定)
+    # 3 件目で pause して 2 batch 目が存在することを間接的に確認
+    script = (
+        "a\nn\n5\n"  # item1
+        "a\nn\n5\n"  # item2
+        "a\nn\n5\n"  # item3
+        "n\n"        # batch 1 終了後 "次の batch へ" 問いに n → 終了
+    )
+    infile = io.StringIO(script)
+    outfile = io.StringIO()
+    rc = ui_mod.run_session(
+        rater="t", batch_sizes=[3, 2], blind_counts=[0],
+        infile=infile, outfile=outfile, resume=False,
+        seed=42, dry_run=False,
+    )
+    assert rc == 0
+    out_text = outfile.getvalue()
+    # "Batch 1/2" が出力されていれば total 2 batches 構築済 → padding 成功
+    assert "Batch 1/2" in out_text, (
+        f"batch 2 が生成されていない (P2 回帰):\n{out_text[-500:]}"
+    )
+    assert "[warn]" in out_text  # padding 警告が出ている
+
+
+def test_merge_orchestrator_uses_own_delta_e(tmp_path, monkeypatch):
+    """P2 回帰: orchestrator 行は自身の delta_e で accept 判定."""
+    ha48 = tmp_path / "ha48.csv"
+    v5 = tmp_path / "v5.csv"
+    acc40 = tmp_path / "acc40.csv"
+    # v5 は q050 を accept にしない (ΔE > 0.10 相当)
+    _write_csv(
+        ha48,
+        [{"id": "q001", "category": "x", "S": "4", "C": "4", "O": "5",
+          "propositions_hit": "3/3", "notes": ""}],
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_csv(
+        v5,
+        [{"id": "q050", "category": "x", "trap_type": "", "f1": "0",
+          "f2": "0", "f3": "0", "f4": "0", "hits": "1", "total": "3",
+          "hit_ids": "", "miss_ids": "", "hit_sources": "",
+          "S": "0.5", "C": "0.3", "dE": "0", "decision": "regenerate"}],
+        ["id", "category", "trap_type", "f1", "f2", "f3", "f4", "hits",
+         "total", "hit_ids", "miss_ids", "hit_sources", "S", "C", "dE",
+         "decision"],
+    )
+    _write_csv(
+        acc40,
+        [
+            # orchestrator 行: 自分の delta_e 0.05 (accept 相当) → 含める
+            {"id": "acc40_001", "source": "orchestrator_claude",
+             "question_id": "q050", "question": "q", "response": "r",
+             "core_propositions": "[]", "O": "5", "rater": "t",
+             "annotated_at": "", "comment": "", "blind_check": "",
+             "hits_total": "", "delta_e": "0.05"},
+            # orchestrator 行: 自分の delta_e 0.20 (accept 外) → 除外
+            {"id": "acc40_002", "source": "orchestrator_gpt4o",
+             "question_id": "q050", "question": "q", "response": "r",
+             "core_propositions": "[]", "O": "4", "rater": "t",
+             "annotated_at": "", "comment": "", "blind_check": "",
+             "hits_total": "", "delta_e": "0.20"},
+        ],
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total", "delta_e"],
+    )
+    monkeypatch.setattr(merge_mod, "HA48_PATH", ha48)
+    monkeypatch.setattr(merge_mod, "V5_PATH", v5)
+
+    combined = merge_mod.load_ha48() + merge_mod.load_acc40(acc40)
+    subset = merge_mod.filter_accept_subset(combined)
+    ids = {r["id"] for r in subset}
+    assert "acc40_001" in ids, (
+        "delta_e ≤ 0.10 の orchestrator 行が accept subset に含まれない (P2 回帰)"
+    )
+    assert "acc40_002" not in ids, (
+        "delta_e > 0.10 の orchestrator 行が accept subset に含まれている (P2 回帰)"
+    )

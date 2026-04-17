@@ -87,11 +87,17 @@ def load_acc40(path: Path) -> List[dict]:
             o = _parse_o(row.get("O", ""))
             if o is None:
                 continue
+            de_raw = (row.get("delta_e") or "").strip()
+            try:
+                de_val = float(de_raw) if de_raw else None
+            except ValueError:
+                de_val = None
             rows.append({
                 "id": row["id"],
                 "O": o,
                 "source": row.get("source", "acc40"),
                 "question_id": row.get("question_id", ""),
+                "delta_e": de_val,
             })
     return rows
 
@@ -130,11 +136,17 @@ def filter_accept_subset(rows: Iterable[dict]) -> List[dict]:
             # sampler で ΔE ≤ 0.10 のみを v5_unannotated にラベル付けしている
             out.append(r)
         elif src.startswith("orchestrator"):
-            # orchestrator 経由は sampler 時点で ΔE ≤ 0.15 フィルタ済み。
-            # accept subset に含めるかは question_id の v5 verdict と ΔE セルで判断。
-            qid = r.get("question_id", "")
-            if qid in accept_v5:
-                out.append(r)
+            # orchestrator は新規 response なので v5 の accept 集合で判定しない。
+            # 行自身の delta_e が記録されていればそれで accept 判定する。
+            # delta_e 欠損 fallback のみ v5 の question_id で照合 (後方互換)。
+            de = r.get("delta_e")
+            if isinstance(de, (int, float)):
+                if de <= DELTA_E_ACCEPT:
+                    out.append(r)
+            else:
+                qid = r.get("question_id", "")
+                if qid in accept_v5:
+                    out.append(r)
         # v5_borderline は accept subset に含めない
     return out
 
@@ -149,7 +161,11 @@ def merge(acc40_path: Path, accept_only: bool) -> List[dict]:
 def write_merged(rows: List[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["id", "O", "source", "question_id"])
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["id", "O", "source", "question_id", "delta_e"],
+            extrasaction="ignore",
+        )
         writer.writeheader()
         for r in rows:
             writer.writerow(r)
