@@ -16,9 +16,21 @@ from __future__ import annotations
 import re
 import statistics
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional, Tuple
 
 from grv_calculator import GrvResult
+
+# --- Phase E thresholds — HA48 calibrated (n=48, 2026-04-17) ---
+# Calibration result: no-ship (see analysis/phase_e_calibration_result.md).
+# Accept subset の anchor/collapse 分布が設計グリッド {0.50..0.90}×{0.10..0.50}
+# 外に集中していたため、発火しない保守値 (grid 端点) を provisional 値として
+# 採用する。HA96+ で再校正予定。
+_TAU_COLLAPSE_HIGH: float = 0.90
+_TAU_ANCHOR_LOW: float = 0.10
+
+# --- Phase E 型定義 ---
+Verdict = Literal["accept", "rewrite", "regenerate", "degraded"]
+AdvisoryFlag = Literal["mcg_collapse_downgrade", "mcg_anchor_missing"]
 
 # --- モード別の重要成分マッピング ---
 # addendum §4: comparative→balance, critical→anchor+boilerplate,
@@ -189,3 +201,37 @@ def compute_mode_conditioned_grv(
         focus_components=focus,
         grv_raw=grv_result.grv,
     )
+
+
+def derive_verdict_advisory(
+    verdict: Verdict,
+    mcg: Optional[ModeConditionedGrv],
+    *,
+    tau_collapse_high: float = _TAU_COLLAPSE_HIGH,
+    tau_anchor_low: float = _TAU_ANCHOR_LOW,
+) -> Tuple[Verdict, List[AdvisoryFlag]]:
+    """primary verdict と mode_conditioned_grv から advisory verdict と flags を導出する。
+
+    Phase E v1 は accept のみ downgrade 対象。他の verdict は pass-through。
+    downgrade は 1 段階 (accept -> rewrite) のみとし、regenerate まで飛ばさない。
+    flags は発火した全ルールを順序 (collapse → anchor) で記録する。
+
+    設計: docs/phase_e_verdict_integration.md §2, §6
+    """
+    flags: List[AdvisoryFlag] = []
+
+    if verdict != "accept" or mcg is None:
+        return verdict, flags
+
+    advisory: Verdict = verdict
+
+    if mcg.collapse_risk is not None and mcg.collapse_risk >= tau_collapse_high:
+        advisory = "rewrite"
+        flags.append("mcg_collapse_downgrade")
+
+    if mcg.anchor_alignment is not None and mcg.anchor_alignment <= tau_anchor_low:
+        if advisory == "accept":
+            advisory = "rewrite"
+        flags.append("mcg_anchor_missing")
+
+    return advisory, flags
