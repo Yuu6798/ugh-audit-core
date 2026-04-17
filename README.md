@@ -435,6 +435,8 @@ cue-list ベースの決定的 scorer。verdict に影響しない。
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 検証結果 (HA48 / HA20) | [`docs/validation.md`](docs/validation.md) |
 | Self-Audit 実験 | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
+| Phase E verdict_advisory 統合 | [`docs/phase_e_verdict_integration.md`](docs/phase_e_verdict_integration.md) |
+| HA-accept40 アノテーションプロトコル | [`docs/annotation_protocol.md`](docs/annotation_protocol.md) |
 | SVP-RPE 統合実装プラン（関連プロジェクト） | [`docs/svp_rpe_implementation_plan.md`](docs/svp_rpe_implementation_plan.md) |
 
 ---

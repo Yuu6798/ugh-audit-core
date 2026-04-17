@@ -46,9 +46,10 @@ def _parse_o(raw: str) -> Optional[int]:
     return v
 
 
-def load_ha48_o_map(path: Path = HA48_PATH) -> dict:
+def load_ha48_o_map(path: Optional[Path] = None) -> dict:
+    p = path if path is not None else HA48_PATH
     result = {}
-    with open(path, encoding="utf-8") as f:
+    with open(p, encoding="utf-8") as f:
         for row in csv.DictReader(f):
             o = _parse_o(row.get("O", ""))
             if o is not None:
