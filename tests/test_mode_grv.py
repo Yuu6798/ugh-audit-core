@@ -403,3 +403,28 @@ class TestDeriveVerdictAdvisory:
         )
         assert flags[0] == "mcg_collapse_downgrade"
         assert flags[1] == "mcg_anchor_missing"
+
+    def test_module_constant_override_takes_effect(self, monkeypatch):
+        """モジュール定数 `_TAU_*` の runtime 書き換えが即座に反映される
+
+        Codex review P2: 関数 default の late-binding 問題を防ぐ。
+        再校正や monkeypatch で `_TAU_COLLAPSE_HIGH` / `_TAU_ANCHOR_LOW` を
+        更新したとき、explicit な引数を渡さない呼び出しでも新しい閾値が
+        参照されることを検証する。
+        """
+        import mode_grv as mg
+
+        # provisional 値 (0.90 / 0.10) では accept 相当の mcg は発火しない
+        m = _mcg(anchor=0.82, collapse=0.25)
+        advisory, flags = derive_verdict_advisory("accept", m)
+        assert advisory == "accept"
+        assert flags == []
+
+        # 定数を強制的に下げる → 即座に発火するはず
+        monkeypatch.setattr(mg, "_TAU_COLLAPSE_HIGH", 0.20)
+        monkeypatch.setattr(mg, "_TAU_ANCHOR_LOW", 0.85)
+
+        advisory2, flags2 = derive_verdict_advisory("accept", m)
+        assert advisory2 == "rewrite"
+        assert "mcg_collapse_downgrade" in flags2
+        assert "mcg_anchor_missing" in flags2

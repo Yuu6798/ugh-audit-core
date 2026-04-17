@@ -207,8 +207,8 @@ def derive_verdict_advisory(
     verdict: Verdict,
     mcg: Optional[ModeConditionedGrv],
     *,
-    tau_collapse_high: float = _TAU_COLLAPSE_HIGH,
-    tau_anchor_low: float = _TAU_ANCHOR_LOW,
+    tau_collapse_high: Optional[float] = None,
+    tau_anchor_low: Optional[float] = None,
 ) -> Tuple[Verdict, List[AdvisoryFlag]]:
     """primary verdict と mode_conditioned_grv から advisory verdict と flags を導出する。
 
@@ -216,8 +216,20 @@ def derive_verdict_advisory(
     downgrade は 1 段階 (accept -> rewrite) のみとし、regenerate まで飛ばさない。
     flags は発火した全ルールを順序 (collapse → anchor) で記録する。
 
+    tau_collapse_high / tau_anchor_low は None のときモジュール定数
+    `_TAU_COLLAPSE_HIGH` / `_TAU_ANCHOR_LOW` を**呼び出し時に**参照する。
+    関数定義時 (import 時) の値には束縛しないため、monkeypatch / 再校正に
+    よる閾値変更は即座に反映される。
+
     設計: docs/phase_e_verdict_integration.md §2, §6
     """
+    # 呼び出し時参照: 関数 default は late binding できないため、明示的に解決する。
+    # Codex review P2: 関数定義時の default 束縛を避けて runtime 書き換えに追随する。
+    if tau_collapse_high is None:
+        tau_collapse_high = _TAU_COLLAPSE_HIGH
+    if tau_anchor_low is None:
+        tau_anchor_low = _TAU_ANCHOR_LOW
+
     flags: List[AdvisoryFlag] = []
 
     if verdict != "accept" or mcg is None:
