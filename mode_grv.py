@@ -21,12 +21,13 @@ from typing import Dict, List, Literal, Optional, Tuple
 from grv_calculator import GrvResult
 
 # --- Phase E thresholds — HA48 calibrated (n=48, 2026-04-17) ---
-# Calibration result: no-ship (see analysis/phase_e_calibration_result.md).
-# Accept subset の anchor/collapse 分布が設計グリッド {0.50..0.90}×{0.10..0.50}
-# 外に集中していたため、発火しない保守値 (grid 端点) を provisional 値として
-# 採用する。HA96+ で再校正予定。
-_TAU_COLLAPSE_HIGH: float = 0.90
-_TAU_ANCHOR_LOW: float = 0.10
+# Calibration result: analysis/phase_e_calibration_result.md
+# grid {0.20..0.40}×{0.60..0.80} step=0.02 で探索、以下が唯一候補として採用:
+#   rho_advisory_full=0.526 (>rho_primary_full=0.500), fire_rate=0.154,
+#   loo_shrinkage=0.002 (stable), |pearson(C, anchor)|=0.278 (leak pass).
+# 運用閾値更新は accept subset n>=40 到達時に再校正で判断する（§9 Trigger）。
+_TAU_COLLAPSE_HIGH: float = 0.26
+_TAU_ANCHOR_LOW: float = 0.80
 
 # --- Phase E 型定義 ---
 Verdict = Literal["accept", "rewrite", "regenerate", "degraded"]

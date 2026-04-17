@@ -228,8 +228,8 @@ def test_verdict_advisory_degraded_passthrough(client):
     assert data["advisory_flags"] == []
 
 
-def test_verdict_advisory_matches_primary_by_default(client):
-    """provisional 閾値 (HA48 no-ship) では advisory は primary verdict と一致する"""
+def test_verdict_advisory_is_valid_verdict_value(client):
+    """advisory は常に VALID_VERDICTS の値を持つ (schema 契約)"""
     resp = client.post("/api/audit", json={
         "question": "PoRが高ければ誠実か？",
         "response": "PoRは共鳴度であり、誠実性の十分条件ではない。",
@@ -242,9 +242,11 @@ def test_verdict_advisory_matches_primary_by_default(client):
         },
     })
     data = resp.json()
-    # provisional 閾値 (collapse>=0.90, anchor<=0.10) では発火しない
-    assert data["verdict_advisory"] == data["verdict"]
-    assert data["advisory_flags"] == []
+    assert data["verdict_advisory"] in {"accept", "rewrite", "regenerate", "degraded"}
+    assert isinstance(data["advisory_flags"], list)
+    # advisory は primary verdict と等しいか downgrade 方向のみ (accept→rewrite)
+    rank = {"accept": 2, "rewrite": 1, "regenerate": 0, "degraded": -1}
+    assert rank[data["verdict_advisory"]] <= rank[data["verdict"]]
 
 
 def test_verdict_advisory_downgrades_on_extreme_collapse(

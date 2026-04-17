@@ -414,7 +414,9 @@ class TestDeriveVerdictAdvisory:
         """
         import mode_grv as mg
 
-        # provisional 値 (0.90 / 0.10) では accept 相当の mcg は発火しない
+        # まず定数を保守値に強制 → 発火しない状態を確認
+        monkeypatch.setattr(mg, "_TAU_COLLAPSE_HIGH", 0.90)
+        monkeypatch.setattr(mg, "_TAU_ANCHOR_LOW", 0.10)
         m = _mcg(anchor=0.82, collapse=0.25)
         advisory, flags = derive_verdict_advisory("accept", m)
         assert advisory == "accept"

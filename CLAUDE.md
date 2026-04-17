@@ -326,7 +326,7 @@ python examples/basic_audit.py
 | VALID_MODES | `{computed, computed_ai_draft, degraded}` | `ugh_calculator.py` |
 | verdict_advisory | mode_conditioned_grv 反映の advisory verdict (downgrade only, accept→rewrite) | `mode_grv.py` / `server.py` / `mcp_server.py` |
 | advisory_flags | Phase E downgrade 発火ルール (`mcg_collapse_downgrade`, `mcg_anchor_missing`) | 同上 |
-| _TAU_COLLAPSE_HIGH / _TAU_ANCHOR_LOW | Phase E 閾値 (provisional: 0.90 / 0.10, HA48 no-ship → HA96+ 再校正) | `mode_grv.py` |
+| _TAU_COLLAPSE_HIGH / _TAU_ANCHOR_LOW | Phase E 閾値 (HA48 校正: 0.26 / 0.80, ρ_adv=0.526>ρ_pri=0.500, fire_rate=0.154) | `mode_grv.py` |
 
 実装詳細・チューニング閾値は各コンポーネントドキュメントを参照。
 

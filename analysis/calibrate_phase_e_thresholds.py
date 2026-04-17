@@ -398,9 +398,17 @@ def evaluate(
 
 
 def grid_search(rows: List[Row]) -> List[GridResult]:
-    # grid: 0.50..0.90 step 0.05 ; 0.10..0.50 step 0.05
-    collapse_grid = [round(0.50 + 0.05 * i, 2) for i in range(9)]  # 9 pts
-    anchor_grid = [round(0.10 + 0.05 * i, 2) for i in range(9)]  # 9 pts
+    """HA48 accept subset の実分布 quantile に合わせたグリッド。
+
+    設計 docs/phase_e_verdict_integration.md §4:
+      τ_collapse_high ∈ {0.20..0.40} step=0.02  (accept collapse_risk P75 近傍)
+      τ_anchor_low    ∈ {0.60..0.80} step=0.02  (accept anchor_alignment P25 近傍)
+
+    初版 ({0.50..0.90} × {0.10..0.50}) は accept 実分布から乖離していたため、
+    fire_rate=0 固定の誤 no-ship を避ける目的で再定義している。
+    """
+    collapse_grid = [round(0.20 + 0.02 * i, 2) for i in range(11)]  # 11 pts
+    anchor_grid = [round(0.60 + 0.02 * i, 2) for i in range(11)]  # 11 pts
     results: List[GridResult] = []
     for tc in collapse_grid:
         for ta in anchor_grid:
