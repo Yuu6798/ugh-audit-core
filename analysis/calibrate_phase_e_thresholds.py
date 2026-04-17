@@ -96,12 +96,14 @@ def _primary_verdict(delta_e: Optional[float], c: Optional[float]) -> str:
 
 
 def _compute_delta_e(s: float, c: float) -> float:
-    """ΔE 正規化 (ugh_calculator.calculate と同じ定数)."""
-    weight_s = 2.0
-    weight_c = 1.0
-    max_dist = weight_s + weight_c  # = 3.0
-    raw = weight_s * (1.0 - s) + weight_c * (1.0 - c)
-    return max(0.0, min(1.0, raw / max_dist))
+    """ΔE 正規化 (canonical 定義を ugh_calculator から再エクスポート).
+
+    過去バージョンは線形式 `2(1-S) + (1-C)` を書いていたが canonical は
+    squared `2(1-S)² + (1-C)²` なので、ドリフト防止のため canonical 実装を
+    そのまま呼ぶ。
+    """
+    from ugh_calculator import _compute_delta_e as _canonical
+    return _canonical(s, c)
 
 
 # --- データローダ ---

@@ -20,6 +20,11 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+# canonical ΔE (squared) を ugh_calculator から借用して定義のドリフトを防ぐ
+from ugh_calculator import _compute_delta_e  # noqa: E402
+
 HA48_PATH = ROOT / "data" / "human_annotation_48" / "annotation_48_merged.csv"
 ACC40_DEFAULT = (
     ROOT / "data" / "human_annotation_accept40" / "annotation_accept40.csv"
@@ -32,11 +37,6 @@ O_SCALE_MIN = 1
 O_SCALE_MAX = 5
 
 DELTA_E_ACCEPT = 0.10
-
-
-def _compute_delta_e(s: float, c: float) -> float:
-    raw = 2.0 * (1.0 - s) + 1.0 * (1.0 - c)
-    return max(0.0, min(1.0, raw / 3.0))
 
 
 def _parse_o(raw: str) -> Optional[int]:

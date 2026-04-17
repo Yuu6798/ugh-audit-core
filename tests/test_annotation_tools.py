@@ -67,11 +67,12 @@ def fake_data(tmp_path, monkeypatch):
              "f2": "0", "f3": "0", "f4": "0", "hits": "3", "total": "3",
              "hit_ids": "", "miss_ids": "", "hit_sources": "",
              "S": "1.0", "C": "1.0", "dE": "0", "decision": "accept"},
-            # q003: borderline (ΔE ≈ 0.11), NOT in HA48
+            # q003: borderline under canonical squared ΔE
+            # (2*(1-0.70)² + (1-0.60)²) / 3 = (0.18 + 0.16) / 3 ≈ 0.113
             {"id": "q003", "category": "y", "trap_type": "", "f1": "0",
              "f2": "0", "f3": "0", "f4": "0", "hits": "2", "total": "3",
              "hit_ids": "", "miss_ids": "", "hit_sources": "",
-             "S": "0.95", "C": "0.70", "dE": "0", "decision": "rewrite"},
+             "S": "0.70", "C": "0.60", "dE": "0", "decision": "rewrite"},
             # q001: in HA48 → skip
             {"id": "q001", "category": "x", "trap_type": "", "f1": "0",
              "f2": "0", "f3": "0", "f4": "0", "hits": "3", "total": "3",
@@ -865,4 +866,96 @@ def test_merge_orchestrator_uses_own_delta_e(tmp_path, monkeypatch):
     )
     assert "acc40_002" not in ids, (
         "delta_e > 0.10 の orchestrator 行が accept subset に含まれている (P2 回帰)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Codex PR #85 第 4 ラウンド回帰テスト (canonical ΔE 揃え)
+# ---------------------------------------------------------------------------
+
+
+def test_sampler_uses_canonical_squared_delta_e(tmp_path, monkeypatch):
+    """P1 回帰: sampler は canonical (squared) ΔE で accept/borderline を決める.
+
+    S=0.75, C=0.75 は:
+      - 線形式: ΔE = (2*0.25 + 0.25)/3 = 0.25 → pool から除外
+      - squared: ΔE = (2*0.0625 + 0.0625)/3 = 0.0625 → accept
+    """
+    ha48 = tmp_path / "ha48.csv"
+    v5 = tmp_path / "v5.csv"
+    qmeta = tmp_path / "qmeta.jsonl"
+    resp = tmp_path / "resp.jsonl"
+    stub = tmp_path / "stub.csv"
+    _write_csv(
+        ha48, [],
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_csv(
+        v5,
+        [{"id": "qX", "category": "x", "trap_type": "",
+          "f1": "0", "f2": "0", "f3": "0", "f4": "0",
+          "hits": "2", "total": "3", "hit_ids": "", "miss_ids": "",
+          "hit_sources": "", "S": "0.75", "C": "0.75", "dE": "0",
+          "decision": "rewrite"}],
+        ["id", "category", "trap_type", "f1", "f2", "f3", "f4", "hits",
+         "total", "hit_ids", "miss_ids", "hit_sources", "S", "C", "dE",
+         "decision"],
+    )
+    _write_jsonl(
+        qmeta,
+        [{"id": "qX", "category": "x", "question": "Q",
+          "original_core_propositions": ["p1", "p2"]}],
+    )
+    _write_jsonl(resp, [{"id": "qX", "response": "A"}])
+
+    monkeypatch.setattr(sampler_mod, "HA48_PATH", ha48)
+    monkeypatch.setattr(sampler_mod, "V5_PATH", v5)
+    monkeypatch.setattr(sampler_mod, "QMETA_PATH", qmeta)
+    monkeypatch.setattr(sampler_mod, "RESPONSES_PATH", resp)
+    monkeypatch.setattr(sampler_mod, "OUT_CSV", stub)
+
+    assert sampler_mod.main(["--batch-size", "5"]) == 0
+    with open(stub, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 1, (
+        f"S=C=0.75 が squared ΔE で accept 候補として含まれない (P1 回帰): {rows}"
+    )
+    assert rows[0]["source"] == "v5_unannotated"
+    # ΔE は squared で ≈ 0.0625 になっているはず (線形なら 0.25)
+    de = float(rows[0]["delta_e"])
+    assert de < 0.10, (
+        f"delta_e が canonical squared 値ではない: {de}"
+    )
+
+
+def test_merge_accept_subset_uses_canonical_squared(tmp_path, monkeypatch):
+    """P1 回帰: merge の _v5_accept_ids が canonical squared ΔE を使う."""
+    ha48 = tmp_path / "ha48.csv"
+    v5 = tmp_path / "v5.csv"
+    _write_csv(
+        ha48,
+        [{"id": "qX", "category": "x", "S": "3", "C": "4", "O": "4",
+          "propositions_hit": "2/3", "notes": ""}],
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_csv(
+        v5,
+        [{"id": "qX", "category": "x", "trap_type": "",
+          "f1": "0", "f2": "0", "f3": "0", "f4": "0",
+          "hits": "2", "total": "3", "hit_ids": "", "miss_ids": "",
+          "hit_sources": "", "S": "0.75", "C": "0.75", "dE": "0",
+          "decision": "rewrite"}],
+        ["id", "category", "trap_type", "f1", "f2", "f3", "f4", "hits",
+         "total", "hit_ids", "miss_ids", "hit_sources", "S", "C", "dE",
+         "decision"],
+    )
+    monkeypatch.setattr(merge_mod, "HA48_PATH", ha48)
+    monkeypatch.setattr(merge_mod, "V5_PATH", v5)
+
+    combined = merge_mod.load_ha48()
+    subset = merge_mod.filter_accept_subset(combined)
+    ids = {r["id"] for r in subset}
+    assert "qX" in ids, (
+        "S=C=0.75 の HA48 行が accept subset に含まれない (P1 回帰、"
+        "線形 ΔE では 0.25 で落とされる)"
     )

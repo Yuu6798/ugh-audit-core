@@ -28,6 +28,9 @@ from typing import Dict, List, Optional
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+# canonical ΔE (squared) を ugh_calculator から借用して定義のドリフトを防ぐ
+from ugh_calculator import _compute_delta_e  # noqa: E402
+
 HA48_PATH = ROOT / "data" / "human_annotation_48" / "annotation_48_merged.csv"
 V5_PATH = ROOT / "data" / "eval" / "audit_102_main_baseline_v5.csv"
 QMETA_PATH = (
@@ -38,11 +41,6 @@ OUT_CSV = ROOT / "data" / "human_annotation_accept40" / "annotation_accept40_stu
 
 DELTA_E_ACCEPT = 0.10
 DELTA_E_BORDERLINE_MAX = 0.15
-
-
-def _compute_delta_e(s: float, c: float) -> float:
-    raw = 2.0 * (1.0 - s) + 1.0 * (1.0 - c)
-    return max(0.0, min(1.0, raw / 3.0))
 
 
 def _load_ha48_ids() -> set:
