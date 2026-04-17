@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # scripts/doc_consistency_check.sh
-# SessionStart hook: detect README.md vs code/docs inconsistencies.
-# Output is fed to Claude as context. No output = no issues.
+# SessionEnd hook: detect README.md vs code/docs inconsistencies on close.
+# 指摘事項はセッション終了ログに残るだけで作業中の C 軸を削らない。
+# 次セッション開始時に手動で確認するか、CI で .claude/logs を拾って alert。
+# No output = no issues.
 # Scope: README.md only (CLAUDE.md is manually maintained under 400-line limit).
 
 set -euo pipefail
