@@ -959,3 +959,137 @@ def test_merge_accept_subset_uses_canonical_squared(tmp_path, monkeypatch):
         "S=C=0.75 の HA48 行が accept subset に含まれない (P1 回帰、"
         "線形 ΔE では 0.25 で落とされる)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Codex PR #85 第 5 ラウンド回帰テスト
+# ---------------------------------------------------------------------------
+
+
+def test_current_accept_subset_excludes_orchestrator(tmp_path, monkeypatch):
+    """P1 回帰: orchestrator 行は gate 計算から除外される.
+
+    build_merged_for_calibration が orchestrator を外すのに合わせて、
+    current_accept_subset_size もカウント対象から外す。両者が乖離すると
+    premature STOP が出る。
+    """
+    import analysis.run_incremental_calibration as rc_mod
+
+    ha48 = tmp_path / "ha48.csv"
+    v5 = tmp_path / "v5.csv"
+    acc40 = tmp_path / "acc40.csv"
+    _write_csv(
+        ha48,
+        [{"id": "qA", "category": "x", "S": "5", "C": "5", "O": "5",
+          "propositions_hit": "3/3", "notes": ""}],
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_csv(
+        v5,
+        [{"id": "qA", "category": "x", "trap_type": "",
+          "f1": "0", "f2": "0", "f3": "0", "f4": "0",
+          "hits": "3", "total": "3", "hit_ids": "", "miss_ids": "",
+          "hit_sources": "", "S": "1.0", "C": "1.0", "dE": "0",
+          "decision": "accept"}],
+        ["id", "category", "trap_type", "f1", "f2", "f3", "f4", "hits",
+         "total", "hit_ids", "miss_ids", "hit_sources", "S", "C", "dE",
+         "decision"],
+    )
+    _write_csv(
+        acc40,
+        [
+            # orchestrator 行 (自分の delta_e で accept 判定されうる)
+            {"id": "acc40_001", "source": "orchestrator_claude",
+             "question_id": "qZ", "question": "", "response": "",
+             "core_propositions": "", "O": "5", "rater": "",
+             "annotated_at": "", "comment": "", "blind_check": "",
+             "hits_total": "", "delta_e": "0.05"},
+        ],
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total", "delta_e"],
+    )
+    monkeypatch.setattr(merge_mod, "HA48_PATH", ha48)
+    monkeypatch.setattr(merge_mod, "V5_PATH", v5)
+
+    n = rc_mod.current_accept_subset_size(acc40)
+    # HA48 qA (accept) のみ含まれる。orchestrator 行は除外されるので +0
+    assert n == 1, (
+        f"orchestrator 行が gate に加算されている (P1 回帰): n={n}"
+    )
+
+
+def test_blind_injection_populates_real_content(tmp_path, monkeypatch):
+    """P2 回帰: blind 行は placeholder ではなく実コンテンツを持つ."""
+    ha48 = tmp_path / "ha48.csv"
+    qmeta = tmp_path / "qmeta.jsonl"
+    resp = tmp_path / "resp.jsonl"
+    _write_csv(
+        ha48,
+        [{"id": "q001", "category": "x", "S": "3", "C": "3", "O": "4",
+          "propositions_hit": "2/3", "notes": ""}],
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_jsonl(
+        qmeta,
+        [{"id": "q001", "category": "x", "question": "実際の質問文?",
+          "original_core_propositions": ["命題1", "命題2"]}],
+    )
+    _write_jsonl(resp, [{"id": "q001", "response": "実際の回答文"}])
+
+    monkeypatch.setattr(ui_mod, "HA48_PATH", ha48)
+    monkeypatch.setattr(ui_mod, "QMETA_PATH", qmeta)
+    monkeypatch.setattr(ui_mod, "RESPONSES_PATH", resp)
+
+    blind_pool = ui_mod._load_ha48_for_blind()
+    assert len(blind_pool) == 1
+    enriched = blind_pool[0]
+    assert enriched["question"] == "実際の質問文?"
+    assert enriched["response"] == "実際の回答文"
+    # core_propositions は JSON 文字列で渡される
+    assert json.loads(enriched["core_propositions"]) == ["命題1", "命題2"]
+
+    # _inject_blind が enrichment 結果を blind 行に引き継ぐ
+    injected = ui_mod._inject_blind([], blind_pool, n_blind=1, seed=1)
+    assert len(injected) == 1
+    blind_row = injected[0]
+    assert blind_row["id"] == "blind_q001"
+    assert "実際の質問文" in blind_row["question"]
+    assert "実際の回答文" in blind_row["response"]
+    assert "placeholder" not in blind_row["question"].lower()
+    assert "参照" not in blind_row["question"]  # 旧 placeholder 文言
+
+
+def test_blind_injection_drops_rows_without_enrichment(tmp_path, monkeypatch):
+    """元 response / qmeta がない HA48 id は blind 候補から除外."""
+    ha48 = tmp_path / "ha48.csv"
+    qmeta = tmp_path / "qmeta.jsonl"
+    resp = tmp_path / "resp.jsonl"
+    _write_csv(
+        ha48,
+        [
+            {"id": "q001", "category": "x", "S": "3", "C": "3", "O": "4",
+             "propositions_hit": "2/3", "notes": ""},
+            # q999 は qmeta / resp に存在しない
+            {"id": "q999", "category": "x", "S": "3", "C": "3", "O": "4",
+             "propositions_hit": "2/3", "notes": ""},
+        ],
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_jsonl(
+        qmeta,
+        [{"id": "q001", "category": "x", "question": "Q",
+          "original_core_propositions": ["p"]}],
+    )
+    _write_jsonl(resp, [{"id": "q001", "response": "A"}])
+
+    monkeypatch.setattr(ui_mod, "HA48_PATH", ha48)
+    monkeypatch.setattr(ui_mod, "QMETA_PATH", qmeta)
+    monkeypatch.setattr(ui_mod, "RESPONSES_PATH", resp)
+
+    blind_pool = ui_mod._load_ha48_for_blind()
+    ids = {r["id"] for r in blind_pool}
+    assert "q001" in ids
+    assert "q999" not in ids, (
+        "enrichment 不能な HA48 id が blind 候補に残っている"
+    )

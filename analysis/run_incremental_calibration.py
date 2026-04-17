@@ -45,10 +45,29 @@ FIRE_RATE_MIN = 0.10
 FIRE_RATE_MAX = 0.30
 
 
+def _is_calibratable(row: dict) -> bool:
+    """build_merged_for_calibration が実際に calibrate に渡す行かを判定する.
+
+    orchestrator 行は v5 と response を共有しないため calibration から除外される。
+    gate 側でも同じ基準を適用しないと、gate が target に達しても実測の
+    merged 母集団が不足し premature STOP が出る (PR #85 review で指摘)。
+    """
+    src = (row.get("source") or "")
+    if src.startswith("orchestrator"):
+        return False
+    return True
+
+
 def current_accept_subset_size(acc40_path: Path) -> int:
+    """calibratable accept subset の現在のサイズ.
+
+    build_merged_for_calibration が採用する母集団 (orchestrator 除外) と
+    同一の基準で数える。
+    """
     ha48 = load_ha48()
     acc40 = load_acc40(acc40_path)
-    subset = filter_accept_subset(ha48 + acc40)
+    calibratable = [r for r in ha48 + acc40 if _is_calibratable(r)]
+    subset = filter_accept_subset(calibratable)
     return len(subset)
 
 

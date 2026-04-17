@@ -36,6 +36,11 @@ ACC40_STUB = (
 )
 ACC40_OUT = ROOT / "data" / "human_annotation_accept40" / "annotation_accept40.csv"
 HA48_PATH = ROOT / "data" / "human_annotation_48" / "annotation_48_merged.csv"
+# blind 行の question/response/core_propositions を再構築するための元ソース
+QMETA_PATH = (
+    ROOT / "data" / "question_sets" / "q_metadata_structural_reviewed_102q.jsonl"
+)
+RESPONSES_PATH = ROOT / "data" / "phase_c_scored_v1_t0_only.jsonl"
 PROGRESS_PATH = Path.home() / ".ugh_audit" / "annotation_progress.json"
 INCREMENTAL_CAL = ROOT / "analysis" / "run_incremental_calibration.py"
 
@@ -96,16 +101,58 @@ def _write_output(rows: List[dict], path: Path) -> None:
             writer.writerow({k: r.get(k, "") for k in fieldnames})
 
 
+def _load_jsonl_map(path: Path, key: str = "id") -> Dict[str, dict]:
+    """jsonl から key 列の値をキーにした dict を返す (blind enrichment 用)."""
+    result: Dict[str, dict] = {}
+    if not path.exists():
+        return result
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            d = json.loads(line)
+            k = d.get(key)
+            if k is not None:
+                result[k] = d
+    return result
+
+
 def _load_ha48_for_blind() -> List[dict]:
-    """HA48 から blind 混入候補を抽出 (O が 1-5 で埋まっている行)."""
+    """HA48 から blind 混入候補を抽出し question/response/core_propositions で
+    enrich した行を返す.
+
+    placeholder のままだと rater は core_propositions を見て判定できず、
+    blind annotation が guesswork になって |Δ|/bias check が機能しない。
+    qmeta + responses から実コンテンツを結合できた行のみ blind 候補に採用。
+    enrichment 不能 (元データ欠落) の行は除外する。
+    """
     rows: List[dict] = []
     if not HA48_PATH.exists():
         return rows
+    qmeta = _load_jsonl_map(QMETA_PATH)
+    responses = _load_jsonl_map(RESPONSES_PATH)
     with open(HA48_PATH, encoding="utf-8") as f:
         for row in csv.DictReader(f):
             if not row.get("O"):
                 continue
-            rows.append(row)
+            qid = row["id"]
+            meta = qmeta.get(qid)
+            resp_entry = responses.get(qid)
+            if not meta or not resp_entry:
+                # 再構築不能 → blind 対象外
+                continue
+            response_text = resp_entry.get("response", "")
+            if not response_text:
+                continue
+            core_props = meta.get("original_core_propositions") or []
+            enriched = dict(row)
+            enriched["question"] = meta.get("question", "")
+            enriched["response"] = response_text
+            enriched["core_propositions"] = json.dumps(
+                core_props, ensure_ascii=False
+            )
+            rows.append(enriched)
     return rows
 
 
@@ -321,13 +368,16 @@ def _inject_blind(
     blind_items = []
     for c in chosen:
         orig_id = c["id"]
+        # c は _load_ha48_for_blind で qmeta/responses から enrich 済み。
+        # enrichment 不能な HA48 id は load 時点で除外済みなので
+        # ここでは空文字を気にせず採用する。
         blind_items.append({
             "id": f"blind_{orig_id}",
             "source": "blind",
             "question_id": orig_id,
-            "question": "(ブラインド項目: 元の質問本文は annotation_48 を参照)",
-            "response": "(ブラインド項目: 元の回答本文は annotation_48 を参照)",
-            "core_propositions": "[]",
+            "question": c.get("question", ""),
+            "response": c.get("response", ""),
+            "core_propositions": c.get("core_propositions", "[]"),
             "hits_total": "",
             "blind_check": orig_id,
         })
