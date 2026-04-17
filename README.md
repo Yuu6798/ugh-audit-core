@@ -45,13 +45,14 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 
 | 指標 | Spearman ρ | p値 | 備考 |
 |------|-----------|-----|------|
-| ΔE vs O (system C) | -0.5195 | 0.000154 | 現行デプロイ指標 |
-| **L_sem vs O (Phase 4 校正)** | **-0.5563** | **<0.001** | **診断用分解指標、ΔE を上回る** |
+| ΔE vs O (system C) | -0.5195 | 0.000154 | ΔE baseline |
+| L_sem vs O (Phase 4) | -0.5563 | <0.001 | L_P+L_F 2項最適化 |
+| **L_sem vs O (Phase 5)** | **-0.6020** | **<0.001** | **L_P+L_F+L_G 3項 (grv 統合)** |
 | ΔE vs O (human C) | 0.8616 | <0.001 | 参照上限（ターゲット情報含む） |
 
 注: scipy.stats.spearmanr（タイ補正あり）で算出。system C の命題照合精度が ΔE のボトルネック。参照上限 ρ=0.862 との差は検出パイプラインの精度改善で縮まる。
 
-**L_sem (意味損失関数)**: 現行 ΔE を分解・拡張した診断用指標。7 項 (L_P, L_Q, L_R, L_A, L_G, L_F, L_X) の線形和で、どの側面が劣化したかを項別に読める。詳細は [`docs/semantic_loss.md`](docs/semantic_loss.md) 参照。
+**L_sem (意味損失関数)**: 現行 ΔE を分解・拡張した診断用指標。7 項 (L_P, L_Q, L_R, L_A, L_G, L_F, L_X) の線形和で、どの側面が劣化したかを項別に読める。Phase 5 で grv (L_G) を統合し ρ=-0.6020 に到達。詳細は [`docs/semantic_loss.md`](docs/semantic_loss.md) 参照。
 
 ---
 
@@ -225,6 +226,7 @@ decider.py            # 判定層 — State + Evidence → Policy
 cascade_matcher.py    # 回収補助 — SBert Tier 2 + 多条件 Tier 3
 grv_calculator.py     # 因果構造損失 grv — 3項式 (drift/dispersion/collapse)
 mode_signal.py        # 応答モード適合度信号 response_mode_signal
+mode_grv.py           # mode_conditioned_grv v2 — モード条件付き grv 解釈ベクトル
 semantic_loss.py      # 意味損失関数 L_sem — 診断用分解指標
 batch_audit_102.py    # 102問一括監査スクリプト
 registry/             # YAML辞書（予約語・演算子・前提フレーム）
@@ -236,8 +238,10 @@ ugh_audit/
 ├── storage/          # SQLite永続化
 ├── reference/        # リファレンスセット管理
 ├── report/           # テキスト/CSVレポート生成
-├── engine/           # Phase 2 エンジン (calculator, decision, runtime)
+├── engine/           # Phase 2 エンジン (calculator, decision, runtime, metapatch)
 ├── metadata_generator.py  # メタデータ欠損検出 + LLM 生成リクエスト構築
+├── metadata_policy.py     # AI草案メタデータの昇格ポリシー
+├── soft_rescue.py    # AI草案メタデータ向け soft-hit rescue (C=0 部分回収)
 ├── server.py         # REST API + MCP 統合サーバー
 └── mcp_server.py     # MCP スタンドアロンサーバー
 
@@ -425,7 +429,8 @@ cue-list ベースの決定的 scorer。verdict に影響しない。
 | 計算式 (PoR / ΔE / verdict) | [`docs/formulas.md`](docs/formulas.md) |
 | 意味損失関数 L_sem | [`docs/semantic_loss.md`](docs/semantic_loss.md) |
 | grv 因果構造損失 | [`docs/grv_design.md`](docs/grv_design.md) |
-| mode_affordance / response_mode_signal | [`docs/mode_affordance.md`](docs/mode_affordance.md) |
+| LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
+| mode_affordance / response_mode_signal | [`docs/mode_affordance.md`](docs/mode_affordance.md), [`addendum`](docs/mode_affordance_v1_addendum.md) |
 | メタデータパイプライン | [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md) |
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 検証結果 (HA48 / HA20) | [`docs/validation.md`](docs/validation.md) |

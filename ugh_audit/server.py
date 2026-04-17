@@ -335,6 +335,31 @@ def _run_pipeline(
     except Exception:
         mode_signal_output = None
 
+    # mode_conditioned_grv (grv + mode_affordance → 4成分解釈ベクトル)
+    mcg_output: Optional[dict] = None
+    if grv_result is not None and resolved_ma and resolved_ma.get("primary"):
+        try:
+            from mode_grv import compute_mode_conditioned_grv
+            mcg = compute_mode_conditioned_grv(
+                grv_result=grv_result,
+                response_text=response,
+                mode_affordance_primary=resolved_ma["primary"],
+                action_required=resolved_ma.get("action_required", False),
+            )
+            if mcg is not None:
+                mcg_output = {
+                    "anchor_alignment": mcg.anchor_alignment,
+                    "balance": mcg.balance,
+                    "boilerplate_risk": mcg.boilerplate_risk,
+                    "collapse_risk": mcg.collapse_risk,
+                    "mode": mcg.mode,
+                    "focus_components": mcg.focus_components,
+                    "grv_raw": mcg.grv_raw,
+                    "version": mcg.version,
+                }
+        except Exception:
+            mcg_output = None
+
     result = {
         "schema_version": SCHEMA_VERSION,
         "S": state.S,
@@ -365,6 +390,7 @@ def _run_pipeline(
         "degraded_reason": errors if mode == "degraded" else [],
         "grv": grv_output,
         "response_mode_signal": mode_signal_output,
+        "mode_conditioned_grv": mcg_output,
         # DB 保存用メタデータ
         "_session_id": session_id or str(uuid.uuid4()),
         "_question": question,
@@ -464,6 +490,9 @@ class AuditResponse(BaseModel):
     )
     response_mode_signal: Optional[dict] = Field(
         None, description="応答モード適合度信号 (deterministic, non-binding)"
+    )
+    mode_conditioned_grv: Optional[dict] = Field(
+        None, description="モード条件付き grv 解釈ベクトル (grv + mode_affordance)"
     )
 
 
@@ -671,6 +700,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         soft_rescue=result.get("soft_rescue"),
         grv=result.get("grv"),
         response_mode_signal=result.get("response_mode_signal"),
+        mode_conditioned_grv=result.get("mode_conditioned_grv"),
     )
 
 

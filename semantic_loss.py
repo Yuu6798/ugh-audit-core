@@ -5,9 +5,10 @@ Evidence から L_P, L_Q, L_X, L_R, L_A, L_F を算出し、
 
 デフォルト重みは HA48 (n=48) で Spearman ρ 最大化により校正済み。
 - 現行 ΔE: ρ = -0.5195
-- L_sem (HA48 最適化): ρ = -0.5563
+- L_sem Phase 4 (L_P, L_F のみ): ρ = -0.5563
+- L_sem Phase 5 (L_P, L_F, L_G): ρ = -0.6020
 
-参照: docs/semantic_loss.md, analysis/optimize_semantic_loss_weights.py
+参照: docs/semantic_loss.md, analysis/calibrate_grv_lsem.py
 """
 from __future__ import annotations
 
@@ -30,18 +31,19 @@ except ModuleNotFoundError as _err:
         raise
 
 
-# --- デフォルト重み (Phase 4: HA48 校正済み) ---
-# HA48 最適化結果 (f2 込み): L_P=0.375, L_R=0.125, L_F=0.50 (ρ=-0.5563)
-# 最適化で L_Q=0, L_A=0 となったが、理論的完全性のため小さな重みを残す。
-# L_G, L_X は HA48 データに含まれないため理論ベースの重みを維持。
+# --- デフォルト重み (Phase 5: HA48 grv 統合校正 + LOO-CV 補正) ---
+# Full-sample 3項最適化: ρ=-0.6020 (L_P=0.425, L_F=0.275, L_G=0.850)
+# LOO-CV: ρ=-0.4743 (shrinkage=0.128) — L_G の最適重みが n=48 で不安定
+# LOO mean 比率 L_P:L_F:L_G ≈ 0.41:0.30:0.91 → 正規化して保守的に配分
+# L_G は単独有意 (ρ=-0.3565, p=0.013) だが過学習リスクを考慮し抑制
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "L_P": 0.25,   # 命題損失 (HA48 最適化 → コア重み)
-    "L_Q": 0.02,   # 制約損失 (HA48 で信号弱、理論的保持)
-    "L_R": 0.08,   # 参照安定性 (HA48 最適化)
-    "L_A": 0.02,   # 曖昧性増大 (HA48 で信号なし、理論的保持)
-    "L_G": 0.13,   # 因果構造 (HA48 外、理論ベース)
-    "L_F": 0.35,   # 用語捏造 (HA48 で最強信号)
-    "L_X": 0.15,   # 極性反転 (HA48 外、理論ベース)
+    "L_P": 0.27,   # 命題損失 (LOO mean 比率ベース)
+    "L_Q": 0.02,   # 制約損失 (HA48 信号なし、理論的保持)
+    "L_R": 0.03,   # 参照安定性 (HA48 Δρ=+0.01 微弱増分)
+    "L_A": 0.02,   # 曖昧性増大 (HA48 全零、理論的保持)
+    "L_G": 0.35,   # 因果構造 (LOO-CV 補正: 0.48→0.35、過学習抑制)
+    "L_F": 0.21,   # 用語捏造 (LOO mean 比率ベース)
+    "L_X": 0.10,   # 極性反転 (理論的保持、L_G 削減分の一部再配分)
 }
 
 

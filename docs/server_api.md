@@ -88,7 +88,8 @@ python -m ugh_audit.mcp_server --port 8000
     "evidence": ["primary(critical): matched inspect_premise, reframe_if_needed"],
     "signal_version": "v1.0"
   },
-  "grv": null
+  "grv": null,
+  "mode_conditioned_grv": null
 }
 ```
 
@@ -118,18 +119,21 @@ python -m ugh_audit.mcp_server --port 8000
   "degraded_reason": ["question_meta_missing", "detection_skipped"],
   "mode_affordance": null,
   "response_mode_signal": {"status": "not_available"},
-  "grv": null
+  "grv": null,
+  "mode_conditioned_grv": null
 }
 ```
 
-### mode_affordance / response_mode_signal
+### mode_affordance / response_mode_signal / mode_conditioned_grv
 
 `mode_affordance` は質問が期待する応答形式。`response_mode_signal` は回答の適合度信号。
-詳細: [`mode_affordance.md`](mode_affordance.md)
+`mode_conditioned_grv` は grv + mode_affordance から算出した 4 成分解釈ベクトル。
+詳細: [`mode_affordance.md`](mode_affordance.md), [`grv_design.md`](grv_design.md)
 
 - canonical reviewed (102問) にある question_id では自動的に `status: "available"` が返る
 - metadata 不在時は `status: "not_available"` (既存監査は継続)
 - verdict / S / C / delta_e / quality_score には影響しない非破壊信号
+- `mode_conditioned_grv` は grv と mode_affordance の両方が存在する場合のみ算出 (null フォールバック)
 
 ### gate_verdict の値
 

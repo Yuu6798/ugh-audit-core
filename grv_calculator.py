@@ -30,9 +30,9 @@ W_DRIFT = 0.70
 W_DISPERSION = 0.05
 W_COLLAPSE_V2 = 0.25
 
-# --- 暫定タグ閾値 ---
-TAG_HIGH = 0.66
-TAG_MID = 0.33
+# --- タグ閾値 (HA48 分布校正: mean=0.185, σ=0.051, range=[0.10, 0.31]) ---
+TAG_HIGH = 0.30
+TAG_MID = 0.20
 
 # --- 参照重心の重み ---
 _REF_WEIGHTS = {
