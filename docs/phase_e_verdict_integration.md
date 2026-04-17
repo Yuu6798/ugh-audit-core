@@ -168,7 +168,10 @@ VERDICT_QUALITY_RANK = {
 **accept サブセット内で:**
 - `rho_accept_subset`: Spearman ρ(`advisory_accept_rank`, O)
 - `fire_rate`: downgrade 発火率
-- `low_quality_recall`: `O <= 0.4` の問で downgrade が発火した率
+- `low_quality_recall`: `O_norm <= 0.4` の問で downgrade が発火した率
+  （**O_norm は [0, 1] 正規化 O**。HA48 は raw O が 1–5 スケールのため、
+  `O_norm = (O - 1) / 4` で変換してから比較する。HA48 では `O_norm ≤ 0.4`
+  は raw `O ≤ 2.6` に相当、整数で `O ∈ {1, 2}`）
 - `single_rule_fire_ratio`: 両閾値同時発火ではなく、片側発火がどれだけ多いか
 - LOO-CV での `rho_accept_subset` の平均と shrinkage
 

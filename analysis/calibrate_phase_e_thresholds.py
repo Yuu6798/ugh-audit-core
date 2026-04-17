@@ -57,6 +57,27 @@ VERDICT_QUALITY_RANK = {
     "regenerate": 0,
 }
 
+# --- HA48 O スコア スケール定義 ---
+# HA48 の O スコアは 1-5 の整数スケール。設計 §4 の low_quality_recall
+# cutoff (0.4) は [0, 1] 正規化 O 前提のため、raw O から正規化する。
+# O_norm = (O - O_MIN) / (O_MAX - O_MIN)
+O_SCALE_MIN = 1.0
+O_SCALE_MAX = 5.0
+# 正規化空間での低品質カットオフ (設計 §4)
+LOW_QUALITY_CUTOFF_NORM = 0.4
+
+
+def _normalize_o(o: float) -> float:
+    """HA48 O (1-5) を [0, 1] に正規化する。
+
+    O_MIN → 0.0, O_MAX → 1.0 (線形変換)。範囲外は clamp する。
+    """
+    denom = O_SCALE_MAX - O_SCALE_MIN
+    if denom <= 0:
+        return 0.0
+    norm = (o - O_SCALE_MIN) / denom
+    return max(0.0, min(1.0, norm))
+
 # ΔE thresholds (HA48 校正済み, ugh_calculator.py と同一契約)
 DELTA_E_ACCEPT = 0.10
 DELTA_E_REWRITE = 0.25
@@ -330,7 +351,8 @@ def evaluate(
                 fire_both_rules += 1
             else:
                 fire_single_rule += 1
-        if r.o <= 0.4:
+        # 低品質判定は正規化 O で行う (HA48 raw O は 1-5 スケール)
+        if _normalize_o(r.o) <= LOW_QUALITY_CUTOFF_NORM:
             low_quality_count += 1
             if fired:
                 low_quality_fires += 1
