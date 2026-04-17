@@ -16,3 +16,5 @@
 - 2026-04-15-2: f4_trap_type_missing 常時発火バグ修正 (PR #76)。mode_affordance v1 設計統合 (GPT アドバイザー活用)。evaluative/critical 分離・procedural 延期・lookup 優先順位・grv 合成禁止を確定。SessionStart hook (doc_consistency_check.sh) 導入。PR #77 レビュー完了 (マージ可)
 - 2026-04-15-3: SVP/RPE 音楽生成ツール概念設計。ugh-audit-core の PoR/ΔE/grv パターンを音楽ドメインに射影し統合実装プランを完成。結論: RPE の第一消費先は「ユーザーの好みの構造化」。既存競合分析 (Essentia 等) で新規価値は SVP 変換層+評価統合層と特定。実装は意味監査基盤が固まってから
 - 2026-04-16: L_sem Phase 5 grv 統合校正 (ρ=-0.6020, LOO-CV 補正で L_G=0.35)。Phase C mode_conditioned_grv v2 完全実装 (4成分解釈ベクトル + API 統合)。grv タグ閾値校正 (0.33/0.66→0.20/0.30)。PR #79 マージ (Codex レビュー計10件対応)。不要ファイル整理 (v1.3スクリプト+旧CSV+完了タスク仕様 削除)。589 tests passed
+- 2026-04-17: karpathy-guidelines スキル取り込み (PR #81)。memory 乖離発見→Phase 5+Phase C 未マージを回収 (PR #82, Codex 2件)。Phase E verdict_advisory 設計→ローカル実装→PR #84 マージ (no-ship 判定で plumbing のみ)。HA-accept40 拡充 tooling (sampler/ui/merge/blind_check/incremental_cal) Opus 代打実装 (PR #85, 7ラウンド・Codex 計14件対応中)。canonical ΔE を 3 ファイルで線形コピーしていた latent bug を ugh_calculator import 一本化で解消。doc_consistency_check を SessionStart→SessionEnd に変更 (直 commit 77c5498)。ロール分担 (Opus 設計 / ローカル実装) 確立 + ローカル停止時の Opus 臨時代打パターン確認
+
