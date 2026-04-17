@@ -139,3 +139,133 @@ def test_streamable_http_app_created():
     """MCP Streamable HTTP アプリが生成可能であることを検証"""
     app = mcp.streamable_http_app()
     assert callable(app)
+
+
+# --- Phase E: verdict_advisory / advisory_flags ---
+
+
+def test_audit_answer_returns_verdict_advisory():
+    """MCP tool の出力に verdict_advisory と advisory_flags が含まれる"""
+    _, structured = _run(mcp.call_tool("audit_answer", {
+        "question": "テスト",
+        "response": "テスト回答",
+    }))
+    assert "verdict_advisory" in structured
+    assert "advisory_flags" in structured
+    assert isinstance(structured["advisory_flags"], list)
+
+
+def test_audit_answer_degraded_advisory_passthrough():
+    """degraded 時は advisory == degraded, flags == []"""
+    _, structured = _run(mcp.call_tool("audit_answer", {
+        "question": "テスト",
+        "response": "テスト回答",
+    }))
+    assert structured["verdict"] == "degraded"
+    assert structured["verdict_advisory"] == "degraded"
+    assert structured["advisory_flags"] == []
+
+
+def test_audit_answer_schema_includes_advisory_fields():
+    """outputSchema に verdict_advisory / advisory_flags が含まれる"""
+    tools = _run(mcp.list_tools())
+    audit_tool = next(t for t in tools if t.name == "audit_answer")
+    out = audit_tool.outputSchema
+    assert out is not None
+    assert "verdict_advisory" in out["properties"]
+    assert "advisory_flags" in out["properties"]
+
+
+def test_proxy_audit_relays_advisory(monkeypatch):
+    """UGH_REMOTE_API proxy 経路でも advisory フィールドが転送される"""
+    import json
+    import os
+
+    from ugh_audit import mcp_server as m
+
+    fake_response = {
+        "schema_version": "2.0.0",
+        "S": 0.9,
+        "C": 0.8,
+        "delta_e": 0.05,
+        "quality_score": 4.8,
+        "verdict": "accept",
+        "hit_rate": "2/3",
+        "structural_gate": {
+            "f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": 0.0,
+            "gate_verdict": "pass", "primary_fail": "none",
+        },
+        "mode": "computed",
+        "is_reliable": True,
+        "matched_id": "qXYZ",
+        "metadata_source": "inline",
+        "verdict_advisory": "rewrite",
+        "advisory_flags": ["mcg_collapse_downgrade"],
+        "mode_conditioned_grv": {"anchor_alignment": 0.5, "collapse_risk": 0.95},
+    }
+
+    class _FakeResp:
+        def __init__(self, body): self._body = body
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return self._body
+
+    def _fake_urlopen(req, timeout=60):
+        return _FakeResp(json.dumps(fake_response).encode("utf-8"))
+
+    # patch the urllib used inside _proxy_audit
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    monkeypatch.setenv("UGH_REMOTE_API", "http://fake.invalid")
+    try:
+        result = m._proxy_audit(
+            os.environ["UGH_REMOTE_API"],
+            question="q", response="r",
+            reference=None, session_id=None,
+            question_meta=None, auto_generate_meta=False, retry_of=None,
+        )
+    finally:
+        monkeypatch.delenv("UGH_REMOTE_API", raising=False)
+
+    assert result.verdict == "accept"
+    assert result.verdict_advisory == "rewrite"
+    assert result.advisory_flags == ["mcg_collapse_downgrade"]
+
+
+def test_proxy_audit_error_falls_back_to_degraded_advisory(monkeypatch):
+    """proxy エラー時、advisory も degraded にフォールバックする"""
+    from ugh_audit import mcp_server as m
+
+    def _raise(req, timeout=60):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise)
+    result = m._proxy_audit(
+        "http://fake.invalid",
+        question="q", response="r",
+        reference=None, session_id=None,
+        question_meta=None, auto_generate_meta=False, retry_of=None,
+    )
+    assert result.verdict == "degraded"
+    assert result.verdict_advisory == "degraded"
+    assert result.advisory_flags == []
+
+
+def test_constructor_path_does_not_leak_advisory_between_calls():
+    """stateless_http モードで連続呼び出しに advisory が汚染されない"""
+    # 2 回連続呼び出しで advisory_flags が mutable な default を共有していないこと
+    _, s1 = _run(mcp.call_tool("audit_answer", {
+        "question": "Q1",
+        "response": "R1",
+    }))
+    _, s2 = _run(mcp.call_tool("audit_answer", {
+        "question": "Q2",
+        "response": "R2",
+    }))
+    # 両者独立 (list が同一オブジェクトでない保証)
+    assert s1["advisory_flags"] == []
+    assert s2["advisory_flags"] == []
+    # 値で比較されるため、object identity は確認できないが、
+    # mutable default bug があれば片方の変更が他方に伝播する。
+    # ここでは「両方が空リスト」かつ「verdict_advisory が primary と一致」で十分。
+    assert s1["verdict_advisory"] == s1["verdict"]
+    assert s2["verdict_advisory"] == s2["verdict"]

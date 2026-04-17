@@ -9,12 +9,14 @@ sys.path.insert(0, ".")
 
 from grv_calculator import GrvResult  # noqa: E402
 from mode_grv import (  # noqa: E402
+    ModeConditionedGrv,
     _compute_anchor_alignment,
     _compute_balance,
     _compute_boilerplate_risk,
     _compute_collapse_risk,
     _MODE_FOCUS,
     compute_mode_conditioned_grv,
+    derive_verdict_advisory,
 )
 
 
@@ -245,3 +247,186 @@ class TestComputeModeConditionedGrv:
         )
         with pytest.raises(AttributeError):
             result.anchor_alignment = 0.5  # type: ignore[misc]
+
+
+# --- derive_verdict_advisory (Phase E) ---
+
+
+def _mcg(
+    *,
+    anchor: float = 0.8,
+    collapse: float = 0.2,
+    balance: float = None,
+    boilerplate: float = 0.1,
+    mode: str = "critical",
+) -> ModeConditionedGrv:
+    return ModeConditionedGrv(
+        anchor_alignment=anchor,
+        balance=balance,
+        boilerplate_risk=boilerplate,
+        collapse_risk=collapse,
+        mode=mode,
+        focus_components=["anchor_alignment"],
+        grv_raw=0.2,
+    )
+
+
+# テスト用の固定閾値 (HA48 校正値と無関係に挙動検証するため明示)
+_TAU_COL = 0.60
+_TAU_ANC = 0.40
+
+
+class TestDeriveVerdictAdvisory:
+    def test_case1_accept_no_mcg(self):
+        advisory, flags = derive_verdict_advisory("accept", None)
+        assert advisory == "accept"
+        assert flags == []
+
+    def test_case2_rewrite_passthrough(self):
+        m = _mcg(anchor=0.1, collapse=0.9)  # would fire on accept
+        advisory, flags = derive_verdict_advisory(
+            "rewrite", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "rewrite"
+        assert flags == []
+
+    def test_case3_regenerate_passthrough(self):
+        m = _mcg(anchor=0.1, collapse=0.9)
+        advisory, flags = derive_verdict_advisory(
+            "regenerate", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "regenerate"
+        assert flags == []
+
+    def test_case4_degraded_no_mcg(self):
+        advisory, flags = derive_verdict_advisory("degraded", None)
+        assert advisory == "degraded"
+        assert flags == []
+
+    def test_case5_accept_collapse_fires(self):
+        m = _mcg(anchor=0.8, collapse=0.75)  # above tau_collapse_high
+        advisory, flags = derive_verdict_advisory(
+            "accept", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "rewrite"
+        assert flags == ["mcg_collapse_downgrade"]
+
+    def test_case6_accept_anchor_fires(self):
+        m = _mcg(anchor=0.25, collapse=0.2)  # below tau_anchor_low
+        advisory, flags = derive_verdict_advisory(
+            "accept", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "rewrite"
+        assert flags == ["mcg_anchor_missing"]
+
+    def test_case7_accept_both_fire(self):
+        m = _mcg(anchor=0.25, collapse=0.75)
+        advisory, flags = derive_verdict_advisory(
+            "accept", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "rewrite"
+        assert flags == ["mcg_collapse_downgrade", "mcg_anchor_missing"]
+
+    def test_case8_accept_collapse_none_anchor_fires(self):
+        m = ModeConditionedGrv(
+            anchor_alignment=0.25,
+            balance=None,
+            boilerplate_risk=0.1,
+            collapse_risk=None,
+            mode="critical",
+            focus_components=["anchor_alignment"],
+            grv_raw=0.2,
+        )
+        advisory, flags = derive_verdict_advisory(
+            "accept", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "rewrite"
+        assert flags == ["mcg_anchor_missing"]
+
+    def test_case9_accept_anchor_none_collapse_fires(self):
+        m = ModeConditionedGrv(
+            anchor_alignment=None,  # type: ignore[arg-type]
+            balance=None,
+            boilerplate_risk=0.1,
+            collapse_risk=0.75,
+            mode="critical",
+            focus_components=[],
+            grv_raw=0.2,
+        )
+        advisory, flags = derive_verdict_advisory(
+            "accept", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "rewrite"
+        assert flags == ["mcg_collapse_downgrade"]
+
+    def test_case10_accept_both_none(self):
+        m = ModeConditionedGrv(
+            anchor_alignment=None,  # type: ignore[arg-type]
+            balance=None,
+            boilerplate_risk=0.1,
+            collapse_risk=None,
+            mode="critical",
+            focus_components=[],
+            grv_raw=0.2,
+        )
+        advisory, flags = derive_verdict_advisory(
+            "accept", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "accept"
+        assert flags == []
+
+    def test_case11_boundary_equality_fires(self):
+        # collapse_risk == tau_collapse_high → 発火 (>=)
+        # anchor_alignment == tau_anchor_low → 発火 (<=)
+        m = _mcg(anchor=_TAU_ANC, collapse=_TAU_COL)
+        advisory, flags = derive_verdict_advisory(
+            "accept", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "rewrite"
+        assert flags == ["mcg_collapse_downgrade", "mcg_anchor_missing"]
+
+    def test_boundary_just_below_does_not_fire(self):
+        """境界値のすぐ下側は発火しないことを確認 (逆境界)"""
+        # collapse just below tau, anchor just above tau
+        m = _mcg(anchor=_TAU_ANC + 0.01, collapse=_TAU_COL - 0.01)
+        advisory, flags = derive_verdict_advisory(
+            "accept", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert advisory == "accept"
+        assert flags == []
+
+    def test_flag_order_collapse_then_anchor(self):
+        """両発火時の順序は collapse → anchor で固定"""
+        m = _mcg(anchor=0.05, collapse=0.95)
+        _, flags = derive_verdict_advisory(
+            "accept", m, tau_collapse_high=_TAU_COL, tau_anchor_low=_TAU_ANC,
+        )
+        assert flags[0] == "mcg_collapse_downgrade"
+        assert flags[1] == "mcg_anchor_missing"
+
+    def test_module_constant_override_takes_effect(self, monkeypatch):
+        """モジュール定数 `_TAU_*` の runtime 書き換えが即座に反映される
+
+        Codex review P2: 関数 default の late-binding 問題を防ぐ。
+        再校正や monkeypatch で `_TAU_COLLAPSE_HIGH` / `_TAU_ANCHOR_LOW` を
+        更新したとき、explicit な引数を渡さない呼び出しでも新しい閾値が
+        参照されることを検証する。
+        """
+        import mode_grv as mg
+
+        # まず定数を保守値に強制 → 発火しない状態を確認
+        monkeypatch.setattr(mg, "_TAU_COLLAPSE_HIGH", 0.90)
+        monkeypatch.setattr(mg, "_TAU_ANCHOR_LOW", 0.10)
+        m = _mcg(anchor=0.82, collapse=0.25)
+        advisory, flags = derive_verdict_advisory("accept", m)
+        assert advisory == "accept"
+        assert flags == []
+
+        # 定数を強制的に下げる → 即座に発火するはず
+        monkeypatch.setattr(mg, "_TAU_COLLAPSE_HIGH", 0.20)
+        monkeypatch.setattr(mg, "_TAU_ANCHOR_LOW", 0.85)
+
+        advisory2, flags2 = derive_verdict_advisory("accept", m)
+        assert advisory2 == "rewrite"
+        assert "mcg_collapse_downgrade" in flags2
+        assert "mcg_anchor_missing" in flags2

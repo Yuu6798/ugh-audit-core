@@ -163,6 +163,9 @@ class AuditOutput:
     is_reliable: bool
     matched_id: Optional[str]
     metadata_source: str
+    # Phase E: advisory verdict は常時必須 (primary verdict にフォールバック)。
+    # dataclass の順序要件上 default を持つフィールドの直前に配置する。
+    verdict_advisory: str = "degraded"
     computed_components: List[str] = field(default_factory=list)
     missing_components: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
@@ -172,6 +175,7 @@ class AuditOutput:
     grv: Optional[Dict] = None
     response_mode_signal: Optional[Dict] = None
     mode_conditioned_grv: Optional[Dict] = None
+    advisory_flags: List[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +206,7 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
             quality_score=None, verdict="degraded", hit_rate=None,
             structural_gate={}, saved_id=None, mode="degraded",
             is_reliable=False, matched_id=None, metadata_source="none",
+            verdict_advisory="degraded",
             errors=[f"remote_api_error: {e.code} {body[:200]}"],
             degraded_reason=["remote_api_error"],
         )
@@ -211,18 +216,20 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
             quality_score=None, verdict="degraded", hit_rate=None,
             structural_gate={}, saved_id=None, mode="degraded",
             is_reliable=False, matched_id=None, metadata_source="none",
+            verdict_advisory="degraded",
             errors=[f"remote_api_error: {e}"],
             degraded_reason=["remote_api_error"],
         )
 
     gate = result.get("structural_gate") or {}
+    primary_verdict = result.get("verdict", "degraded")
     return AuditOutput(
         schema_version=result.get("schema_version", "2.0.0"),
         S=result.get("S", 0.0),
         C=result.get("C"),
         delta_e=result.get("delta_e"),
         quality_score=result.get("quality_score"),
-        verdict=result.get("verdict", "degraded"),
+        verdict=primary_verdict,
         hit_rate=result.get("hit_rate"),
         structural_gate=gate,
         saved_id=result.get("saved_id"),
@@ -230,6 +237,7 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         is_reliable=result.get("is_reliable", False),
         matched_id=result.get("matched_id"),
         metadata_source=result.get("metadata_source", "none"),
+        verdict_advisory=result.get("verdict_advisory", primary_verdict),
         computed_components=result.get("computed_components", []),
         missing_components=result.get("missing_components", []),
         errors=result.get("errors", []),
@@ -239,6 +247,7 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         grv=result.get("grv"),
         response_mode_signal=result.get("response_mode_signal"),
         mode_conditioned_grv=result.get("mode_conditioned_grv"),
+        advisory_flags=result.get("advisory_flags", []),
     )
 
 
@@ -538,28 +547,39 @@ def audit_answer(
 
     # mode_conditioned_grv (grv + mode_affordance → 4成分解釈ベクトル)
     mcg_output: Optional[Dict] = None
+    mcg_obj = None
     if grv_result is not None and _ma_out and _ma_out.get("primary"):
         try:
             from mode_grv import compute_mode_conditioned_grv
-            mcg = compute_mode_conditioned_grv(
+            mcg_obj = compute_mode_conditioned_grv(
                 grv_result=grv_result,
                 response_text=response,
                 mode_affordance_primary=_ma_out["primary"],
                 action_required=_ma_out.get("action_required", False),
             )
-            if mcg is not None:
+            if mcg_obj is not None:
                 mcg_output = {
-                    "anchor_alignment": mcg.anchor_alignment,
-                    "balance": mcg.balance,
-                    "boilerplate_risk": mcg.boilerplate_risk,
-                    "collapse_risk": mcg.collapse_risk,
-                    "mode": mcg.mode,
-                    "focus_components": mcg.focus_components,
-                    "grv_raw": mcg.grv_raw,
-                    "version": mcg.version,
+                    "anchor_alignment": mcg_obj.anchor_alignment,
+                    "balance": mcg_obj.balance,
+                    "boilerplate_risk": mcg_obj.boilerplate_risk,
+                    "collapse_risk": mcg_obj.collapse_risk,
+                    "mode": mcg_obj.mode,
+                    "focus_components": mcg_obj.focus_components,
+                    "grv_raw": mcg_obj.grv_raw,
+                    "version": mcg_obj.version,
                 }
         except Exception:
             mcg_output = None
+            mcg_obj = None
+
+    # Phase E verdict advisory (downgrade-only, accept -> rewrite)
+    # 設計: docs/phase_e_verdict_integration.md
+    try:
+        from mode_grv import derive_verdict_advisory
+        verdict_advisory, advisory_flags = derive_verdict_advisory(verdict, mcg_obj)
+    except Exception:
+        verdict_advisory = verdict
+        advisory_flags = []
 
     return AuditOutput(
         schema_version=SCHEMA_VERSION,
@@ -577,6 +597,7 @@ def audit_answer(
         is_reliable=is_reliable,
         matched_id=matched_id,
         metadata_source=metadata_source,
+        verdict_advisory=verdict_advisory,
         computed_components=sorted(computed),
         missing_components=sorted(missing),
         errors=errors,
@@ -586,6 +607,7 @@ def audit_answer(
         grv=grv_output,
         response_mode_signal=_ms_output,
         mode_conditioned_grv=mcg_output,
+        advisory_flags=list(advisory_flags),
     )
 
 

@@ -16,9 +16,22 @@ from __future__ import annotations
 import re
 import statistics
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional, Tuple
 
 from grv_calculator import GrvResult
+
+# --- Phase E thresholds — HA48 calibrated (n=48, 2026-04-17) ---
+# Calibration result: analysis/phase_e_calibration_result.md
+# grid {0.20..0.40}×{0.60..0.80} step=0.02 で探索、以下が唯一候補として採用:
+#   rho_advisory_full=0.526 (>rho_primary_full=0.500), fire_rate=0.154,
+#   loo_shrinkage=0.002 (stable), |pearson(C, anchor)|=0.278 (leak pass).
+# 運用閾値更新は accept subset n>=40 到達時に再校正で判断する（§9 Trigger）。
+_TAU_COLLAPSE_HIGH: float = 0.26
+_TAU_ANCHOR_LOW: float = 0.80
+
+# --- Phase E 型定義 ---
+Verdict = Literal["accept", "rewrite", "regenerate", "degraded"]
+AdvisoryFlag = Literal["mcg_collapse_downgrade", "mcg_anchor_missing"]
 
 # --- モード別の重要成分マッピング ---
 # addendum §4: comparative→balance, critical→anchor+boilerplate,
@@ -189,3 +202,49 @@ def compute_mode_conditioned_grv(
         focus_components=focus,
         grv_raw=grv_result.grv,
     )
+
+
+def derive_verdict_advisory(
+    verdict: Verdict,
+    mcg: Optional[ModeConditionedGrv],
+    *,
+    tau_collapse_high: Optional[float] = None,
+    tau_anchor_low: Optional[float] = None,
+) -> Tuple[Verdict, List[AdvisoryFlag]]:
+    """primary verdict と mode_conditioned_grv から advisory verdict と flags を導出する。
+
+    Phase E v1 は accept のみ downgrade 対象。他の verdict は pass-through。
+    downgrade は 1 段階 (accept -> rewrite) のみとし、regenerate まで飛ばさない。
+    flags は発火した全ルールを順序 (collapse → anchor) で記録する。
+
+    tau_collapse_high / tau_anchor_low は None のときモジュール定数
+    `_TAU_COLLAPSE_HIGH` / `_TAU_ANCHOR_LOW` を**呼び出し時に**参照する。
+    関数定義時 (import 時) の値には束縛しないため、monkeypatch / 再校正に
+    よる閾値変更は即座に反映される。
+
+    設計: docs/phase_e_verdict_integration.md §2, §6
+    """
+    # 呼び出し時参照: 関数 default は late binding できないため、明示的に解決する。
+    # Codex review P2: 関数定義時の default 束縛を避けて runtime 書き換えに追随する。
+    if tau_collapse_high is None:
+        tau_collapse_high = _TAU_COLLAPSE_HIGH
+    if tau_anchor_low is None:
+        tau_anchor_low = _TAU_ANCHOR_LOW
+
+    flags: List[AdvisoryFlag] = []
+
+    if verdict != "accept" or mcg is None:
+        return verdict, flags
+
+    advisory: Verdict = verdict
+
+    if mcg.collapse_risk is not None and mcg.collapse_risk >= tau_collapse_high:
+        advisory = "rewrite"
+        flags.append("mcg_collapse_downgrade")
+
+    if mcg.anchor_alignment is not None and mcg.anchor_alignment <= tau_anchor_low:
+        if advisory == "accept":
+            advisory = "rewrite"
+        flags.append("mcg_anchor_missing")
+
+    return advisory, flags

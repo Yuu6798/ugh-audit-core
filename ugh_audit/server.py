@@ -337,28 +337,39 @@ def _run_pipeline(
 
     # mode_conditioned_grv (grv + mode_affordance → 4成分解釈ベクトル)
     mcg_output: Optional[dict] = None
+    mcg_obj = None
     if grv_result is not None and resolved_ma and resolved_ma.get("primary"):
         try:
             from mode_grv import compute_mode_conditioned_grv
-            mcg = compute_mode_conditioned_grv(
+            mcg_obj = compute_mode_conditioned_grv(
                 grv_result=grv_result,
                 response_text=response,
                 mode_affordance_primary=resolved_ma["primary"],
                 action_required=resolved_ma.get("action_required", False),
             )
-            if mcg is not None:
+            if mcg_obj is not None:
                 mcg_output = {
-                    "anchor_alignment": mcg.anchor_alignment,
-                    "balance": mcg.balance,
-                    "boilerplate_risk": mcg.boilerplate_risk,
-                    "collapse_risk": mcg.collapse_risk,
-                    "mode": mcg.mode,
-                    "focus_components": mcg.focus_components,
-                    "grv_raw": mcg.grv_raw,
-                    "version": mcg.version,
+                    "anchor_alignment": mcg_obj.anchor_alignment,
+                    "balance": mcg_obj.balance,
+                    "boilerplate_risk": mcg_obj.boilerplate_risk,
+                    "collapse_risk": mcg_obj.collapse_risk,
+                    "mode": mcg_obj.mode,
+                    "focus_components": mcg_obj.focus_components,
+                    "grv_raw": mcg_obj.grv_raw,
+                    "version": mcg_obj.version,
                 }
         except Exception:
             mcg_output = None
+            mcg_obj = None
+
+    # Phase E verdict advisory (downgrade-only, accept -> rewrite)
+    # 設計: docs/phase_e_verdict_integration.md
+    try:
+        from mode_grv import derive_verdict_advisory
+        verdict_advisory, advisory_flags = derive_verdict_advisory(verdict, mcg_obj)
+    except Exception:
+        verdict_advisory = verdict
+        advisory_flags = []
 
     result = {
         "schema_version": SCHEMA_VERSION,
@@ -391,6 +402,8 @@ def _run_pipeline(
         "grv": grv_output,
         "response_mode_signal": mode_signal_output,
         "mode_conditioned_grv": mcg_output,
+        "verdict_advisory": verdict_advisory,
+        "advisory_flags": advisory_flags,
         # DB 保存用メタデータ
         "_session_id": session_id or str(uuid.uuid4()),
         "_question": question,
@@ -493,6 +506,22 @@ class AuditResponse(BaseModel):
     )
     mode_conditioned_grv: Optional[dict] = Field(
         None, description="モード条件付き grv 解釈ベクトル (grv + mode_affordance)"
+    )
+    verdict_advisory: str = Field(
+        ...,
+        description=(
+            "Phase E: mode_conditioned_grv を反映した advisory verdict。"
+            "primary `verdict` を弱信号で downgrade するのみ (accept -> rewrite)。"
+            "consumer は任意に採用する。"
+        ),
+    )
+    advisory_flags: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Phase E: advisory downgrade 発火ルールのリスト。"
+            "未知の flag は無視されるべき。"
+            "例: mcg_collapse_downgrade, mcg_anchor_missing"
+        ),
     )
 
 
@@ -701,6 +730,8 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         grv=result.get("grv"),
         response_mode_signal=result.get("response_mode_signal"),
         mode_conditioned_grv=result.get("mode_conditioned_grv"),
+        verdict_advisory=result.get("verdict_advisory", result["verdict"]),
+        advisory_flags=result.get("advisory_flags", []),
     )
 
 

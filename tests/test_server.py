@@ -199,3 +199,136 @@ def test_structural_gate_fields(client):
     assert "f4" in gate
     assert "gate_verdict" in gate
     assert "primary_fail" in gate
+
+
+# --- Phase E: verdict_advisory / advisory_flags ---
+
+
+def test_verdict_advisory_fields_present(client):
+    """/api/audit のレスポンスに verdict_advisory / advisory_flags が必ず含まれる"""
+    resp = client.post("/api/audit", json={
+        "question": "テスト",
+        "response": "テスト回答",
+    })
+    data = resp.json()
+    assert "verdict_advisory" in data
+    assert "advisory_flags" in data
+    assert isinstance(data["advisory_flags"], list)
+
+
+def test_verdict_advisory_degraded_passthrough(client):
+    """degraded のときは advisory も degraded, flags は空"""
+    resp = client.post("/api/audit", json={
+        "question": "テスト",
+        "response": "テスト回答",
+    })
+    data = resp.json()
+    assert data["verdict"] == "degraded"
+    assert data["verdict_advisory"] == "degraded"
+    assert data["advisory_flags"] == []
+
+
+def test_verdict_advisory_is_valid_verdict_value(client):
+    """advisory は常に VALID_VERDICTS の値を持つ (schema 契約)"""
+    resp = client.post("/api/audit", json={
+        "question": "PoRが高ければ誠実か？",
+        "response": "PoRは共鳴度であり、誠実性の十分条件ではない。",
+        "question_meta": {
+            "question": "PoRが高ければ誠実か？",
+            "core_propositions": ["PoRは誠実性の十分条件ではない"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "metric_omnipotence",
+        },
+    })
+    data = resp.json()
+    assert data["verdict_advisory"] in {"accept", "rewrite", "regenerate", "degraded"}
+    assert isinstance(data["advisory_flags"], list)
+    # advisory は primary verdict と等しいか downgrade 方向のみ (accept→rewrite)
+    rank = {"accept": 2, "rewrite": 1, "regenerate": 0, "degraded": -1}
+    assert rank[data["verdict_advisory"]] <= rank[data["verdict"]]
+
+
+def test_verdict_advisory_downgrades_on_extreme_collapse(
+    monkeypatch, tmp_db, tmp_golden,
+):
+    """collapse_risk が閾値を超えると accept → rewrite に downgrade される
+
+    Codex P3 対応: 前提 (verdict=accept, mcg 計算済み) は必ず成立させる。
+    成立しないときは fixture バグとして test を失敗させる（silent no-op 禁止）。
+
+    mcg 計算には sentence-transformers (SBert) + grv_calculator が必要。
+    CI の `[dev]` extra では未インストールのため skip する。
+    """
+    try:
+        import sentence_transformers  # noqa: F401
+    except ImportError:
+        pytest.skip("sentence-transformers not installed (mcg computation unavailable)")
+
+    import mode_grv
+
+    # 閾値を下げ、accept + 非 None mcg なら必ず両ルール発火するようにする。
+    # _TAU_ANCHOR_LOW=1.0 で anchor ルールは常に発火、_TAU_COLLAPSE_HIGH=0.0
+    # で collapse ルールは非 None のとき常に発火。
+    monkeypatch.setattr(mode_grv, "_TAU_COLLAPSE_HIGH", 0.0)
+    monkeypatch.setattr(mode_grv, "_TAU_ANCHOR_LOW", 1.0)
+
+    configure(db=tmp_db, golden=tmp_golden)
+    with TestClient(app) as c:
+        resp = c.post("/api/audit", json={
+            # accept を確実にするため命題と回答を高マッチにする。
+            # mcg の collapse_risk を None にしないよう命題 2 本 (>=2 で applicable)。
+            # exploratory primary mode は collapse_risk を focus に含む。
+            "question": "PoRとは何か？",
+            "response": "PoRは共鳴度である。意味との共振プロセスでもある。",
+            "question_meta": {
+                "question": "PoRとは何か？",
+                "core_propositions": ["PoRは共鳴度", "PoRは共振プロセス"],
+                "disqualifying_shortcuts": [],
+                "acceptable_variants": [],
+                "trap_type": "",
+                "mode_affordance": {"primary": "exploratory"},
+            },
+        })
+    configure(db=None, golden=None)
+    data = resp.json()
+
+    # --- 前提条件を必ず満たすことをハード assert する（silent no-op 禁止）---
+    assert data["verdict"] == "accept", (
+        f"fixture precondition failed: primary verdict must be accept "
+        f"to exercise downgrade, got {data['verdict']!r}"
+    )
+    assert data.get("mode_conditioned_grv") is not None, (
+        "fixture precondition failed: mode_conditioned_grv must be computed "
+        "(SBert + mode_affordance='exploratory' with >=2 propositions)"
+    )
+    mcg = data["mode_conditioned_grv"]
+    assert mcg["collapse_risk"] is not None, (
+        "fixture precondition failed: collapse_risk must be non-None "
+        "(needs n_propositions>=2)"
+    )
+
+    # --- 目標挙動: downgrade 発生 + 両フラグ発火 ---
+    assert data["verdict_advisory"] == "rewrite"
+    assert "mcg_collapse_downgrade" in data["advisory_flags"]
+    assert "mcg_anchor_missing" in data["advisory_flags"]
+
+
+def test_verdict_advisory_rewrite_passthrough(client):
+    """primary verdict が rewrite のとき advisory も rewrite のまま (pass-through)"""
+    resp = client.post("/api/audit", json={
+        "question": "質問A",
+        "response": "命題とは無関係な回答です。",
+        "question_meta": {
+            "question": "質問A",
+            "core_propositions": ["全く別の命題", "さらに別の命題"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+        },
+    })
+    data = resp.json()
+    if data["verdict"] in ("rewrite", "regenerate"):
+        # pass-through: flags は空
+        assert data["verdict_advisory"] == data["verdict"]
+        assert data["advisory_flags"] == []
