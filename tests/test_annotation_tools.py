@@ -418,3 +418,114 @@ def test_ui_c_path_short_circuits_to_o1():
     result = ui_mod._annotate_one(item, infile, outfile, "t")
     assert result is not None
     assert result["O"] == "1"
+
+
+# ---------------------------------------------------------------------------
+# Codex PR #85 回帰テスト
+# ---------------------------------------------------------------------------
+
+
+def test_blind_ids_do_not_collide_with_stub_ids():
+    """P1-2 回帰: blind ID が `blind_*` 名前空間を使い stub `acc40_*` と衝突しない."""
+    stub_chunk = [
+        {"id": "acc40_001", "source": "v5_unannotated"},
+        {"id": "acc40_002", "source": "v5_unannotated"},
+        {"id": "acc40_016", "source": "v5_unannotated"},  # 後続 batch の id 相当
+    ]
+    ha48_rows = [
+        {"id": "q001", "O": "3"},
+        {"id": "q002", "O": "4"},
+    ]
+    result = ui_mod._inject_blind(stub_chunk, ha48_rows, n_blind=2, seed=1)
+    stub_ids = {r["id"] for r in stub_chunk}
+    blind_ids = {r["id"] for r in result if r.get("blind_check")}
+    # blind_ids は stub_ids と disjoint
+    assert blind_ids & stub_ids == set()
+    # blind id 形式の検証
+    assert all(bid.startswith("blind_") for bid in blind_ids)
+
+
+def test_blind_ids_deterministic_across_calls():
+    """同一 seed/pool なら blind id が安定 (resume 時の整合性)."""
+    ha48_rows = [
+        {"id": "q001", "O": "3"},
+        {"id": "q002", "O": "4"},
+        {"id": "q003", "O": "5"},
+    ]
+    r1 = ui_mod._inject_blind([], ha48_rows, n_blind=2, seed=42)
+    r2 = ui_mod._inject_blind([], ha48_rows, n_blind=2, seed=42)
+    ids1 = sorted(r["id"] for r in r1)
+    ids2 = sorted(r["id"] for r in r2)
+    assert ids1 == ids2
+
+
+def test_resume_does_not_skip_pending_items(tmp_path, monkeypatch):
+    """P1-1 回帰: resume 時に cursor_in_batch が保存位置と一致する.
+
+    batch 内 index をそのまま使えば未アノテート行を飛ばさない。
+    stub_rows を事前フィルタしないことで batch 構造が決定的に再現される。
+    """
+    stub = tmp_path / "stub.csv"
+    out = tmp_path / "out.csv"
+    rows = []
+    for i in range(1, 8):  # 7 件の stub
+        rows.append({
+            "id": f"acc40_{i:03d}", "source": "v5_unannotated",
+            "question_id": f"q{i:03d}", "question": "Q",
+            "response": "R", "core_propositions": "[]",
+            "O": "", "rater": "", "annotated_at": "",
+            "comment": "", "blind_check": "", "hits_total": "",
+        })
+    _write_csv(
+        stub, rows,
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total"],
+    )
+    monkeypatch.setattr(ui_mod, "ACC40_STUB", stub)
+    monkeypatch.setattr(ui_mod, "ACC40_OUT", out)
+    monkeypatch.setattr(ui_mod, "INCREMENTAL_CAL", Path("/nonexistent"))
+    monkeypatch.setattr(ui_mod, "_load_ha48_for_blind", lambda: [])
+    prog = tmp_path / "progress.json"
+    monkeypatch.setattr(ui_mod, "PROGRESS_PATH", prog)
+
+    # 1 件目 annotate → 2 件目で pause
+    script = "a\nn\n5\nq\n"
+    infile = io.StringIO(script)
+    outfile = io.StringIO()
+    rc = ui_mod.run_session(
+        rater="t", batch_sizes=[5], blind_counts=[0],
+        infile=infile, outfile=outfile, resume=False,
+        seed=42, dry_run=False,
+    )
+    assert rc == 0
+    # 出力に acc40_001 だけ annotate されている
+    with open(out, encoding="utf-8") as f:
+        done = [r for r in csv.DictReader(f) if r.get("O")]
+    assert len(done) == 1
+    assert done[0]["id"] == "acc40_001"
+
+    # 保存された cursor=1 (2 件目でポーズ)
+    with open(prog, encoding="utf-8") as f:
+        saved_state = json.load(f)
+    assert saved_state["batch_index"] == 0
+    assert saved_state["cursor_in_batch"] == 1
+
+    # resume: 2 件目 (acc40_002) から続き、すぐに pause
+    script2 = "a\nn\n5\nq\n"
+    infile = io.StringIO(script2)
+    outfile = io.StringIO()
+    rc = ui_mod.run_session(
+        rater="t", batch_sizes=[5], blind_counts=[0],
+        infile=infile, outfile=outfile, resume=True,
+        seed=42, dry_run=False,
+    )
+    assert rc == 0
+    # 2 件目 (acc40_002) が annotate された — skip されていないことを検証
+    with open(out, encoding="utf-8") as f:
+        done = [r for r in csv.DictReader(f) if r.get("O")]
+    done_ids = {r["id"] for r in done}
+    assert "acc40_001" in done_ids
+    assert "acc40_002" in done_ids, (
+        "resume 後に acc40_002 が skip されている (P1-1 回帰)"
+    )

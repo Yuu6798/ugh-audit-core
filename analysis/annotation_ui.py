@@ -302,15 +302,14 @@ def _inject_blind(
     items: List[dict],
     ha48_rows: List[dict],
     n_blind: int,
-    existing_acc40_ids: set,
     seed: int,
 ) -> List[dict]:
     """items に blind 混入を織り込む.
 
-    blind 行は acc40 id を新規で振り、source="blind", blind_check=元 id.
-    user に見えない形式で response/question は持たないので、
-    blind は「annotate_ui 起動前に stub にあらかじめ混ぜる」設計が本筋だが、
-    本 UI では簡易に items の前後に挿入する。
+    blind 行の id は `blind_{orig_id}` 形式で採番。stub の `acc40_NNN`
+    名前空間と分離されているため、後続 batch の stub id と衝突しない。
+    元 HA48 id から決定的に導出するため、同一 seed/same ha48 pool で
+    再実行しても同じ id になる (resume 時の整合性を保証)。
     """
     if n_blind <= 0 or not ha48_rows:
         return items
@@ -320,27 +319,18 @@ def _inject_blind(
     # ペアを stub に含めるのが望ましいが、本 v1 では警告のみ出す。
     chosen = rng.sample(ha48_rows, min(n_blind, len(ha48_rows)))
     blind_items = []
-    max_existing = 0
-    for i in items + [{"id": x} for x in existing_acc40_ids]:
-        m = i.get("id", "")
-        if m.startswith("acc40_"):
-            try:
-                max_existing = max(max_existing, int(m.split("_")[1]))
-            except (IndexError, ValueError):
-                pass
-    next_idx = max_existing + 1
     for c in chosen:
+        orig_id = c["id"]
         blind_items.append({
-            "id": f"acc40_{next_idx:03d}",
+            "id": f"blind_{orig_id}",
             "source": "blind",
-            "question_id": c["id"],
+            "question_id": orig_id,
             "question": "(ブラインド項目: 元の質問本文は annotation_48 を参照)",
             "response": "(ブラインド項目: 元の回答本文は annotation_48 を参照)",
             "core_propositions": "[]",
             "hits_total": "",
-            "blind_check": c["id"],
+            "blind_check": orig_id,
         })
-        next_idx += 1
     combined = items + blind_items
     rng.shuffle(combined)
     return combined
@@ -388,20 +378,21 @@ def run_session(
     completed_ids = {r["id"] for r in existing_out if r.get("O")}
     all_outputs = list(existing_out)
 
-    # stub から未完成分だけ残し、blind を混入
-    pending = [r for r in stub_rows if r["id"] not in completed_ids]
+    # 注: stub_rows は resume 時も decompose せずそのまま batch 化する。
+    # 既アノテート分は内部ループで skip する (cursor_in_batch 位置を
+    # 保つため、事前フィルタは行わない — これをすると batch 内 index が
+    # ズレて未アノテート行を飛ばす resume バグの原因になる)。
     ha48_for_blind = _load_ha48_for_blind()
 
     # batch に分割
     batches: List[List[dict]] = []
     idx = 0
     for bs, blind_n in zip(batch_sizes, blind_counts):
-        chunk = pending[idx: idx + bs]
+        chunk = stub_rows[idx: idx + bs]
         idx += bs
         if not chunk:
             continue
-        existing_ids = completed_ids | {r["id"] for b in batches for r in b}
-        chunk = _inject_blind(chunk, ha48_for_blind, blind_n, existing_ids, seed + len(batches))
+        chunk = _inject_blind(chunk, ha48_for_blind, blind_n, seed + len(batches))
         batches.append(chunk)
 
     if not batches:
