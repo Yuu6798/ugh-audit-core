@@ -15,6 +15,7 @@ verdict_advisory の τ 閾値を HA48 (n=48) で校正する。
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import statistics
@@ -95,20 +96,30 @@ def _primary_verdict(delta_e: Optional[float], c: Optional[float]) -> str:
 
 
 def _compute_delta_e(s: float, c: float) -> float:
-    """ΔE 正規化 (ugh_calculator.calculate と同じ定数)."""
-    weight_s = 2.0
-    weight_c = 1.0
-    max_dist = weight_s + weight_c  # = 3.0
-    raw = weight_s * (1.0 - s) + weight_c * (1.0 - c)
-    return max(0.0, min(1.0, raw / max_dist))
+    """ΔE 正規化 (canonical 定義を ugh_calculator から再エクスポート).
+
+    過去バージョンは線形式 `2(1-S) + (1-C)` を書いていたが canonical は
+    squared `2(1-S)² + (1-C)²` なので、ドリフト防止のため canonical 実装を
+    そのまま呼ぶ。
+    """
+    from ugh_calculator import _compute_delta_e as _canonical
+    return _canonical(s, c)
 
 
 # --- データローダ ---
 
 
-def load_ha48() -> Dict[str, dict]:
+def load_ha48(path: Optional[Path] = None) -> Dict[str, dict]:
+    """HA48 (または merged) アノテーション CSV を読み込む.
+
+    path が与えられた場合はそれを使う (run_incremental_calibration が
+    HA48+acc40 を結合した CSV を流し込むために使う)。
+    スキーマは HA48 と同一: 最低限 ``id`` と ``O`` カラムを持つこと。
+    ``id`` は v5 の question_id (qNNN) に対応する必要がある。
+    """
+    target = path if path is not None else HA48_PATH
     result: Dict[str, dict] = {}
-    with open(HA48_PATH, encoding="utf-8") as f:
+    with open(target, encoding="utf-8") as f:
         for row in csv.DictReader(f):
             result[row["id"]] = row
     return result
@@ -657,7 +668,18 @@ def write_result_md(
 # --- main ---
 
 
-def main() -> None:
+def main(argv: Optional[List[str]] = None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--ha48-path", type=Path, default=None,
+        help="アノテーション CSV パス上書き (HA48 + acc40 merged などを食わせる)",
+    )
+    args = parser.parse_args(argv)
+
+    global HA48_PATH
+    if args.ha48_path is not None:
+        HA48_PATH = args.ha48_path
+
     rows = build_rows()
     if not rows:
         print("データなし。終了。")
