@@ -1,0 +1,6 @@
+# sampler / merge が生成する transient な CSV
+annotation_accept40_stub.csv
+annotation_ha48_plus_accept40.csv
+annotation_merged_accept_subset.csv
+# annotate 本体は空欄スタブでは commit せず、完走後に commit する運用
+annotation_accept40.csv
