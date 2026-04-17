@@ -350,24 +350,31 @@ def _inject_blind(
     ha48_rows: List[dict],
     n_blind: int,
     seed: int,
-) -> List[dict]:
+    exclude_orig_ids: Optional[set] = None,
+) -> tuple:
     """items に blind 混入を織り込む.
 
     blind 行の id は `blind_{orig_id}` 形式で採番。stub の `acc40_NNN`
     名前空間と分離されているため、後続 batch の stub id と衝突しない。
-    元 HA48 id から決定的に導出するため、同一 seed/same ha48 pool で
-    再実行しても同じ id になる (resume 時の整合性を保証)。
+
+    exclude_orig_ids: 既に別 batch で使われた HA48 id 集合。ここから
+    抽選対象を外すことで、同一 HA48 行が複数 batch に現れて `blind_{id}`
+    が重複し completed_ids 照合で skip される事故を防ぐ。
+
+    戻り値: (blind 混入後の items, 今回選ばれた orig_id 集合)
     """
     if n_blind <= 0 or not ha48_rows:
-        return items
+        return items, set()
     rng = random.Random(seed)
-    # HA48 には question/response 本文がない → blind 混入は smoke 上は
-    # question/response を空のまま渡す運用。実運用では sampler 側で HA48 対応
-    # ペアを stub に含めるのが望ましいが、本 v1 では警告のみ出す。
-    chosen = rng.sample(ha48_rows, min(n_blind, len(ha48_rows)))
+    pool = [r for r in ha48_rows if r["id"] not in (exclude_orig_ids or set())]
+    if not pool:
+        return items, set()
+    chosen = rng.sample(pool, min(n_blind, len(pool)))
     blind_items = []
+    chosen_ids: set = set()
     for c in chosen:
         orig_id = c["id"]
+        chosen_ids.add(orig_id)
         # c は _load_ha48_for_blind で qmeta/responses から enrich 済み。
         # enrichment 不能な HA48 id は load 時点で除外済みなので
         # ここでは空文字を気にせず採用する。
@@ -383,7 +390,7 @@ def _inject_blind(
         })
     combined = items + blind_items
     rng.shuffle(combined)
-    return combined
+    return combined, chosen_ids
 
 
 def _call_incremental_cal(acc40_path: Path) -> None:
@@ -455,15 +462,38 @@ def run_session(
         )
         blind_counts = list(blind_counts)[: len(batch_sizes)]
 
-    # batch に分割
+    # batch に分割 (blind は batch 間で orig_id の重複抽選を禁止)
     batches: List[List[dict]] = []
+    used_blind_orig_ids: set = set()
     idx = 0
     for bs, blind_n in zip(batch_sizes, blind_counts):
         chunk = stub_rows[idx: idx + bs]
         idx += bs
         if not chunk:
             continue
-        chunk = _inject_blind(chunk, ha48_for_blind, blind_n, seed + len(batches))
+        chunk, chosen_ids = _inject_blind(
+            chunk, ha48_for_blind, blind_n,
+            seed=seed + len(batches),
+            exclude_orig_ids=used_blind_orig_ids,
+        )
+        used_blind_orig_ids.update(chosen_ids)
+        batches.append(chunk)
+
+    # 設定された batch_sizes の総和を超える stub 行は末尾 batch として追加する
+    # (silently drop しない)。末尾 batch の blind は直近 blind_count を継承。
+    if idx < len(stub_rows):
+        tail = stub_rows[idx:]
+        tail_blind_n = blind_counts[-1] if blind_counts else 0
+        outfile.write(
+            f"[warn] batch_sizes の総和 ({idx}) より stub 行が {len(tail)} 件多い。"
+            f"末尾 batch として追加 (blind={tail_blind_n})。\n"
+        )
+        chunk, chosen_ids = _inject_blind(
+            tail, ha48_for_blind, tail_blind_n,
+            seed=seed + len(batches),
+            exclude_orig_ids=used_blind_orig_ids,
+        )
+        used_blind_orig_ids.update(chosen_ids)
         batches.append(chunk)
 
     if not batches:

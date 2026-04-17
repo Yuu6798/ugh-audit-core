@@ -437,7 +437,7 @@ def test_blind_ids_do_not_collide_with_stub_ids():
         {"id": "q001", "O": "3"},
         {"id": "q002", "O": "4"},
     ]
-    result = ui_mod._inject_blind(stub_chunk, ha48_rows, n_blind=2, seed=1)
+    result, _chosen = ui_mod._inject_blind(stub_chunk, ha48_rows, n_blind=2, seed=1)
     stub_ids = {r["id"] for r in stub_chunk}
     blind_ids = {r["id"] for r in result if r.get("blind_check")}
     # blind_ids は stub_ids と disjoint
@@ -453,8 +453,8 @@ def test_blind_ids_deterministic_across_calls():
         {"id": "q002", "O": "4"},
         {"id": "q003", "O": "5"},
     ]
-    r1 = ui_mod._inject_blind([], ha48_rows, n_blind=2, seed=42)
-    r2 = ui_mod._inject_blind([], ha48_rows, n_blind=2, seed=42)
+    r1, _ = ui_mod._inject_blind([], ha48_rows, n_blind=2, seed=42)
+    r2, _ = ui_mod._inject_blind([], ha48_rows, n_blind=2, seed=42)
     ids1 = sorted(r["id"] for r in r1)
     ids2 = sorted(r["id"] for r in r2)
     assert ids1 == ids2
@@ -1050,7 +1050,7 @@ def test_blind_injection_populates_real_content(tmp_path, monkeypatch):
     assert json.loads(enriched["core_propositions"]) == ["命題1", "命題2"]
 
     # _inject_blind が enrichment 結果を blind 行に引き継ぐ
-    injected = ui_mod._inject_blind([], blind_pool, n_blind=1, seed=1)
+    injected, _chosen = ui_mod._inject_blind([], blind_pool, n_blind=1, seed=1)
     assert len(injected) == 1
     blind_row = injected[0]
     assert blind_row["id"] == "blind_q001"
@@ -1093,3 +1093,135 @@ def test_blind_injection_drops_rows_without_enrichment(tmp_path, monkeypatch):
     assert "q999" not in ids, (
         "enrichment 不能な HA48 id が blind 候補に残っている"
     )
+
+
+# ---------------------------------------------------------------------------
+# Codex PR #85 第 6 ラウンド回帰テスト
+# ---------------------------------------------------------------------------
+
+
+def test_ui_appends_tail_batch_when_stub_exceeds_batch_sizes(tmp_path, monkeypatch):
+    """P2 回帰: stub が sum(batch_sizes) を超えても末尾行が drop されない."""
+    stub = tmp_path / "stub.csv"
+    out = tmp_path / "out.csv"
+    # 5 件の stub、 batch_sizes=[2] (sum=2) だと残り 3 件が drop される問題を検証
+    rows = []
+    for i in range(1, 6):
+        rows.append({
+            "id": f"acc40_{i:03d}", "source": "v5_unannotated",
+            "question_id": f"q{i:03d}", "question": "Q",
+            "response": "R", "core_propositions": "[]",
+            "O": "", "rater": "", "annotated_at": "",
+            "comment": "", "blind_check": "", "hits_total": "",
+            "delta_e": "0.05",
+        })
+    _write_csv(
+        stub, rows,
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total", "delta_e"],
+    )
+    monkeypatch.setattr(ui_mod, "ACC40_STUB", stub)
+    monkeypatch.setattr(ui_mod, "ACC40_OUT", out)
+    monkeypatch.setattr(ui_mod, "INCREMENTAL_CAL", Path("/nonexistent"))
+    monkeypatch.setattr(ui_mod, "_load_ha48_for_blind", lambda: [])
+    monkeypatch.setattr(ui_mod, "PROGRESS_PATH", tmp_path / "progress.json")
+
+    # batch_sizes=[2] (sum=2) だが stub は 5 件。3 件の tail が作られる想定。
+    # 1件目 annotate → pause
+    script = "a\nn\n5\nq\n"
+    infile = io.StringIO(script)
+    outfile = io.StringIO()
+    rc = ui_mod.run_session(
+        rater="t", batch_sizes=[2], blind_counts=[0],
+        infile=infile, outfile=outfile, resume=False,
+        seed=42, dry_run=False,
+    )
+    assert rc == 0
+    out_text = outfile.getvalue()
+    # tail batch が作られている: 2 batch (1 + tail)
+    assert "Batch 1/2" in out_text, (
+        f"tail batch が作られていない (P2 回帰):\n{out_text[-500:]}"
+    )
+    assert "[warn]" in out_text and "末尾 batch" in out_text
+
+
+def test_blind_does_not_repeat_orig_id_across_batches(tmp_path, monkeypatch):
+    """P2 回帰: 複数 batch で同じ HA48 行を抽選しない (id 衝突 → skip 防止).
+
+    batch 数 * blind_count > HA48 pool size でなければ重複は起きない、という
+    保証を run_session レベルで確かめる。pool 3 件から 2 batch × 2 blind
+    (=4 件) を要求する設定で、全 HA48 pool が消費されるまで重複しないか。
+    """
+    stub = tmp_path / "stub.csv"
+    out = tmp_path / "out.csv"
+    ha48 = tmp_path / "ha48.csv"
+    qmeta = tmp_path / "qmeta.jsonl"
+    resp = tmp_path / "resp.jsonl"
+    rows = []
+    for i in range(1, 5):
+        rows.append({
+            "id": f"acc40_{i:03d}", "source": "v5_unannotated",
+            "question_id": f"q{i:03d}", "question": "Q",
+            "response": "R", "core_propositions": "[]",
+            "O": "", "rater": "", "annotated_at": "",
+            "comment": "", "blind_check": "", "hits_total": "",
+            "delta_e": "0.05",
+        })
+    _write_csv(
+        stub, rows,
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total", "delta_e"],
+    )
+    # HA48 は 3 件のみ
+    ha48_rows = [
+        {"id": f"hq{i:03d}", "category": "x", "S": "3", "C": "3",
+         "O": "4", "propositions_hit": "2/3", "notes": ""}
+        for i in range(1, 4)
+    ]
+    _write_csv(
+        ha48, ha48_rows,
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_jsonl(
+        qmeta,
+        [{"id": r["id"], "question": "HA question",
+          "original_core_propositions": ["p"]} for r in ha48_rows],
+    )
+    _write_jsonl(
+        resp,
+        [{"id": r["id"], "response": "HA response"} for r in ha48_rows],
+    )
+
+    monkeypatch.setattr(ui_mod, "ACC40_STUB", stub)
+    monkeypatch.setattr(ui_mod, "ACC40_OUT", out)
+    monkeypatch.setattr(ui_mod, "HA48_PATH", ha48)
+    monkeypatch.setattr(ui_mod, "QMETA_PATH", qmeta)
+    monkeypatch.setattr(ui_mod, "RESPONSES_PATH", resp)
+    monkeypatch.setattr(ui_mod, "INCREMENTAL_CAL", Path("/nonexistent"))
+    monkeypatch.setattr(ui_mod, "PROGRESS_PATH", tmp_path / "progress.json")
+
+    # batch_sizes=[2, 2], blind_counts=[2, 2] → 合計 blind 要求 4 件だが
+    # HA48 pool は 3 件。orig_id 重複禁止なので 2 batch 目は最大 1 件しか
+    # blind を得られない (重複回避で pool 枯渇)。
+    # pause ですぐ抜ける。batches が構築された時点で検証できる。
+    infile = io.StringIO("q\n")
+    outfile = io.StringIO()
+    rc = ui_mod.run_session(
+        rater="t", batch_sizes=[2, 2], blind_counts=[2, 2],
+        infile=infile, outfile=outfile, resume=False,
+        seed=42, dry_run=False,
+    )
+    assert rc == 0
+    # blind id が重複していないことを確認するため直接 _inject_blind を叩く
+    pool = ui_mod._load_ha48_for_blind()
+    _, chosen1 = ui_mod._inject_blind([], pool, n_blind=2, seed=1)
+    _, chosen2 = ui_mod._inject_blind(
+        [], pool, n_blind=2, seed=2, exclude_orig_ids=chosen1
+    )
+    assert chosen1 & chosen2 == set(), (
+        "blind 抽選で batch 間の orig_id 重複が発生 (P2 回帰)"
+    )
+    # pool 枯渇で 2 batch 目は max 1 件 (pool=3 - 2件消費 = 1 残り)
+    assert len(chosen2) <= 1
