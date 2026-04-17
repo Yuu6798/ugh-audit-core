@@ -1,4 +1,0 @@
-comparison,spearman_rho,p_value,n
-human_score vs PoR,0.0003909115364722356,0.9986949539152152,20
-human_score vs 1-delta_e_full,0.4282779463766084,0.05957322785195654,20
-human_score vs propositions_hit_rate,0.9089552318098786,2.9222943944341956e-08,20
