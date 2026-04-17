@@ -281,37 +281,53 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.orchestrator_jsonl:
         candidates.extend(collect_orchestrator(args.orchestrator_jsonl, ha48_ids))
 
-    ordered = _stratified_shuffle(candidates, args.seed)
-    window = ordered[args.offset : args.offset + args.batch_size]
-
+    # --append 時は既存 stub に含まれる question_id を候補から除外
+    # (重複 sampling による question の weight 偏りを防止)
+    excluded_qids: set = set()
+    existing_rows: List[dict] = []
     start_id = 1
     if args.append and OUT_CSV.exists():
         with open(OUT_CSV, encoding="utf-8") as f:
-            existing = list(csv.DictReader(f))
-        start_id = len(existing) + 1
-        assigned = assign_acc40_ids(window, start=start_id)
-        combined = existing + [
-            {**r, "O": r.get("O", ""), "rater": "", "annotated_at": "",
-             "comment": "", "blind_check": ""}
-            for r in assigned
-        ]
-        write_csv(assigned, OUT_CSV)  # 書き込みは新規分のみ上書き (append 実装は簡略化)
-        # append モードでは既存行を保持して再書き出し
+            existing_rows = list(csv.DictReader(f))
+        excluded_qids = {r["question_id"] for r in existing_rows if r.get("question_id")}
+        start_id = len(existing_rows) + 1
+    if excluded_qids:
+        candidates = [c for c in candidates if c["question_id"] not in excluded_qids]
+
+    ordered = _stratified_shuffle(candidates, args.seed)
+    window = ordered[args.offset : args.offset + args.batch_size]
+    assigned = assign_acc40_ids(window, start=start_id)
+
+    fieldnames = [
+        "id", "source", "question_id", "question", "response",
+        "core_propositions", "O", "rater", "annotated_at", "comment",
+        "blind_check", "hits_total",
+    ]
+    if args.append and existing_rows:
+        OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
         with open(OUT_CSV, "w", encoding="utf-8", newline="") as f:
-            fieldnames = [
-                "id", "source", "question_id", "question", "response",
-                "core_propositions", "O", "rater", "annotated_at", "comment",
-                "blind_check", "hits_total",
-            ]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            for row in combined:
+            for row in existing_rows:
                 writer.writerow({k: row.get(k, "") for k in fieldnames})
+            for r in assigned:
+                writer.writerow({
+                    "id": r["id"],
+                    "source": r["source"],
+                    "question_id": r["question_id"],
+                    "question": r["question"],
+                    "response": r["response"],
+                    "core_propositions": r["core_propositions"],
+                    "O": "", "rater": "", "annotated_at": "",
+                    "comment": "", "blind_check": "",
+                    "hits_total": r.get("hits_total", ""),
+                })
     else:
-        assigned = assign_acc40_ids(window, start=start_id)
         write_csv(assigned, OUT_CSV)
 
     print(f"抽出: {len(window)} 件 (候補プール {len(ordered)} 件中)")
+    if excluded_qids:
+        print(f"  --append: 既存 question_id {len(excluded_qids)} 件を除外")
     print(f"出力: {OUT_CSV}")
     source_counts: Dict[str, int] = {}
     for r in window:

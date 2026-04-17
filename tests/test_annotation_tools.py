@@ -529,3 +529,111 @@ def test_resume_does_not_skip_pending_items(tmp_path, monkeypatch):
     assert "acc40_002" in done_ids, (
         "resume 後に acc40_002 が skip されている (P1-1 回帰)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Codex PR #85 追加レビュー回帰テスト
+# ---------------------------------------------------------------------------
+
+
+def test_sampler_append_excludes_existing_question_ids(fake_data):
+    """P1 回帰: --append で既存 question_id を候補から除外する."""
+    # 1 回目: 1 件サンプリング
+    assert sampler_mod.main(["--batch-size", "1", "--seed", "1"]) == 0
+    with open(fake_data["stub"], encoding="utf-8") as f:
+        first = list(csv.DictReader(f))
+    assert len(first) == 1
+    first_qid = first[0]["question_id"]
+
+    # 2 回目: --append で残り全部。first_qid は重複してはならない
+    assert sampler_mod.main(
+        ["--batch-size", "5", "--append", "--seed", "1"]
+    ) == 0
+    with open(fake_data["stub"], encoding="utf-8") as f:
+        all_rows = list(csv.DictReader(f))
+    qids = [r["question_id"] for r in all_rows]
+    assert qids.count(first_qid) == 1, (
+        f"--append で {first_qid} が重複している (P1 回帰): {qids}"
+    )
+    # 新規 id が assigned されている (acc40_002 以降)
+    new_ids = [r["id"] for r in all_rows[1:]]
+    assert all(nid != "acc40_001" for nid in new_ids)
+
+
+def test_ui_back_navigation_revises_prior_annotation(tmp_path, monkeypatch):
+    """P2 回帰: `r` キーで前件に戻って再 annotate できる."""
+    stub = tmp_path / "stub.csv"
+    out = tmp_path / "out.csv"
+    rows = []
+    for i in range(1, 4):
+        rows.append({
+            "id": f"acc40_{i:03d}", "source": "v5_unannotated",
+            "question_id": f"q{i:03d}", "question": "Q",
+            "response": "R", "core_propositions": "[]",
+            "O": "", "rater": "", "annotated_at": "",
+            "comment": "", "blind_check": "", "hits_total": "",
+        })
+    _write_csv(
+        stub, rows,
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total"],
+    )
+    monkeypatch.setattr(ui_mod, "ACC40_STUB", stub)
+    monkeypatch.setattr(ui_mod, "ACC40_OUT", out)
+    monkeypatch.setattr(ui_mod, "INCREMENTAL_CAL", Path("/nonexistent"))
+    monkeypatch.setattr(ui_mod, "_load_ha48_for_blind", lambda: [])
+    monkeypatch.setattr(ui_mod, "PROGRESS_PATH", tmp_path / "progress.json")
+
+    # 1件目: a,n,5 → O=5
+    # 2件目: r で戻る (1件目を訂正するため)
+    # 1件目を再評価: b,y,3 → O=2
+    # 2件目: a,n,5 → O=5
+    # 3件目: q で pause
+    script = (
+        "a\nn\n5\n"        # item1 O=5
+        "r\n"               # back
+        "b\ny\n3\n"         # item1 再 annotate → O=2
+        "a\nn\n5\n"         # item2 O=5
+        "q\n"               # pause
+    )
+    infile = io.StringIO(script)
+    outfile = io.StringIO()
+    rc = ui_mod.run_session(
+        rater="t", batch_sizes=[3], blind_counts=[0],
+        infile=infile, outfile=outfile, resume=False,
+        seed=42, dry_run=False,
+    )
+    assert rc == 0
+    with open(out, encoding="utf-8") as f:
+        done = {r["id"]: r for r in csv.DictReader(f) if r.get("O")}
+    # item1 は再 annotate で O=2 に上書きされているべき
+    assert done["acc40_001"]["O"] == "2", (
+        f"`r` で戻っても item1 が再評価されていない (P2 回帰): {done['acc40_001']}"
+    )
+    # item2 も annotate 済
+    assert "acc40_002" in done
+
+
+def test_ui_incremental_cal_does_not_pass_no_run_full(monkeypatch):
+    """P2 回帰: batch 境界で --no-run-full を渡さない (STOP 判定を可能に)."""
+    captured_args: List[List[str]] = []
+
+    def fake_run(args, **kwargs):
+        captured_args.append(list(args))
+        class R:
+            returncode = 0
+        return R()
+
+    import subprocess as _sp
+    monkeypatch.setattr(_sp, "run", fake_run)
+    monkeypatch.setattr(ui_mod, "INCREMENTAL_CAL", Path(__file__))  # exists
+
+    ui_mod._call_incremental_cal(Path("/tmp/fake.csv"))
+
+    assert captured_args, "subprocess.run が呼ばれていない"
+    args = captured_args[0]
+    assert "--no-run-full" not in args, (
+        f"--no-run-full が渡っている (P2 回帰): {args}"
+    )
+    assert "--acc40" in args and "/tmp/fake.csv" in args

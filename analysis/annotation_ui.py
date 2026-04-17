@@ -337,12 +337,17 @@ def _inject_blind(
 
 
 def _call_incremental_cal(acc40_path: Path) -> None:
+    """batch 境界で run_incremental_calibration を呼ぶ.
+
+    --no-run-full は付けない: 内部で accept subset の n をチェックし、
+    目標未達ならスキップ、到達していれば full grid を回して
+    STOP 推奨を出す設計になっている。
+    """
     if not INCREMENTAL_CAL.exists():
         return
     try:
         subprocess.run(
-            [sys.executable, str(INCREMENTAL_CAL), "--acc40", str(acc40_path),
-             "--no-run-full"],
+            [sys.executable, str(INCREMENTAL_CAL), "--acc40", str(acc40_path)],
             check=False,
         )
     except Exception as exc:  # pragma: no cover - best-effort hook
@@ -423,7 +428,20 @@ def run_session(
                 outfile.write("\n[pause] 進捗を保存して終了。--resume で再開可能。\n")
                 return 0
             if result.get("_control") == "back":
-                i = max(0, i - 1)
+                # 前件に戻る: 直前の annotated 分を completed/all_outputs から
+                # 取り下げて再 annotate できるようにする。
+                # そうしないと内部ループの「completed_ids 照合で skip」が
+                # 発火して「戻ったつもりが次へ進む」挙動になる。
+                if i > 0:
+                    prev_id = batch[i - 1]["id"]
+                    if prev_id in completed_ids:
+                        completed_ids.discard(prev_id)
+                        all_outputs = [
+                            r for r in all_outputs if r.get("id") != prev_id
+                        ]
+                        if not dry_run:
+                            _write_output(all_outputs, ACC40_OUT)
+                    i -= 1
                 continue
             # 正常完了
             all_outputs.append(result)
