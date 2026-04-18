@@ -533,6 +533,232 @@ def test_resume_does_not_skip_pending_items(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# annotation_ui step mode tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def step_mode_env(tmp_path, monkeypatch):
+    """step モード用の最小環境 (stub/out/progress を tmp 配下に固定)."""
+    stub = tmp_path / "stub.csv"
+    out = tmp_path / "annotation_accept40.csv"
+    progress = tmp_path / "annotation_progress.json"
+    _write_csv(
+        stub,
+        [
+            {
+                "id": "acc40_001", "source": "v5_unannotated",
+                "question_id": "q001", "question": "Q1?",
+                "response": "R1", "core_propositions": "[\"p1\"]",
+                "O": "", "rater": "", "annotated_at": "",
+                "comment": "", "blind_check": "", "hits_total": "1/1",
+                "delta_e": "0.05",
+            },
+            {
+                "id": "acc40_002", "source": "v5_unannotated",
+                "question_id": "q002", "question": "Q2?",
+                "response": "R2", "core_propositions": "[\"p2\"]",
+                "O": "", "rater": "", "annotated_at": "",
+                "comment": "", "blind_check": "", "hits_total": "1/1",
+                "delta_e": "0.05",
+            },
+        ],
+        ["id", "source", "question_id", "question", "response",
+         "core_propositions", "O", "rater", "annotated_at", "comment",
+         "blind_check", "hits_total", "delta_e"],
+    )
+    monkeypatch.setattr(ui_mod, "ACC40_STUB", stub)
+    monkeypatch.setattr(ui_mod, "ACC40_OUT", out)
+    monkeypatch.setattr(ui_mod, "INCREMENTAL_CAL", tmp_path / "no_call.py")
+    monkeypatch.setattr(ui_mod, "PROGRESS_PATH", progress)
+    monkeypatch.setattr(ui_mod, "_load_ha48_for_blind", lambda: [])
+    monkeypatch.delenv("UGH_ANNOTATION_PROGRESS_PATH", raising=False)
+    return {"stub": stub, "out": out, "progress": progress}
+
+
+def _seed_step_progress(progress_path: Path) -> None:
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.write_text(
+        json.dumps(
+            {
+                "rater": "user",
+                "batch_index": 0,
+                "cursor_in_batch": 0,
+                "completed_ids": [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _read_progress(progress_path: Path) -> dict:
+    return json.loads(progress_path.read_text(encoding="utf-8"))
+
+
+def test_step_next_shows_current_without_mutation(step_mode_env, capsys):
+    _seed_step_progress(step_mode_env["progress"])
+    before = _read_progress(step_mode_env["progress"])
+
+    rc = ui_mod.main([
+        "--resume",
+        "--batch-size", "2",
+        "--blind-count", "0",
+        "--step-next",
+    ])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "[next]" in out
+    assert "[ID: acc40_001]" in out
+    assert not step_mode_env["out"].exists()
+    after = _read_progress(step_mode_env["progress"])
+    assert after["cursor_in_batch"] == before["cursor_in_batch"]
+    assert after["batch_index"] == before["batch_index"]
+
+
+def test_step_annotate_advances_cursor_and_writes_csv(step_mode_env, capsys):
+    _seed_step_progress(step_mode_env["progress"])
+
+    rc = ui_mod.main([
+        "--resume",
+        "--batch-size", "2",
+        "--blind-count", "0",
+        "--step-annotate",
+        "--item-id", "acc40_001",
+        "--q1", "a",
+        "--q2", "n",
+        "--comment-key", "5",
+    ])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "[saved] id=acc40_001" in out
+    assert "[next-id] acc40_002" in out
+
+    assert step_mode_env["out"].exists()
+    with open(step_mode_env["out"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    row = next(r for r in rows if r["id"] == "acc40_001")
+    assert row["O"] == "5"
+    assert row["comment"] == "完璧"
+
+    after = _read_progress(step_mode_env["progress"])
+    assert after["cursor_in_batch"] == 1
+    assert after["batch_index"] == 0
+
+
+def test_step_annotate_dry_run_does_not_write_or_persist_cursor(
+    step_mode_env, capsys
+):
+    _seed_step_progress(step_mode_env["progress"])
+    before = _read_progress(step_mode_env["progress"])
+
+    rc = ui_mod.main([
+        "--resume",
+        "--dry-run",
+        "--batch-size", "2",
+        "--blind-count", "0",
+        "--step-annotate",
+        "--item-id", "acc40_001",
+        "--q1", "a",
+        "--q2", "n",
+        "--comment-key", "5",
+    ])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "[saved] id=acc40_001" in out
+    assert "[dry-run] progress not persisted." in out
+    assert not step_mode_env["out"].exists()
+    after = _read_progress(step_mode_env["progress"])
+    assert after["cursor_in_batch"] == before["cursor_in_batch"]
+    assert after["batch_index"] == before["batch_index"]
+
+
+def test_step_skip_advances_without_writing(step_mode_env, capsys):
+    _seed_step_progress(step_mode_env["progress"])
+
+    rc = ui_mod.main([
+        "--resume",
+        "--batch-size", "2",
+        "--blind-count", "0",
+        "--step-skip",
+    ])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "[skip] acc40_001" in out
+    assert not step_mode_env["out"].exists()
+    after = _read_progress(step_mode_env["progress"])
+    assert after["cursor_in_batch"] == 1
+    assert after["batch_index"] == 0
+
+
+def test_step_item_id_mismatch_returns_error(step_mode_env, capsys):
+    _seed_step_progress(step_mode_env["progress"])
+    before = _read_progress(step_mode_env["progress"])
+
+    rc = ui_mod.main([
+        "--resume",
+        "--batch-size", "2",
+        "--blind-count", "0",
+        "--step-annotate",
+        "--item-id", "acc40_999",
+        "--q1", "a",
+        "--q2", "n",
+        "--comment-key", "5",
+    ])
+    out = capsys.readouterr().out
+
+    assert rc == 2
+    assert "[error] current item id mismatch" in out
+    assert not step_mode_env["out"].exists()
+    after = _read_progress(step_mode_env["progress"])
+    assert after == before
+
+
+def test_step_override_o_skips_decision_tree(step_mode_env):
+    _seed_step_progress(step_mode_env["progress"])
+    rc = ui_mod.main([
+        "--resume",
+        "--batch-size", "2",
+        "--blind-count", "0",
+        "--step-annotate",
+        "--item-id", "acc40_001",
+        "--o", "3",
+        "--comment-key", "5",
+    ])
+    assert rc == 0
+    with open(step_mode_env["out"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    row = next(r for r in rows if r["id"] == "acc40_001")
+    assert row["O"] == "3"
+    assert row["comment"] == "完璧"
+
+
+def test_step_custom_comment_with_detail(step_mode_env):
+    _seed_step_progress(step_mode_env["progress"])
+    rc = ui_mod.main([
+        "--resume",
+        "--batch-size", "2",
+        "--blind-count", "0",
+        "--step-annotate",
+        "--item-id", "acc40_001",
+        "--q1", "a",
+        "--q2", "n",
+        "--comment-key", "6",
+        "--comment-detail", "カスタム理由",
+    ])
+    assert rc == 0
+    with open(step_mode_env["out"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    row = next(r for r in rows if r["id"] == "acc40_001")
+    assert row["comment"] == "カスタム: カスタム理由"
+
+
+# ---------------------------------------------------------------------------
 # Codex PR #85 追加レビュー回帰テスト
 # ---------------------------------------------------------------------------
 
@@ -637,7 +863,9 @@ def test_ui_incremental_cal_does_not_pass_no_run_full(monkeypatch):
     assert "--no-run-full" not in args, (
         f"--no-run-full が渡っている (P2 回帰): {args}"
     )
-    assert "--acc40" in args and "/tmp/fake.csv" in args
+    assert "--acc40" in args
+    acc40_idx = args.index("--acc40")
+    assert Path(args[acc40_idx + 1]) == Path("/tmp/fake.csv")
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import random
 import subprocess
 import sys
@@ -71,6 +72,14 @@ SLOW_THINK_SECONDS = 90
 # ---------------------------------------------------------------------------
 # I/O helpers
 # ---------------------------------------------------------------------------
+
+
+def _progress_path() -> Path:
+    """Return progress json path (override via UGH_ANNOTATION_PROGRESS_PATH)."""
+    override = os.environ.get("UGH_ANNOTATION_PROGRESS_PATH")
+    if override:
+        return Path(override)
+    return PROGRESS_PATH
 
 
 def _load_stub(path: Path) -> List[dict]:
@@ -157,15 +166,17 @@ def _load_ha48_for_blind() -> List[dict]:
 
 
 def _save_progress(state: dict) -> None:
-    PROGRESS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(PROGRESS_PATH, "w", encoding="utf-8") as f:
+    progress_path = _progress_path()
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(progress_path, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
 def _load_progress() -> Optional[dict]:
-    if not PROGRESS_PATH.exists():
+    progress_path = _progress_path()
+    if not progress_path.exists():
         return None
-    with open(PROGRESS_PATH, encoding="utf-8") as f:
+    with open(progress_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -606,6 +617,269 @@ def run_stability_check(
 # ---------------------------------------------------------------------------
 
 
+def _normalize_state(rater: str, resume: bool) -> dict:
+    state: dict = {
+        "rater": rater,
+        "batch_index": 0,
+        "cursor_in_batch": 0,
+        "completed_ids": [],
+    }
+    if resume:
+        loaded = _load_progress()
+        if loaded:
+            state.update(loaded)
+    return state
+
+
+def _build_batches_for_step_mode(
+    stub_rows: List[dict],
+    batch_sizes: List[int],
+    blind_counts: List[int],
+    seed: int,
+) -> List[List[dict]]:
+    """Build deterministic batches identical to run_session."""
+    ha48_for_blind = _load_ha48_for_blind()
+    b_counts = list(blind_counts)
+    if len(b_counts) < len(batch_sizes):
+        b_counts = b_counts + [0] * (len(batch_sizes) - len(b_counts))
+    elif len(b_counts) > len(batch_sizes):
+        b_counts = b_counts[: len(batch_sizes)]
+
+    batches: List[List[dict]] = []
+    used_blind_orig_ids: set = set()
+    idx = 0
+    for bs, blind_n in zip(batch_sizes, b_counts):
+        chunk = stub_rows[idx: idx + bs]
+        idx += bs
+        if not chunk:
+            continue
+        chunk, chosen_ids = _inject_blind(
+            chunk,
+            ha48_for_blind,
+            blind_n,
+            seed=seed + len(batches),
+            exclude_orig_ids=used_blind_orig_ids,
+        )
+        used_blind_orig_ids.update(chosen_ids)
+        batches.append(chunk)
+
+    if idx < len(stub_rows):
+        tail = stub_rows[idx:]
+        tail_blind_n = b_counts[-1] if b_counts else 0
+        chunk, chosen_ids = _inject_blind(
+            tail,
+            ha48_for_blind,
+            tail_blind_n,
+            seed=seed + len(batches),
+            exclude_orig_ids=used_blind_orig_ids,
+        )
+        used_blind_orig_ids.update(chosen_ids)
+        batches.append(chunk)
+    return batches
+
+
+def _seek_next_pending(
+    batches: List[List[dict]],
+    completed_ids: set,
+    batch_index: int,
+    cursor_in_batch: int,
+) -> tuple[int, int]:
+    """Return the next unresolved (batch_index, cursor) or (len(batches), 0)."""
+    b_i = max(0, batch_index)
+    i = max(0, cursor_in_batch)
+    while b_i < len(batches):
+        batch = batches[b_i]
+        while i < len(batch):
+            if batch[i]["id"] in completed_ids:
+                i += 1
+                continue
+            return b_i, i
+        b_i += 1
+        i = 0
+    return len(batches), 0
+
+
+def _compose_comment(comment_key: str, comment_detail: str) -> str:
+    base = COMMENT_TEMPLATES.get(comment_key, COMMENT_TEMPLATES["5"])
+    detail = (comment_detail or "").strip()
+    if detail:
+        return f"{base}: {detail}"
+    return base
+
+
+def _derive_o_from_inputs(
+    *,
+    override_o: Optional[int],
+    q1: Optional[str],
+    q2: Optional[str],
+) -> int:
+    if override_o is not None:
+        return int(override_o)
+
+    if not q1:
+        raise ValueError("q1 is required when --o is not provided")
+    q1_n = q1.strip().upper()
+    if q1_n not in {"A", "B", "C"}:
+        raise ValueError("q1 must be one of A/B/C")
+
+    if q1_n == "C":
+        return DECISION_TREE[("C", "N")]
+
+    if not q2:
+        raise ValueError("q2 is required when q1 is A or B")
+    q2_n = q2.strip().upper()
+    if q2_n not in {"Y", "N"}:
+        raise ValueError("q2 must be one of Y/N")
+    return DECISION_TREE[(q1_n, q2_n)]
+
+
+def run_step_mode(
+    *,
+    rater: str,
+    batch_sizes: List[int],
+    blind_counts: List[int],
+    resume: bool,
+    seed: int,
+    dry_run: bool,
+    show_next: bool,
+    annotate_current: bool,
+    skip_current: bool,
+    item_id: Optional[str],
+    q1: Optional[str],
+    q2: Optional[str],
+    override_o: Optional[int],
+    comment_key: str,
+    comment_detail: str,
+    outfile: TextIO,
+) -> int:
+    stub_rows = _load_stub(ACC40_STUB)
+    if not stub_rows:
+        outfile.write("stub CSV がありません。先に annotation_sampler.py を実行してください。\n")
+        return 1
+
+    batches = _build_batches_for_step_mode(
+        stub_rows=stub_rows,
+        batch_sizes=batch_sizes,
+        blind_counts=blind_counts,
+        seed=seed,
+    )
+    if not batches:
+        outfile.write("batch が作れませんでした。\n")
+        return 1
+
+    all_outputs = _load_existing_output(ACC40_OUT)
+    completed_ids = {r["id"] for r in all_outputs if r.get("O")}
+
+    state = _normalize_state(rater=rater, resume=resume)
+    b_i, i = _seek_next_pending(
+        batches=batches,
+        completed_ids=completed_ids,
+        batch_index=state.get("batch_index", 0),
+        cursor_in_batch=state.get("cursor_in_batch", 0),
+    )
+    state["batch_index"] = b_i
+    state["cursor_in_batch"] = i
+
+    if b_i >= len(batches):
+        _save_progress(state)
+        outfile.write("[done] すべての対象が処理済みです。\n")
+        return 0
+
+    current = batches[b_i][i]
+    if item_id and item_id != current["id"]:
+        outfile.write(
+            f"[error] current item id mismatch: expected={current['id']} provided={item_id}\n"
+        )
+        return 2
+
+    if show_next:
+        _save_progress(state)
+        batch_total = len(batches[b_i])
+        remaining_in_batch = sum(
+            1 for row in batches[b_i][i:] if row["id"] not in completed_ids
+        )
+        outfile.write(
+            f"[next] batch={b_i+1}/{len(batches)} index={i+1}/{batch_total} "
+            f"remaining_in_batch={remaining_in_batch}\n"
+        )
+        outfile.write(_format_item(current) + "\n")
+        return 0
+
+    if skip_current:
+        old_b_i = b_i
+        next_b_i, next_i = _seek_next_pending(
+            batches=batches,
+            completed_ids=completed_ids,
+            batch_index=b_i,
+            cursor_in_batch=i + 1,
+        )
+        if not dry_run:
+            state["batch_index"] = next_b_i
+            state["cursor_in_batch"] = next_i
+            _save_progress(state)
+        outfile.write(f"[skip] {current['id']}\n")
+        if dry_run:
+            outfile.write("[dry-run] progress not persisted.\n")
+        if next_b_i > old_b_i and not dry_run:
+            _call_incremental_cal(ACC40_OUT)
+        return 0
+
+    if annotate_current:
+        try:
+            o_val = _derive_o_from_inputs(
+                override_o=override_o,
+                q1=q1,
+                q2=q2,
+            )
+        except ValueError as exc:
+            outfile.write(f"[error] {exc}\n")
+            return 2
+
+        row = dict(current)
+        row["O"] = str(o_val)
+        row["rater"] = rater
+        row["annotated_at"] = datetime.now(timezone.utc).isoformat()
+        row["comment"] = _compose_comment(comment_key=comment_key, comment_detail=comment_detail)
+
+        # overwrite-safe upsert
+        all_outputs = [r for r in all_outputs if r.get("id") != row["id"]]
+        all_outputs.append(row)
+        completed_ids.add(row["id"])
+        if not dry_run:
+            _write_output(all_outputs, ACC40_OUT)
+
+        old_b_i = b_i
+        next_b_i, next_i = _seek_next_pending(
+            batches=batches,
+            completed_ids=completed_ids,
+            batch_index=b_i,
+            cursor_in_batch=i + 1,
+        )
+        if not dry_run:
+            state["batch_index"] = next_b_i
+            state["cursor_in_batch"] = next_i
+            _save_progress(state)
+
+        outfile.write(
+            f"[saved] id={row['id']} O={row['O']} "
+            f"batch={old_b_i+1}/{len(batches)} index={i+1}/{len(batches[old_b_i])}\n"
+        )
+        if dry_run:
+            outfile.write("[dry-run] progress not persisted.\n")
+        if next_b_i > old_b_i and not dry_run:
+            _call_incremental_cal(ACC40_OUT)
+            outfile.write(f"[batch {old_b_i+1} completed] incremental calibration triggered.\n")
+        if next_b_i >= len(batches):
+            outfile.write("[done] すべての対象が処理済みです。\n")
+        else:
+            nxt = batches[next_b_i][next_i]
+            outfile.write(f"[next-id] {nxt['id']}\n")
+        return 0
+
+    outfile.write("[error] no step action selected.\n")
+    return 2
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rater", default="user")
@@ -631,11 +905,70 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--stability-n", type=int, default=5,
         help="stability-check サンプル数",
     )
+    parser.add_argument(
+        "--step-next", action="store_true",
+        help="非対話ステップモード: 現在の対象1件を表示して終了",
+    )
+    parser.add_argument(
+        "--step-annotate", action="store_true",
+        help="非対話ステップモード: 現在の対象1件を記録して次へ進む",
+    )
+    parser.add_argument(
+        "--step-skip", action="store_true",
+        help="非対話ステップモード: 現在の対象1件を skip して次へ進む",
+    )
+    parser.add_argument(
+        "--item-id",
+        help="step 実行時の安全確認用 (現在対象IDと一致必須)",
+    )
+    parser.add_argument(
+        "--q1", choices=["a", "b", "c", "A", "B", "C"],
+        help="step-annotate 用 Q1",
+    )
+    parser.add_argument(
+        "--q2", choices=["y", "n", "Y", "N"],
+        help="step-annotate 用 Q2 (Q1=A/B の場合必須)",
+    )
+    parser.add_argument(
+        "--o", type=int, choices=[1, 2, 3, 4, 5],
+        help="step-annotate 用 override O (指定時は q1/q2 不要)",
+    )
+    parser.add_argument(
+        "--comment-key", choices=["1", "2", "3", "4", "5", "6"], default="5",
+        help="step-annotate 用コメントテンプレート番号",
+    )
+    parser.add_argument(
+        "--comment-detail", default="",
+        help="step-annotate 用コメント詳細",
+    )
     args = parser.parse_args(argv)
+    step_modes = [args.step_next, args.step_annotate, args.step_skip]
+    if sum(1 for f in step_modes if f) > 1:
+        parser.error("use only one of --step-next / --step-annotate / --step-skip")
 
     if args.stability_check:
         return run_stability_check(
             args.rater, sys.stdin, sys.stdout, args.seed, args.stability_n
+        )
+
+    if any(step_modes):
+        return run_step_mode(
+            rater=args.rater,
+            batch_sizes=args.batch_size,
+            blind_counts=args.blind_count,
+            resume=args.resume,
+            seed=args.seed,
+            dry_run=args.dry_run,
+            show_next=args.step_next,
+            annotate_current=args.step_annotate,
+            skip_current=args.step_skip,
+            item_id=args.item_id,
+            q1=args.q1,
+            q2=args.q2,
+            override_o=args.o,
+            comment_key=args.comment_key,
+            comment_detail=args.comment_detail,
+            outfile=sys.stdout,
         )
 
     return run_session(
