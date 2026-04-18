@@ -2,5 +2,8 @@
 annotation_accept40_stub.csv
 annotation_ha48_plus_accept40.csv
 annotation_merged_accept_subset.csv
+annotation_merged_for_calibration.csv
+# UI の進捗保存（ローカル実行時に生成）
+annotation_progress.json
 # annotate 本体は空欄スタブでは commit せず、完走後に commit する運用
 annotation_accept40.csv
