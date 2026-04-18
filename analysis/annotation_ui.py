@@ -813,10 +813,13 @@ def run_step_mode(
             batch_index=b_i,
             cursor_in_batch=i + 1,
         )
-        state["batch_index"] = next_b_i
-        state["cursor_in_batch"] = next_i
-        _save_progress(state)
+        if not dry_run:
+            state["batch_index"] = next_b_i
+            state["cursor_in_batch"] = next_i
+            _save_progress(state)
         outfile.write(f"[skip] {current['id']}\n")
+        if dry_run:
+            outfile.write("[dry-run] progress not persisted.\n")
         if next_b_i > old_b_i and not dry_run:
             _call_incremental_cal(ACC40_OUT)
         return 0
@@ -852,14 +855,17 @@ def run_step_mode(
             batch_index=b_i,
             cursor_in_batch=i + 1,
         )
-        state["batch_index"] = next_b_i
-        state["cursor_in_batch"] = next_i
-        _save_progress(state)
+        if not dry_run:
+            state["batch_index"] = next_b_i
+            state["cursor_in_batch"] = next_i
+            _save_progress(state)
 
         outfile.write(
             f"[saved] id={row['id']} O={row['O']} "
             f"batch={old_b_i+1}/{len(batches)} index={i+1}/{len(batches[old_b_i])}\n"
         )
+        if dry_run:
+            outfile.write("[dry-run] progress not persisted.\n")
         if next_b_i > old_b_i and not dry_run:
             _call_incremental_cal(ACC40_OUT)
             outfile.write(f"[batch {old_b_i+1} completed] incremental calibration triggered.\n")
