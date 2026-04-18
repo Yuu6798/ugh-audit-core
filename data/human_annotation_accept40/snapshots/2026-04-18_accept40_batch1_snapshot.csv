@@ -1,0 +1,19 @@
+id,source,question_id,O,comment,blind_check
+acc40_004,v5_borderline,q036,4,完璧,
+acc40_006,v5_borderline,q097,2,誤情報含む,
+acc40_015,v5_unannotated,q046,3,冗長だが核心あり,
+acc40_005,v5_unannotated,q040,4,冗長だが核心あり,
+acc40_010,v5_borderline,q016,1,方向違い / 主題逸脱,
+acc40_014,v5_borderline,q065,3,方向違い / 主題逸脱,
+blind_q088,blind,q088,5,カスタム: 概ね捉えてるが完璧とは言い難い,q088
+acc40_001,v5_unannotated,q070,5,完璧,
+acc40_007,v5_unannotated,q084,4,誤情報含む,
+acc40_013,v5_unannotated,q020,5,完璧,
+blind_q003,blind,q003,1,カスタム: ΔEは意味・文脈のずれ指標だが、回答が未知語を一般化して定義誤認,q003
+acc40_011,v5_unannotated,q021,3,冗長だが核心あり,
+acc40_002,v5_borderline,q052,5,完璧,
+acc40_012,v5_borderline,q004,2,誤情報含む,
+acc40_003,v5_unannotated,q051,5,完璧,
+blind_q017,blind,q017,5,完璧,q017
+acc40_008,v5_borderline,q043,5,完璧,
+acc40_009,v5_unannotated,q077,3,命題カバー不足,
