@@ -38,6 +38,7 @@ warnings.filterwarnings("ignore", category=ConstantInputWarning)
 
 from grv_calculator import compute_grv  # noqa: E402
 from mode_grv import compute_mode_conditioned_grv  # noqa: E402
+from ugh_calculator import _compute_delta_e  # noqa: E402
 
 # --- データパス ---
 HA48_PATH = ROOT / "data" / "human_annotation_48" / "annotation_48_merged.csv"
@@ -93,17 +94,6 @@ def _primary_verdict(delta_e: Optional[float], c: Optional[float]) -> str:
     if delta_e <= DELTA_E_REWRITE:
         return "rewrite"
     return "regenerate"
-
-
-def _compute_delta_e(s: float, c: float) -> float:
-    """ΔE 正規化 (canonical 定義を ugh_calculator から再エクスポート).
-
-    過去バージョンは線形式 `2(1-S) + (1-C)` を書いていたが canonical は
-    squared `2(1-S)² + (1-C)²` なので、ドリフト防止のため canonical 実装を
-    そのまま呼ぶ。
-    """
-    from ugh_calculator import _compute_delta_e as _canonical
-    return _canonical(s, c)
 
 
 # --- データローダ ---
