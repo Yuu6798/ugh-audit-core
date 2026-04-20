@@ -177,20 +177,19 @@ re.split(r'[。．！？!?.\n]+', text)
 - grv パス自体には `fugashi` / `ipadic` / `MeCab` 等の**明示的な形態素
   解析器を使っていない**。トークナイズは SBert に閉じている
 
-### pyproject の `ja` / `full` / `server` extra について
+### pyproject の extras について
 
-`fugashi>=1.3` / `ipadic>=1.0` は `[ja]` / `[full]` / `[server]` extras に
-宣言されているが、**2026-04 時点で repo 内の Python コードからは import
-されていない** (`grep -r "fugashi\|ipadic\|MeCab" --include="*.py"` で
-ヒット 0)。下記のどちらかに該当する:
+`fugashi` / `ipadic` は過去に `[ja]` / `[full]` / `[server]` extras で
+宣言されていたが、repo 内 Python コードから import されたことが
+一度もなかった (`grep -r "fugashi\|ipadic\|MeCab" --include="*.py"` で
+ヒット 0)。Phase C v0 / v1 の calibration note では「将来の形態素 POS
+filter 導入で不正トークンを完全除去する」計画が言及されていたが、
+実装されないまま 2026-04 に cleanup で extras から削除した。
 
-- **将来の形態素ベース機能用の予約** (cascade の bigram を morpheme
-  Jaccard に置き換える計画など)
-- **sentence-transformers の transitive 要請に備えた保険** (実際には
-  paraphrase-multilingual-MiniLM-L12-v2 は SentencePiece で完結するので
-  不要)
-
-不要と判定された場合は extras から外す cleanup 候補となる。
+形態素解析を後日導入する場合は、現在と同様に `fugashi>=1.3` /
+`ipadic>=1.0` を追加する extra を新設する (例: `[morpheme]`)。
+SBert パス自体は `paraphrase-multilingual-MiniLM-L12-v2` の
+SentencePiece で完結するため不要。
 
 ## 多言語対応方針
 
@@ -222,7 +221,7 @@ re.split(r'[。．！？!?.\n]+', text)
 | 方向 | 効果 | 工数 |
 |------|------|------|
 | `pysbd` 等の言語対応 sentence splitter 導入 | タイ語・アラビア語で `dispersion` / `collapse_v2` が本来の粒度で動作 | 低 (入れ替えのみ) |
-| fugashi ベースの形態素 bigram を detector に実装 | 日本語の命題マッチ精度向上、extras `ja` の実装実体化 | 中 (detector 側の hit 判定改修) |
+| fugashi ベースの形態素 bigram を detector に実装 | 日本語の命題マッチ精度向上 (導入時は新規 `[morpheme]` extra を切る) | 中 (detector 側の hit 判定改修) |
 | 多言語での ρ 検証 (英・中・韓で各 n=20+) | 論文での汎用性主張の根拠になる | 高 (アノテーション作業) |
 | XLM-R 以外のモデル差し替え (LaBSE 等) の比較 | 特定言語ペアで精度向上の可能性 | 中 (校正再走) |
 
