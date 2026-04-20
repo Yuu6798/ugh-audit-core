@@ -377,14 +377,24 @@ git push -u origin <branch-name>
 
 ## CI Pipeline
 
-GitHub Actions (`.github/workflows/ci.yml`):
+### Fast path: `.github/workflows/ci.yml` (push / PR)
 
 1. Python 3.10 / 3.11 / 3.12 マトリクス
-2. `pip install -e ".[dev]"` (dev extra にサーバー依存を含む)
+2. `pip install -e ".[dev]"` (dev extra にサーバー依存を含む、SBert 非包含)
 3. `ruff check .` — lint
-4. `pytest -q --tb=short` — test (REST/MCP テスト含む)
+4. `pytest -q --tb=short` — test (REST/MCP テスト含む、SBert 依存 7 件は自動 skip)
 
 CI 通過 = lint clean + 全テスト pass
+
+### Weekly regression: `.github/workflows/ci-weekly.yml` (schedule + manual)
+
+1. 毎週月曜 00:00 UTC + `workflow_dispatch` で手動 kick
+2. Python 3.11 単独 (マトリクスは fast path に任せる、weekly は SBert 経路の確認に集中)
+3. `pip install -e ".[dev,server]"` で `sentence-transformers` 同梱
+4. `actions/cache@v4` で `~/.cache/huggingface` をキャッシュ (`paraphrase-multilingual-MiniLM-L12-v2` ≈ 470 MB の再 DL 回避)
+5. `ruff check .` + `pytest -q -rs` で SBert 依存 7 件 (tier2×4, grv×3) も実行
+
+目的: fast path が skip する SBert 経路 (cascade tier2 / grv_calculator / mode_grv / server の cascade 連携) の regression 検知。失敗時は GitHub Actions 既定の通知経路で把握。
 
 ## Important Notes
 
