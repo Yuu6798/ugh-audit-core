@@ -43,12 +43,21 @@
 | S 重み | `f1=5, f2=25, f3=5, f4=5` | [`formulas.md`](formulas.md) | `ugh_calculator.py:WEIGHTS_F` |
 | ΔE 重み | `w_s=2, w_c=1` | [`formulas.md`](formulas.md) | `ugh_calculator.py:WEIGHT_S/C` |
 | quality_score | `5 - 4 × ΔE` | [`formulas.md`](formulas.md) | `ugh_calculator.py` |
-| `C_BIN_THRESHOLDS` | `[0.34, 0.67]` (bin1/2, bin2/3 境界) | [`formulas.md`](formulas.md) | `ugh_calculator.py:C_BIN_THRESHOLDS` |
-| `DELTA_E_BIN_THRESHOLDS` | `[0.10, 0.25]` (= verdict 閾値に同期) | [`formulas.md`](formulas.md) | `ugh_calculator.py:DELTA_E_BIN_THRESHOLDS` |
+| `C_BIN_THRESHOLDS` | `[0.34, 0.67]` (bin1/2, bin2/3 境界) | `ugh_calculator.py:C_BIN_THRESHOLDS` (設計 doc 未記載、コードが source of truth) | `ugh_calculator.py:C_BIN_THRESHOLDS` |
+| `DELTA_E_BIN_THRESHOLDS` | `[0.10, 0.25]` (= verdict 閾値に同期) | [`formulas.md`](formulas.md) §verdict 判定 | `ugh_calculator.py:DELTA_E_BIN_THRESHOLDS` |
+| gate_verdict `pass` | `fail_max == 0.0` AND `f4 != None` | [`formulas.md`](formulas.md) §gate_verdict | `ugh_audit/server.py:_gate_verdict_safe` |
+| gate_verdict `warn` | `0.0 < fail_max < 1.0` AND `f4 != None` | [`formulas.md`](formulas.md) §gate_verdict | `ugh_audit/server.py:_gate_verdict_safe` |
+| gate_verdict `fail` | `fail_max ≥ 1.0` | [`formulas.md`](formulas.md) §gate_verdict | `ugh_audit/server.py:_gate_verdict_safe` |
+| gate_verdict `incomplete` | `f4 == None` | [`formulas.md`](formulas.md) §gate_verdict | `ugh_audit/server.py:_gate_verdict_safe` |
 
 **導出根拠**: ΔE の `0.10 / 0.25` は HA48 (n=48, ρ=-0.5195) で校正済み
 確定値。詳細は [`validation.md`](validation.md) の HA48 verdict 単調性
-(`accept(3.44) > rewrite(2.62) > regenerate(1.00)`) を参照。
+(`accept(3.44) > rewrite(2.62) > regenerate(1.00)`) を参照。gate_verdict
+は f1〜f4 の max を見る構造的健全性ゲート (`fail_max = max(f1, f2, f3, f4)`)
+で、`verdict` とは独立に算出される副次出力。`C_BIN_THRESHOLDS` は
+`ugh_calculator.py` のみで定義され設計 doc には未記載のため、変更時は
+コード定数と本書の両方を同期させる (formulas.md 側にも記載する場合は
+新たに 1 節追加が必要)。
 
 ## 2. 検出層 (detector)
 
