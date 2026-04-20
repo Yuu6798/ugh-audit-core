@@ -78,6 +78,7 @@ def main() -> None:
         question_meta = _load_meta(qid)
 
         result = audit(qid, response_text, question_meta)
+        evidence = result["evidence"]
         state = result["state"]
         verdict = result["policy"]["decision"]
 
@@ -85,6 +86,12 @@ def main() -> None:
         c = state.get("C")
         delta_e = state.get("delta_e")
         quality_score = state.get("quality_score")
+        propositions_hit = int(evidence.get("propositions_hit", 0) or 0)
+        propositions_total = int(evidence.get("propositions_total", 0) or 0)
+        hit_rate = (
+            f"{propositions_hit}/{propositions_total}"
+            if propositions_total > 0 else ""
+        )
 
         saved_id = None
         if verdict != "degraded":
@@ -98,11 +105,11 @@ def main() -> None:
                 delta_e=_as_float(delta_e),
                 quality_score=_as_float(quality_score),
                 verdict=str(verdict),
-                f1=_as_float(state.get("f1")),
-                f2=_as_float(state.get("f2")),
-                f3=_as_float(state.get("f3")),
-                f4=_as_float(state.get("f4")),
-                hit_rate=str(state.get("hit_rate", "") or ""),
+                f1=_as_float(evidence.get("f1_anchor")),
+                f2=_as_float(evidence.get("f2_unknown")),
+                f3=_as_float(evidence.get("f3_operator")),
+                f4=_as_float(evidence.get("f4_premise")),
+                hit_rate=hit_rate,
                 metadata_source="inline",
             )
 
