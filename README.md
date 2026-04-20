@@ -43,6 +43,8 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 
 ### 検証結果（HA48, n=48, v5 ベースライン 197/310 hits）
 
+**評価目的: 主評価** — システム自動算出 C と人手参照 C の相関を比較し、検出パイプラインの上限性能を評価する。
+
 | 指標 | Spearman ρ | p値 | 備考 |
 |------|-----------|-----|------|
 | ΔE vs O (system C) | -0.5195 | 0.000154 | ΔE baseline |
@@ -130,7 +132,10 @@ auto_generate_meta: true
 - **metadata_source: "llm_generated"** で手動メタとの区別が明示される
 - **opt-in**: `auto_generate_meta=true` を指定しない限り従来通り degraded
 
-検証結果 (n=102): degraded 排除 100%, verdict 一致率 61.8%, ΔE 相関 ρ=0.378
+検証結果 (n=102, **副次評価**): LLM 動的メタ生成時の degraded 排除と verdict 一致率を測定する。HA48 主評価とは目的が異なり、相関値の絶対水準ではなく degraded 解消と verdict 整合の両立を見る。
+- degraded 排除: 100%
+- verdict 一致率: 61.8%
+- ΔE 相関: ρ=0.378
 
 設計詳細: `docs/orchestration_design.md`, `experiments/README.md`
 
