@@ -1211,11 +1211,31 @@ def detect(
     frames = _load_premise_frames()
 
     # メタデータから必要情報を取得
+    # 子孫 JSONL (q_metadata_structural_*.jsonl) は `original_*` プレフィクス
+    # を使うので、正規キーが欠落している場合は original_* にフォールバックする。
+    # ※ 正規キーが空値 ("" や []) で明示的に設定されている場合は fallback させない
+    #   (例: trap_type="" は「罠なし」を意味し、trap_type キー不在と区別される)
     question_text = question_meta.get("question", "")
-    core_props = question_meta.get("core_propositions", [])
-    disqualifying = question_meta.get("disqualifying_shortcuts", [])
-    acceptable_variants = question_meta.get("acceptable_variants", [])
-    trap_type = question_meta.get("trap_type", None)
+    core_props = (
+        question_meta["core_propositions"]
+        if "core_propositions" in question_meta
+        else question_meta.get("original_core_propositions", [])
+    )
+    disqualifying = (
+        question_meta["disqualifying_shortcuts"]
+        if "disqualifying_shortcuts" in question_meta
+        else question_meta.get("original_disqualifying_shortcuts", [])
+    )
+    acceptable_variants = (
+        question_meta["acceptable_variants"]
+        if "acceptable_variants" in question_meta
+        else question_meta.get("original_acceptable_variants", [])
+    )
+    trap_type = (
+        question_meta["trap_type"]
+        if "trap_type" in question_meta
+        else question_meta.get("original_trap_type")
+    )
     if not isinstance(trap_type, str):
         trap_type = None
 
