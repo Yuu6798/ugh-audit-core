@@ -121,19 +121,28 @@ f1_anchor coverage ゲート (< 0.3 / < 0.6) と f4_premise 安全語彙密度
 
 ## 6. L_sem (意味損失関数)
 
+`DEFAULT_WEIGHTS` 全 7 項 (`semantic_loss.py:39-47`)。**full-sample
+最適値**ではなく **LOO-CV 補正後の runtime 値** を記載する (両者は異なる)。
+
 | 閾値 / 重み | 値 | 出典 | コード |
 |---|---|---|---|
-| `DEFAULT_WEIGHTS["L_P"]` | `0.425` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
-| `DEFAULT_WEIGHTS["L_F"]` | `0.275` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_P"]` | `0.27` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_Q"]` | `0.02` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_R"]` | `0.03` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_A"]` | `0.02` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
 | `DEFAULT_WEIGHTS["L_G"]` | `0.35` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_F"]` | `0.21` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
 | `DEFAULT_WEIGHTS["L_X"]` | `0.10` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
 
-**導出根拠**: HA48 Phase 5 の full-sample 3 項最適化で `L_P+L_F+L_G` →
-ρ=-0.6020 に到達 ([`validation.md`](validation.md))。`L_G` は当初
-full-sample 最適で 0.48 が選ばれたが、LOO-CV で shrinkage=0.128 を
-確認 (n=48 で不安定) し、過学習抑制のため `0.35` に補正
-(`semantic_loss.py:44` コメント参照)。`L_X=0.10` は `L_G` 削減分の
-一部を極性反転検出に再配分。
+**導出根拠**: HA48 Phase 5 の full-sample 3 項最適化で
+`L_P=0.425 / L_F=0.275 / L_G=0.850` が ρ=-0.6020 を達成
+([`validation.md`](validation.md))。ただし LOO-CV で shrinkage=0.128
+(n=48 で不安定) が検出されたため、LOO mean 比率
+`L_P:L_F:L_G ≈ 0.41:0.30:0.91` を正規化して保守的に配分した結果が
+runtime の `L_P=0.27 / L_F=0.21 / L_G=0.35` (`semantic_loss.py:34-38`
+コメント参照)。`L_X=0.10` は `L_G` 削減分の一部を極性反転検出に
+再配分。`L_Q / L_R / L_A` は HA48 で有意信号なしだが理論的保持
+(低重みで運用)。
 
 ## 7. Phase E verdict_advisory (mode_conditioned_grv)
 
