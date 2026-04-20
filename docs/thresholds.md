@@ -54,16 +54,19 @@
 
 | 閾値 | 値 | 出典 | コード |
 |---|---|---|---|
-| 命題マッチ `direct_recall` | `≥ 0.15` | [`detector_design.md`](detector_design.md) | `detector.py` |
-| 命題マッチ `full_recall` (fr) | `≥ 0.30` | [`detector_design.md`](detector_design.md) | `detector.py` |
-| 命題マッチ `overlap` | `≥ 3` | [`detector_design.md`](detector_design.md) | `detector.py` |
+| 命題マッチ `direct_recall` | `≥ 0.15` | [`detector_design.md`](detector_design.md) | `detector.py:1080` |
+| 命題マッチ `full_recall` (fr) | `≥ 0.30` | [`detector_design.md`](detector_design.md) | `detector.py:1080` |
+| 命題マッチ `overlap` | `≥ min(_MIN_OVERLAP, len(prop_bigrams))` — 短命題で `_MIN_OVERLAP` 未満でも通る | [`detector_design.md`](detector_design.md) | `detector.py:1079-1080` |
 | 演算子回収 `direct_recall` | `≥ 0.10` | [`detector_design.md`](detector_design.md) | `detector.py` |
 | 演算子回収 `full_recall` | `≥ 0.25` | [`detector_design.md`](detector_design.md) | `detector.py` |
 | 演算子回収 `overlap` | `≥ 2` | [`detector_design.md`](detector_design.md) | `detector.py` |
 | Relaxed Tier1 ΔE ゲート (`_RELAXED_DELTA_E_MAX`) | `≤ 0.04` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_RELAXED_DELTA_E_MAX` |
+| Relaxed Tier1 operator-family branch | `direct≥0.15 / full≥0.35 / overlap≥_MIN_OVERLAP` (`operator_family is not None` 時に size 判定より優先) | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_relaxed_thresholds:947-956` |
 | Relaxed Tier1 size≥8 bg | `direct≥0.10 / full≥0.30 / overlap≥2` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_RELAXED_BY_SIZE` |
 | Relaxed Tier1 size≥5 bg | `direct≥0.12 / full≥0.30 / overlap≥2` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_RELAXED_BY_SIZE` |
-| 命題マッチ最小 overlap (`_MIN_OVERLAP`) | `3` | [`detector_design.md`](detector_design.md) | `detector.py:_MIN_OVERLAP` |
+| Relaxed Tier1 fallback | `direct≥0.15 / full≥0.35 / overlap≥_MIN_OVERLAP` (size 条件が全て不発時) | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_relaxed_thresholds` |
+| Relaxed Tier1 overlap 短命題ケア | `≥ min(overlap_t, len(prop_bigrams))` — 通常マッチと同じ size-cap 適用 | [`detector_design.md`](detector_design.md) | `detector.py:1143-1144` |
+| 命題マッチ最小 overlap (`_MIN_OVERLAP`) | `3` (基準値、短命題では `min(3, len(prop_bigrams))` で上限される) | [`detector_design.md`](detector_design.md) | `detector.py:_MIN_OVERLAP` |
 | 命題マッチ 緩和帯ガード (full_recall 0.30–0.35 帯) | `< 0.35` で relaxed tier 流用の厳格検証を発動 | [`detector_design.md`](detector_design.md) | `detector.py:1092` |
 | `check_f1_anchor` coverage 重度 `1.0` | `coverage < 0.3` | [`detector_design.md`](detector_design.md) | `detector.py:300-303` |
 | `check_f1_anchor` coverage 重度 `0.5` | `0.3 ≤ coverage < 0.6` | [`detector_design.md`](detector_design.md) | `detector.py:300-303` |
@@ -72,9 +75,14 @@
 
 **導出根拠**: 命題マッチの 3 閾値はもともと `0.15 / 0.35 / 3` 時代から
 `fr 0.30` に緩和された経緯あり ([`detector_design.md`](detector_design.md))。
-Relaxed Tier1 のサイズ別閾値は `_RELAXED_BY_SIZE` タプル (命題 bigram 数
-に応じた段階的緩和) として定義される。`full_recall < 0.35` 緩和帯ガード
-は `0.30 ≤ fr < 0.35` で通過した命題に対し、relaxed tier より厳格な
+overlap は `_MIN_OVERLAP=3` が基準値だが、命題 bigram 数が 3 未満の
+短命題では `min(_MIN_OVERLAP, len(prop_bigrams))` で上限され、相対的に
+機能する (非整合を避けるためのサイズ適応)。Relaxed Tier1 の閾値選択は
+`_relaxed_thresholds()` が決定木で行う: 演算子命題は operator-family
+branch (`0.15/0.35/3`) を最優先、それ以外は `_RELAXED_BY_SIZE` タプル
+(命題 bigram 数に応じた段階的緩和)、全て不発なら fallback
+(`0.15/0.35/3`) に落ちる。`full_recall < 0.35` 緩和帯ガードは
+`0.30 ≤ fr < 0.35` で通過した命題に対し、relaxed tier より厳格な
 文レベル接地 + 汎用チャンクフィルタを適用して偽陽性を抑える追加防衛線。
 f1_anchor coverage ゲート (< 0.3 / < 0.6) と f4_premise 安全語彙密度
 (≥ 0.4 / ≥ 0.6) は構造ゲートの段階的重度付けに使用。
