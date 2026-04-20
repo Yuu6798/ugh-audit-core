@@ -121,13 +121,19 @@ f1_anchor coverage ゲート (< 0.3 / < 0.6) と f4_premise 安全語彙密度
 
 ## 6. L_sem (意味損失関数)
 
-| 閾値 / 重み | 値 | 出典 |
-|---|---|---|
-| Phase 5 項別重み | L_P, L_F, L_G 3 項最適化 | [`semantic_loss.md`](semantic_loss.md) |
-| L_G 係数 `δ` | `0.13` | [`grv_design.md`](grv_design.md) §L_sem 接続 |
+| 閾値 / 重み | 値 | 出典 | コード |
+|---|---|---|---|
+| `DEFAULT_WEIGHTS["L_P"]` | `0.425` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_F"]` | `0.275` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_G"]` | `0.35` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_X"]` | `0.10` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
 
-**導出根拠**: HA48 Phase 5 校正で L_P+L_F+L_G → ρ=-0.6020 到達
-([`validation.md`](validation.md))。
+**導出根拠**: HA48 Phase 5 の full-sample 3 項最適化で `L_P+L_F+L_G` →
+ρ=-0.6020 に到達 ([`validation.md`](validation.md))。`L_G` は当初
+full-sample 最適で 0.48 が選ばれたが、LOO-CV で shrinkage=0.128 を
+確認 (n=48 で不安定) し、過学習抑制のため `0.35` に補正
+(`semantic_loss.py:44` コメント参照)。`L_X=0.10` は `L_G` 削減分の
+一部を極性反転検出に再配分。
 
 ## 7. Phase E verdict_advisory (mode_conditioned_grv)
 
