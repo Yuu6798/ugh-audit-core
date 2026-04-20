@@ -422,8 +422,9 @@ env | grep -iE "^(http|https)_proxy"
 
 `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` のいずれかに
 到達不能なアドレス（例: `http://127.0.0.1:9`）が設定されている場合、
-モデルダウンロード失敗でパイプラインが silent fallback し、`C=None` /
-`anchor_alignment=None` が大量発生する。
+モデルダウンロード失敗で cascade layer が silent fallback し、
+`anchor_alignment=None` が大量発生しやすくなる。結果として C の上方補正が
+効かず、スコアが保守的になる。
 
 **復旧手順**:
 
@@ -452,7 +453,10 @@ python examples/basic_audit.py
 - calibration / 検証スクリプトで `leak_check n=0`
 - HA48 / HA63 評価で `anchor_alignment` が全行 `None`
 - `cascade_matcher.get_shared_model()` が常に `None` を返している
-  （`UGH_AUDIT_EMBED_CACHE_DISABLE` が意図せず有効になっているケース含む）
+  （SBert 未インストール、モデルロード失敗、再試行上限到達など）
+
+`UGH_AUDIT_EMBED_CACHE_DISABLE` は埋め込みキャッシュの無効化フラグであり、
+shared model のロード可否には影響しない。
 
 cascade が無効化された状態でも core pipeline（detect tier 1 + calculator + decider）は完走するため、出力自体はエラーにならず verdict は出る。
 ただし C が上方修正されないので scoring が保守的になる。
