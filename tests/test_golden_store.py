@@ -437,6 +437,54 @@ def test_sbert_rerank_does_not_cache_user_query(tmp_path, monkeypatch):
     assert entry_a_key in cascade_matcher._embedding_cache
     assert entry_b_key in cascade_matcher._embedding_cache
 
+
+# --- seed loading (P2-8) ---
+
+def test_seed_loaded_from_json_on_first_init(tmp_path):
+    """新規 store 初期化時、既定 seed JSON (examples/seed_references.json)
+
+    の 3 エントリがロードされる。
+    """
+    store = GoldenStore(path=tmp_path / "golden.json")
+    keys = store.list_keys()
+    assert "ugh_definition" in keys
+    assert "por_definition" in keys
+    assert "delta_e_definition" in keys
+
+    por = store.get("por_definition")
+    assert por is not None
+    assert por.question == "PoRとは何か？"
+    assert por.por_floor == 0.82
+    assert por.delta_e_ceiling == 0.05
+
+
+def test_custom_seed_path(tmp_path):
+    """seed_path 引数で別の JSON を seed として指定できる"""
+    seed = tmp_path / "custom_seed.json"
+    seed.write_text(
+        '{"custom_key": {"question": "q", "reference": "r", "source": "s"}}',
+        encoding="utf-8",
+    )
+    store = GoldenStore(
+        path=tmp_path / "golden.json",
+        seed_path=seed,
+    )
+    assert store.list_keys() == ["custom_key"]
+    entry = store.get("custom_key")
+    assert entry.reference == "r"
+
+
+def test_missing_seed_graceful_fallback(tmp_path):
+    """seed JSON が存在しない場合は空 store で起動し crash しない"""
+    missing = tmp_path / "does_not_exist.json"
+    store = GoldenStore(
+        path=tmp_path / "golden.json",
+        seed_path=missing,
+    )
+    assert store.list_keys() == []
+    # find も None を返す (既存 _empty_store パターンと同じ挙動)
+    assert store.find_reference("何か") is None
+
     # 別のユニーククエリで再呼び出ししても cache サイズは増えない
     # （entry は既に cache hit、query は bypass）
     initial_cache_size = len(cascade_matcher._embedding_cache)
