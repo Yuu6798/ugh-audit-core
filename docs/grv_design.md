@@ -150,6 +150,79 @@ grv=None 時は L_G が除外され、残り6項で正規化。
 | モデル | `paraphrase-multilingual-MiniLM-L12-v2` |
 | 共有方式 | `cascade_matcher.get_shared_model()` シングルトン |
 
+## トークナイズ・形態素解析パイプライン
+
+grv の入力は「質問 Q / 回答 R / core_propositions」の 3 種テキスト。これを
+以下の 2 段階で数値化する:
+
+### 1. 文分割 (`_split_sentences` @ `grv_calculator.py:52-55`)
+
+```python
+re.split(r'[。．！？!?.\n]+', text)
+```
+
+- 日本語句読点 (`。．！？`) と Western 終端 (`!?.` + 改行) を等価に扱う
+- **形態素解析器には依存しない**。正規表現のみ
+- 分割結果が空になったら全文を 1 文扱いで継続 (`n_sent=1` フォールバックで
+  `dispersion=0.0`)
+
+### 2. 埋め込み (`cascade_matcher.encode_texts`)
+
+- SBert モデル `paraphrase-multilingual-MiniLM-L12-v2` に委譲
+- このモデルは XLM-RoBERTa ベースの SentencePiece tokenizer を内蔵
+  (約 50 言語カバー、日本語・英語・中国語・韓国語などを語彙レベルで処理)
+- grv パス自体には `fugashi` / `ipadic` / `MeCab` 等の**明示的な形態素
+  解析器を使っていない**。トークナイズは SBert に閉じている
+
+### pyproject の `ja` / `full` / `server` extra について
+
+`fugashi>=1.3` / `ipadic>=1.0` は `[ja]` / `[full]` / `[server]` extras に
+宣言されているが、**2026-04 時点で repo 内の Python コードからは import
+されていない** (`grep -r "fugashi\|ipadic\|MeCab" --include="*.py"` で
+ヒット 0)。下記のどちらかに該当する:
+
+- **将来の形態素ベース機能用の予約** (cascade の bigram を morpheme
+  Jaccard に置き換える計画など)
+- **sentence-transformers の transitive 要請に備えた保険** (実際には
+  paraphrase-multilingual-MiniLM-L12-v2 は SentencePiece で完結するので
+  不要)
+
+不要と判定された場合は extras から外す cleanup 候補となる。
+
+## 多言語対応方針
+
+### カバー範囲
+
+| 言語 / 系 | 文分割 | 埋め込み | 備考 |
+|----------|--------|---------|------|
+| 日本語 | ✓ (`。．！？`) | ✓ (XLM-R) | 主検証言語 |
+| 英語 | ✓ (`!?.` + `\n`) | ✓ (XLM-R) | HA20 で副次検証 |
+| 中国語 / 韓国語 | ✓ (`。！？` 共通) | ✓ (XLM-R) | 未検証、理論上は動く |
+| タイ語 / アラビア語 | △ (句読点が異なる) | ✓ (XLM-R) | 文分割で全文 1 文扱いになる可能性 |
+| 改行なし長文 (任意言語) | △ (1 文扱い) | ✓ | `dispersion=0.0` 固定になる |
+
+### 既知の制限
+
+1. **文分割が句読点ルールベース**: タイ語 (句読点を基本使わない)
+   アラビア語 (`؟` `،` など独自記号) では分割が不十分になりうる。影響は
+   `dispersion` / `collapse_v2` の粒度低下 (全文 1 文扱いで成分劣化)
+2. **形態素単位の一致判定なし**: detector の bigram Jaccard は
+   **文字 bigram** ベース。CJK では機能するが、空白区切り言語では
+   意味的に近い語が別 bigram になる
+3. **言語検出なし**: 入力言語に応じて分割ルールを切り替える仕組みは
+   持たない。常に日英ハイブリッドの正規表現で処理する
+4. **検証カバレッジ**: HA48 / HA20 / HA-accept40 は全件日本語
+   (`data/human_annotation_*/`)。他言語での経験的 ρ は未取得
+
+### 将来の改善余地
+
+| 方向 | 効果 | 工数 |
+|------|------|------|
+| `pysbd` 等の言語対応 sentence splitter 導入 | タイ語・アラビア語で `dispersion` / `collapse_v2` が本来の粒度で動作 | 低 (入れ替えのみ) |
+| fugashi ベースの形態素 bigram を detector に実装 | 日本語の命題マッチ精度向上、extras `ja` の実装実体化 | 中 (detector 側の hit 判定改修) |
+| 多言語での ρ 検証 (英・中・韓で各 n=20+) | 論文での汎用性主張の根拠になる | 高 (アノテーション作業) |
+| XLM-R 以外のモデル差し替え (LaBSE 等) の比較 | 特定言語ペアで精度向上の可能性 | 中 (校正再走) |
+
 ## バージョン履歴
 
 | ver | 変更 | ρ |
