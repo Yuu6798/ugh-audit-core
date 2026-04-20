@@ -1,5 +1,38 @@
 # Cascade Tier 2 設計ドキュメント
 
+<a id="core-vs-cascade"></a>
+## core pipeline と cascade layer の関係
+
+本システムは決定性の保証範囲で 2 層に分離される。
+
+### core pipeline
+
+- 構成: `detector.py` の tier 1 (tfidf) + `ugh_calculator.py` + `decider.py`
+- 依存: YAML 辞書 (registry/) + 漢字バイグラム + 類義語展開 (`_SYNONYM_MAP`) のみ
+- 決定性: 同じ入力なら同じ出力。embedding / LLM 呼び出しなし
+- 出力: S, C, ΔE, verdict（全て core で確定する最終値）
+
+### cascade layer
+
+- 構成: `cascade_matcher.py` の `tier2_candidate` + `tier3_filter`
+- 依存: SBert (`paraphrase-multilingual-MiniLM-L12-v2`) + 永続埋め込みキャッシュ
+- 性質: 確率的。tier 1 で miss した命題のみ対象に、SBert 類似度で候補生成 →
+  多条件 AND フィルタ (c1..c5) で回収を試みる
+- 動作範囲: **hit の追加のみ**。tier 1 で hit した命題を cascade が miss に
+  降格することはない。したがって verdict は tier 1 単独時と比べて同等以上
+  （C が上方修正されうる → ΔE が下方修正されうる → verdict が accept 方向に
+  移動しうる）のみ
+- **optional**: SBert 未インストール環境、モデルロード失敗、または
+  `UGH_AUDIT_EMBED_CACHE_DISABLE=1` 設定下では `get_shared_model()` が
+  None を返し、cascade 呼び出しは skip される。pipeline は tier 1 のみで
+  完走する（silent fallback）
+
+### 決定性声明の扱い
+
+論文・README・API ドキュメントで「推論ゼロ / 決定的」と記述する場合は
+core pipeline を指す。cascade を含めるときは「決定的 core pipeline +
+確率的 cascade layer」と明記し、範囲を混同しない。
+
 ## 概要
 
 cascade_matcher は detector.py の既存ロジックを変更せず、**判定層から呼ばれる補助モジュール**として

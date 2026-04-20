@@ -58,9 +58,25 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 
 ## アーキテクチャ
 
-推論ゼロ・決定的パターンマッチのみで動作する3層パイプライン。
+本システムは 2 層構造で動作する。
 
-注: cascade（SBert）導入により推論ゼロの厳密な定義は再検討中。メインパイプライン（detect→calculate→decide）は推論ゼロだが、cascade_matcher は SBert embedding を使用する。
+### 決定性の適用範囲
+
+| 層 | 依存 | 決定性 | 役割 |
+|---|---|---|---|
+| **core pipeline** (detect → calculate → decide) | tfidf + YAML 辞書のみ | 決定的（同じ入力なら同じ出力）| S, C, ΔE, verdict の算出 |
+| **cascade layer** (cascade_matcher) | SBert embedding | 確率的 | tier 1 (tfidf) で miss した命題の optional 回収補強 |
+
+- **verdict を含む全スコアは core pipeline で確定する**。cascade は C を
+  上方補正することがあるが、下方補正はしない（hit の追加のみ、miss への
+  降格はない）。
+- **cascade layer は optional**。SBert 未インストール / モデルロード失敗時は
+  `cascade_matcher.get_shared_model()` が None を返し、pipeline は tier 1
+  のみで完走する（fallback は silent、verdict ロジックに影響なし）。
+- 論文・査読で「推論ゼロ」と呼ぶ範囲は core pipeline を指す。cascade は
+  「決定的パイプラインに対する確率的回収補強」として区別する。
+
+詳細: [`docs/cascade_design.md#core-vs-cascade`](docs/cascade_design.md#core-vs-cascade)
 
 ```
 [質問 Q + メタデータ]  →  [AI回答 R]
