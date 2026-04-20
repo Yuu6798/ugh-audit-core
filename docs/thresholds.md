@@ -1,0 +1,155 @@
+# 閾値一覧と導出根拠の索引 (thresholds)
+
+本リポジトリに出現する**全ての数値閾値**の一覧・出典・導出根拠を単一の
+エントリポイントに集約する索引ドキュメント。
+
+- **数値の定義・計算式・校正方法の詳細は各コンポーネント doc に委ねる**
+  (本書は要約と相互リンクのみ)
+- 閾値を変更する際は本書と出典 doc の両方を同期させること
+- 新規閾値を追加する際は本書に必ず 1 行追加する
+
+## 1. 電卓層 (core pipeline)
+
+| 閾値 / 重み | 値 | 出典 doc | コード |
+|---|---|---|---|
+| verdict `accept` | `ΔE ≤ 0.10` | [`formulas.md`](formulas.md) | `ugh_calculator.py` |
+| verdict `rewrite` | `0.10 < ΔE ≤ 0.25` | [`formulas.md`](formulas.md) | `ugh_calculator.py` |
+| verdict `regenerate` | `ΔE > 0.25` | [`formulas.md`](formulas.md) | `ugh_calculator.py` |
+| verdict `degraded` | `C=None` or `ΔE=None` | [`formulas.md`](formulas.md) | `ugh_calculator.py` |
+| S 重み | `f1=5, f2=25, f3=5, f4=5` | [`formulas.md`](formulas.md) | `ugh_calculator.py:WEIGHTS_F` |
+| ΔE 重み | `w_s=2, w_c=1` | [`formulas.md`](formulas.md) | `ugh_calculator.py:WEIGHT_S/C` |
+| quality_score | `5 - 4 × ΔE` | [`formulas.md`](formulas.md) | `ugh_calculator.py` |
+| C_bin / ΔE_bin | 3-bin 分類 | [`formulas.md`](formulas.md) | `ugh_calculator.py` |
+
+**導出根拠**: ΔE の `0.10 / 0.25` は HA48 (n=48, ρ=-0.5195) で校正済み
+確定値。詳細は [`validation.md`](validation.md) の HA48 verdict 単調性
+(`accept(3.44) > rewrite(2.62) > regenerate(1.00)`) を参照。
+
+## 2. 検出層 (detector)
+
+| 閾値 | 値 | 出典 | コード |
+|---|---|---|---|
+| 命題マッチ `direct_recall` | `≥ 0.15` | [`detector_design.md`](detector_design.md) | `detector.py` |
+| 命題マッチ `full_recall` (fr) | `≥ 0.30` | [`detector_design.md`](detector_design.md) | `detector.py` |
+| 命題マッチ `overlap` | `≥ 3` | [`detector_design.md`](detector_design.md) | `detector.py` |
+| 演算子回収 `direct_recall` | `≥ 0.10` | [`detector_design.md`](detector_design.md) | `detector.py` |
+| 演算子回収 `full_recall` | `≥ 0.25` | [`detector_design.md`](detector_design.md) | `detector.py` |
+| 演算子回収 `overlap` | `≥ 2` | [`detector_design.md`](detector_design.md) | `detector.py` |
+| Relaxed Tier1 ΔE ゲート | `≤ 0.04` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py` |
+| Relaxed Tier1 バイグラム別閾値 | 文長に応じた段階値 | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py` |
+
+**導出根拠**: 命題マッチの 3 閾値はもともと `0.15 / 0.35 / 3` 時代から
+`fr 0.30` に緩和された経緯あり ([`detector_design.md`](detector_design.md))。
+実験スクリプト: `analysis/threshold_validation/run_proposition_hit_experiment.py`
+
+## 3. Cascade Matcher (tier 2/3)
+
+| 閾値 | 値 | 出典 | コード |
+|---|---|---|---|
+| `θ_sbert` (cosine 閾値) | `0.50` | [`cascade_design.md`](cascade_design.md) §チューニング | `cascade_matcher.py:THETA_SBERT` |
+| `δ_gap` (top1 - top2) | `0.04` | [`cascade_design.md`](cascade_design.md) | `cascade_matcher.py:DELTA_GAP` |
+| `HIGH_SCORE_THRESHOLD` | `0.70` | [`cascade_design.md`](cascade_design.md) §c4 閾値緩和 | `cascade_matcher.py` |
+| `RELAXED_DELTA_GAP` | `0.02` | [`cascade_design.md`](cascade_design.md) §c4 閾値緩和 | `cascade_matcher.py` |
+
+**導出根拠**: `cascade_design.md` に感度分析表あり (θ=0.45–0.55 で同等性能、
+中間値 0.50 採用)。`δ=0.04` で false_rescue=0 を達成、`δ=0.03` では 1 件漏れ。
+
+## 4. GoldenStore リファレンス検索
+
+| 閾値 | 値 | 出典 | コード |
+|---|---|---|---|
+| Stage 2 bigram `min_score` | `0.1` | [`golden_store.md`](golden_store.md) | `ugh_audit/reference/golden_store.py:_BIGRAM_MIN_JACCARD` |
+| Stage 2 top_K | `5` | [`golden_store.md`](golden_store.md) | `_BIGRAM_CANDIDATE_TOP_K` |
+| Stage 3 SBert `δ_gap` | `0.04` | [`golden_store.md`](golden_store.md) | `_SBERT_GAP_DELTA` (cascade と同期) |
+| Stage 3 `HIGH_SCORE` | `0.70` | [`golden_store.md`](golden_store.md) | `_SBERT_HIGH_SCORE` |
+| Stage 3 `relaxed_δ_gap` | `0.02` | [`golden_store.md`](golden_store.md) | `_SBERT_RELAXED_GAP` |
+
+**注**: cascade_matcher の値と同期運用。どちらか変更時は両方追従させること。
+
+## 5. grv (因果構造損失)
+
+| 閾値 / 重み | 値 | 出典 | コード |
+|---|---|---|---|
+| 合成重み `w_d / w_s / w_c` | `0.70 / 0.05 / 0.25` | [`grv_design.md`](grv_design.md) | `grv_calculator.py:W_DRIFT/DISPERSION/COLLAPSE_V2` |
+| タグ `high_gravity` | `grv ≥ 0.30` | [`grv_design.md`](grv_design.md) §タグ閾値 | `grv_calculator.py:TAG_HIGH` |
+| タグ `mid_gravity` | `grv ≥ 0.20` | [`grv_design.md`](grv_design.md) | `grv_calculator.py:TAG_MID` |
+| 参照重心 manual 重み | `w_q=0.60, w_m=0.40` | [`grv_design.md`](grv_design.md) §参照重心 | `grv_calculator.py:_REF_WEIGHTS` |
+| 参照重心 auto 重み | `w_q=0.80, w_m=0.20` | [`grv_design.md`](grv_design.md) | 同上 |
+| 参照重心 missing | `w_q=1.00, w_m=0.00` | [`grv_design.md`](grv_design.md) | 同上 |
+
+**導出根拠**: HA48 で ρ=-0.357 (σ=0.051)。タグ閾値は HA48 分布
+(mean=0.185, σ=0.051, range=[0.10, 0.31]) を校正した値
+([`grv_design.md`](grv_design.md) §タグ閾値)。
+
+## 6. L_sem (意味損失関数)
+
+| 閾値 / 重み | 値 | 出典 |
+|---|---|---|
+| Phase 5 項別重み | L_P, L_F, L_G 3 項最適化 | [`semantic_loss.md`](semantic_loss.md) |
+| L_G 係数 `δ` | `0.13` | [`grv_design.md`](grv_design.md) §L_sem 接続 |
+
+**導出根拠**: HA48 Phase 5 校正で L_P+L_F+L_G → ρ=-0.6020 到達
+([`validation.md`](validation.md))。
+
+## 7. Phase E verdict_advisory (mode_conditioned_grv)
+
+| 閾値 | 値 | 出典 | コード |
+|---|---|---|---|
+| `τ_collapse_high` | `0.28` | [`phase_e_verdict_integration.md`](phase_e_verdict_integration.md) | `mode_grv.py:_TAU_COLLAPSE_HIGH` |
+| `τ_anchor_low` | `0.80` | [`phase_e_verdict_integration.md`](phase_e_verdict_integration.md) | `mode_grv.py:_TAU_ANCHOR_LOW` |
+
+**導出根拠**: n=63 (HA48 + accept40 batch1) でグリッド探索
+`{0.20..0.40}×{0.60..0.80}` step=0.02。採用値で
+`rho_primary_full=0.4408 → rho_advisory_full=0.5225`, `fire_rate=0.225`。
+詳細: `analysis/phase_e_calibration_result.md`, `analysis/phase_e_calibration_grid.csv`。
+
+## 8. レガシー (現在未使用 / 廃止済み)
+
+本パイプラインで**参照されていない**が、コード上に残っている閾値群。
+削除時の安全性確認用に列挙する。
+
+| 閾値 | 値 | 場所 | 状態 |
+|---|---|---|---|
+| `_POR_FIRE_THRESHOLD` | `0.82` | `ugh_audit/engine/runtime.py:77` | レガシー互換層、メインパイプライン未使用 ([CLAUDE.md](../CLAUDE.md) §Important Notes) |
+| 旧 ΔE bin | `0.02 / 0.12 / 0.35` | `engine/runtime.py:_LEGACY_BIN*` | HA48 校正で `0.10 / 0.25` に統一済み |
+| 旧 grv タグ | `0.33 / 0.66` | — | HA48 分布校正で `0.20 / 0.30` に差し替え済み |
+
+## 9. 検証データの相関値 (参考)
+
+本書は閾値索引が本分のため、ρ (Spearman 相関) の完全一覧は
+[`validation.md`](validation.md) に委ねる。主要 anchor のみ再掲:
+
+| 指標 | n | ρ | 備考 |
+|---|---|---|---|
+| ΔE (system C) | 48 | -0.5195 | HA48 主評価、デプロイ可能指標 |
+| ΔE (human C) | 48 | +0.8616 | 参照上限 |
+| L_sem Phase 5 | 48 | -0.6020 | L_P+L_F+L_G 3 項統合 |
+| grv | 48 | -0.357 | σ=0.051 |
+| anchor_alignment | 48 | +0.4063 | p=0.004 |
+| collapse_risk | 48 | -0.3191 | p=0.027 |
+| rho_advisory_full | 63 | +0.5225 | Phase E verdict_advisory |
+
+## 10. 変更時チェックリスト
+
+閾値を変更する場合は以下を実施する:
+
+1. [ ] 本書 (この doc) の該当行を更新
+2. [ ] 出典 doc (該当コンポーネント doc) の数値と整合確認
+3. [ ] `CLAUDE.md` の Key Thresholds 表に載っている閾値は、そちらも更新
+4. [ ] 閾値の根拠が `validation.md` や `analysis/` の校正結果にある場合は、
+      再校正が必要か判断
+5. [ ] `ruff check .` と `pytest -q` が緑になることを確認
+6. [ ] PR description で変更前後の値と `ρ` への影響を明記
+
+## 11. 関連ドキュメント
+
+| doc | 扱う閾値 |
+|---|---|
+| [`formulas.md`](formulas.md) | verdict / S 重み / ΔE 重み / quality_score |
+| [`detector_design.md`](detector_design.md) | 命題マッチ / 演算子回収 / Relaxed Tier1 |
+| [`cascade_design.md`](cascade_design.md) | θ_sbert / δ_gap / HIGH_SCORE / RELAXED |
+| [`golden_store.md`](golden_store.md) | Stage 2 bigram / Stage 3 SBert |
+| [`grv_design.md`](grv_design.md) | grv 重み / タグ閾値 / 参照重心 |
+| [`semantic_loss.md`](semantic_loss.md) | L_sem 項別重み |
+| [`phase_e_verdict_integration.md`](phase_e_verdict_integration.md) | τ_collapse / τ_anchor |
+| [`validation.md`](validation.md) | HA48 / HA20 ρ 検証結果全般 |
