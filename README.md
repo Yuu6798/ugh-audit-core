@@ -532,7 +532,7 @@ cue-list ベースの決定的 scorer。verdict に影響しない。
 | Self-Audit 実験 | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
 | Phase E verdict_advisory 統合 | [`docs/phase_e_verdict_integration.md`](docs/phase_e_verdict_integration.md) |
 | HA-accept40 アノテーションプロトコル | [`docs/annotation_protocol.md`](docs/annotation_protocol.md) |
-| 閾値一覧と導出根拠の索引 | [`docs/thresholds.md`](docs/thresholds.md) |
+| 閾値一覧と導出根拠の索引 (tunable な主要閾値のみ、対象外は scope 節で明示) | [`docs/thresholds.md`](docs/thresholds.md) |
 | SVP-RPE 統合実装プラン（関連プロジェクト） | [`docs/svp_rpe_implementation_plan.md`](docs/svp_rpe_implementation_plan.md) |
 
 ---
