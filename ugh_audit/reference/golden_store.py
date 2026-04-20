@@ -89,10 +89,14 @@ class GoldenStore:
             self._save()
 
     def _load_seed(self) -> None:
-        """seed JSON から初期エントリをロードする。不在なら no-op。
+        """seed JSON から初期エントリをロードする。
 
-        非 editable install 等で seed ファイルが見つからない場合は警告のみ
-        出して空 store で続行する (GoldenStore は初期 seed なしでも動作する)。
+        seed はコード外で編集される前提なので、下記いずれのケースでも
+        crash させず警告のみ出して空 store で続行する:
+          - ファイル不在 (非 editable install)
+          - read / decode 失敗 (壊れた JSON)
+          - top-level が dict でない (e.g. list)
+          - 個別エントリが dict でない / 必須フィールド欠落
         """
         if not self._seed_path.exists():
             _logger.info(
@@ -109,8 +113,32 @@ class GoldenStore:
                 e,
             )
             return
+        if not isinstance(data, dict):
+            _logger.warning(
+                "GoldenStore seed (%s) top-level must be dict, got %s; "
+                "starting with empty store",
+                self._seed_path,
+                type(data).__name__,
+            )
+            return
         for key, val in data.items():
-            self._store[key] = GoldenEntry(**val)
+            if not isinstance(val, dict):
+                _logger.warning(
+                    "GoldenStore seed entry %r is not a dict (got %s); skipping",
+                    key,
+                    type(val).__name__,
+                )
+                continue
+            try:
+                self._store[key] = GoldenEntry(**val)
+            except TypeError as e:
+                # 必須フィールド欠落 or 未知フィールド
+                _logger.warning(
+                    "GoldenStore seed entry %r invalid (%s); skipping",
+                    key,
+                    e,
+                )
+                continue
 
     def _save(self) -> None:
         data = {

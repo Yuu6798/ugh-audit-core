@@ -437,6 +437,14 @@ def test_sbert_rerank_does_not_cache_user_query(tmp_path, monkeypatch):
     assert entry_a_key in cascade_matcher._embedding_cache
     assert entry_b_key in cascade_matcher._embedding_cache
 
+    # 別のユニーククエリで再呼び出ししても cache サイズは増えない
+    # （entry は既に cache hit、query は bypass）
+    initial_cache_size = len(cascade_matcher._embedding_cache)
+    store.find_reference("PoRあれこれ疑問")
+    assert len(cascade_matcher._embedding_cache) == initial_cache_size
+
+    cascade_matcher.clear_embedding_cache()
+
 
 # --- seed loading (P2-8) ---
 
@@ -485,10 +493,59 @@ def test_missing_seed_graceful_fallback(tmp_path):
     # find も None を返す (既存 _empty_store パターンと同じ挙動)
     assert store.find_reference("何か") is None
 
-    # 別のユニーククエリで再呼び出ししても cache サイズは増えない
-    # （entry は既に cache hit、query は bypass）
-    initial_cache_size = len(cascade_matcher._embedding_cache)
-    store.find_reference("PoRあれこれ疑問")
-    assert len(cascade_matcher._embedding_cache) == initial_cache_size
 
-    cascade_matcher.clear_embedding_cache()
+def test_malformed_seed_top_level_list(tmp_path, caplog):
+    """seed JSON の top-level が list でも crash せず空 store で起動する"""
+    import logging
+
+    seed = tmp_path / "bad_seed.json"
+    seed.write_text('[{"question": "q", "reference": "r"}]', encoding="utf-8")
+    with caplog.at_level(logging.WARNING):
+        store = GoldenStore(
+            path=tmp_path / "golden.json",
+            seed_path=seed,
+        )
+    assert store.list_keys() == []
+    assert any("top-level must be dict" in m for m in caplog.messages)
+
+
+def test_malformed_seed_entry_missing_required_fields(tmp_path, caplog):
+    """seed entry に必須フィールドが欠けていても crash せず該当 entry を
+
+    スキップして残りをロードする。
+    """
+    import logging
+
+    seed = tmp_path / "mixed_seed.json"
+    seed.write_text(
+        # good_entry は正常、bad_entry は reference/source が欠落
+        '{"good_entry": {"question": "q1", "reference": "r1", "source": "s1"},'
+        ' "bad_entry": {"question": "q2"}}',
+        encoding="utf-8",
+    )
+    with caplog.at_level(logging.WARNING):
+        store = GoldenStore(
+            path=tmp_path / "golden.json",
+            seed_path=seed,
+        )
+    assert store.list_keys() == ["good_entry"]
+    assert any("bad_entry" in m and "invalid" in m for m in caplog.messages)
+
+
+def test_malformed_seed_entry_not_dict(tmp_path, caplog):
+    """seed entry が dict でない場合もスキップして続行する"""
+    import logging
+
+    seed = tmp_path / "string_entry.json"
+    seed.write_text(
+        '{"good_entry": {"question": "q", "reference": "r", "source": "s"},'
+        ' "bad_entry": "not a dict"}',
+        encoding="utf-8",
+    )
+    with caplog.at_level(logging.WARNING):
+        store = GoldenStore(
+            path=tmp_path / "golden.json",
+            seed_path=seed,
+        )
+    assert store.list_keys() == ["good_entry"]
+    assert any("bad_entry" in m and "not a dict" in m for m in caplog.messages)
