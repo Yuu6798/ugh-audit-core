@@ -3,6 +3,7 @@ examples/ 配下のサンプルが import + 実行で壊れていないことを
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -33,26 +34,30 @@ def test_basic_audit_runs_to_completion():
         f"--- stderr ---\n{result.stderr}"
     )
 
-    # q001 良質回答ケース → accept が出ていること
-    assert "verdict=accept" in result.stdout, (
-        f"q001 良質ケースで verdict=accept が出ていない:\n{result.stdout}"
+    case_verdicts: dict[int, str] = {}
+    for line in result.stdout.splitlines():
+        match = re.search(r"^\[(\d+)\].*verdict=([a-z_]+)", line)
+        if match:
+            case_verdicts[int(match.group(1))] = match.group(2)
+
+    assert len(case_verdicts) == 3, (
+        f"ケース行の verdict 抽出に失敗: {case_verdicts}\n{result.stdout}"
     )
 
-    # q001 ショートカットケース → rewrite または regenerate が出ていること
-    assert (
-        "verdict=rewrite" in result.stdout
-        or "verdict=regenerate" in result.stdout
-    ), (
-        f"q001 ショートカットケースで rewrite/regenerate が出ていない:\n{result.stdout}"
+    # q001 良質回答ケース（case 1） → accept
+    assert case_verdicts[1] == "accept", (
+        f"q001 良質ケースの verdict が想定外: {case_verdicts[1]}\n{result.stdout}"
+    )
+
+    # q001 ショートカットケース（case 2） → rewrite または regenerate
+    assert case_verdicts[2] in {"rewrite", "regenerate"}, (
+        f"q001 ショートカットケースの verdict が想定外: {case_verdicts[2]}\n"
+        f"{result.stdout}"
     )
 
     # 3 ケース全体で verdict が 2 種類以上出ていること
     # （全件 accept や全件 degraded で誤って pass しないようにする）
-    distinct = {
-        v
-        for v in ("accept", "rewrite", "regenerate", "degraded")
-        if f"verdict={v}" in result.stdout
-    }
+    distinct = set(case_verdicts.values())
     assert len(distinct) >= 2, (
         f"verdict に多様性がない（パイプラインが定値を返している疑い）: {distinct}\n"
         f"{result.stdout}"
