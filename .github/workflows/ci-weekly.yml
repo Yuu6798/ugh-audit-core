@@ -1,0 +1,52 @@
+name: CI Weekly (SBert regression)
+
+# Weekly full-dependency CI including sentence-transformers path.
+# Purpose: catch regressions in SBert-gated tests (cascade tier2, grv_calculator,
+# mode_grv) that the fast-path ci.yml skips via `pytest.mark.skipif`.
+#
+# Triggers:
+#   - schedule: every Monday 00:00 UTC
+#   - workflow_dispatch: manual kick for on-demand verification
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+jobs:
+  test-full:
+    runs-on: ubuntu-latest
+    # Single Python version for weekly; matrix on ci.yml covers 3.10-3.12.
+    # Weekly focuses on SBert path, not compat matrix.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache HuggingFace model hub
+        # Avoid re-downloading paraphrase-multilingual-MiniLM-L12-v2 (~470 MB)
+        # every week. Key includes model name so cache busts when switched.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-paraphrase-multilingual-MiniLM-L12-v2
+          restore-keys: |
+            hf-${{ runner.os }}-
+
+      - name: Install with server extras
+        # server extras include sentence-transformers, which unlocks the
+        # SBert-gated tests (tier2 x4, grv x3, plus server tests that go
+        # through cascade_matcher).
+        run: |
+          pip install -e ".[dev,server]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test (SBert path included)
+        # Expect ~655 base + 7 SBert-gated = 662+ tests actually running.
+        # -rs flag prints skip reasons so we can verify no unexpected skips.
+        run: python -m pytest -q --tb=short -rs
