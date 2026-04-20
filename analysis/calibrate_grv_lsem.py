@@ -37,7 +37,7 @@ warnings.filterwarnings("ignore", category=ConstantInputWarning)
 # --- データパス ---
 HA48_PATH = ROOT / "data" / "human_annotation_48" / "annotation_48_merged.csv"
 V5_PATH = ROOT / "data" / "eval" / "audit_102_main_baseline_v5.csv"
-Q_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
+Q_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 RESPONSES_PATH = ROOT / "data" / "phase_c_scored_v1_t0_only.jsonl"
 
 # --- データ読み込み ---

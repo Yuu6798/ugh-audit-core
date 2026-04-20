@@ -26,7 +26,7 @@ from q_metadata_drafter import (
 # ---------- ヘルパー ----------
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "question_sets"
-INPUT_FILE = DATA_DIR / "ugh-audit-100q-v3-1.json.txtl.txt"
+INPUT_FILE = DATA_DIR / "ugh-audit-100q-v3-1.jsonl"
 
 
 def _load_questions() -> dict[str, dict]:

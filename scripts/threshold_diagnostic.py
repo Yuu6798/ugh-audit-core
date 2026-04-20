@@ -20,7 +20,7 @@ from detector import (
 def load_data():
     base = Path(__file__).resolve().parent.parent / "data"
     questions = {}
-    with open(base / "question_sets/ugh-audit-100q-v3-1.json.txtl.txt", encoding="utf-8") as f:
+    with open(base / "question_sets/ugh-audit-100q-v3-1.jsonl", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:

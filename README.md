@@ -209,7 +209,7 @@ pip install -e ".[experiment]"
 ### CLI（Audit Engine）
 
 ```bash
-python audit.py --question-id q001 --response "AIは..." --data data/question_sets/ugh-audit-100q-v3-1.json.txtl.txt --pretty
+python audit.py --question-id q001 --response "AIは..." --data data/question_sets/ugh-audit-100q-v3-1.jsonl --pretty
 ```
 
 ### REST API

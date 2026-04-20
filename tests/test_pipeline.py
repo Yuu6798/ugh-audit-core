@@ -30,7 +30,7 @@ from ugh_calculator import Evidence, State, calculate  # noqa: E402
 
 # --- データファイルパス ---
 DATA_DIR = ROOT / "data"
-QUESTION_META_PATH = DATA_DIR / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
+QUESTION_META_PATH = DATA_DIR / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 HA20_PATH = DATA_DIR / "human_annotation_20" / "human_annotation_20_completed.csv"
 PHASE_C_RAW_PATH = DATA_DIR / "phase_c_v0" / "phase_c_raw.jsonl"
 

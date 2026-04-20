@@ -21,7 +21,7 @@ with open("data/human_annotation_48/annotation_48_merged.csv", encoding="utf-8")
         ha48[row["id"]] = row
 
 q_meta = {}
-with open("data/question_sets/ugh-audit-100q-v3-1.json.txtl.txt", encoding="utf-8") as f:
+with open("data/question_sets/ugh-audit-100q-v3-1.jsonl", encoding="utf-8") as f:
     for line in f:
         line = line.strip()
         if not line:

@@ -43,7 +43,7 @@ from ugh_calculator import _compute_delta_e  # noqa: E402
 # --- データパス ---
 HA48_PATH = ROOT / "data" / "human_annotation_48" / "annotation_48_merged.csv"
 V5_PATH = ROOT / "data" / "eval" / "audit_102_main_baseline_v5.csv"
-Q_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
+Q_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 CANONICAL_PATH = (
     ROOT / "data" / "question_sets" / "q_metadata_structural_reviewed_102q.jsonl"
 )

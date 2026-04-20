@@ -60,7 +60,7 @@ def load_atomic_units_map(csv_path: str) -> dict[str, dict[int, list[str]]]:
 
 
 def main():
-    questions_path = ROOT / "data/question_sets/ugh-audit-100q-v3-1.json.txtl.txt"
+    questions_path = ROOT / "data/question_sets/ugh-audit-100q-v3-1.jsonl"
     responses_path = ROOT / "data/phase_c_scored_v1_t0_only.jsonl"
     sg_path = ROOT / "data/gate_results/structural_gate_summary.csv"
     atomic_path = ROOT / "data/eval/dev_cascade_20.csv"

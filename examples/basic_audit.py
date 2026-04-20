@@ -17,7 +17,7 @@ DATA_PATH = (
     Path(__file__).resolve().parent.parent
     / "data"
     / "question_sets"
-    / "ugh-audit-100q-v3-1.json.txtl.txt"
+    / "ugh-audit-100q-v3-1.jsonl"
 )
 DB_PATH = Path(__file__).resolve().parent.parent / ".tmp" / "example_audit.db"
 SESSION_ID = "example-session-01"

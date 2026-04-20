@@ -32,7 +32,7 @@ from decider import decide
 
 # --- 定数 ---
 BASE_DIR = Path(__file__).resolve().parent.parent / "data"
-QUESTIONS_PATH = BASE_DIR / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
+QUESTIONS_PATH = BASE_DIR / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 RESPONSES_PATH = BASE_DIR / "phase_c_scored_v1_t0_only.jsonl"
 HA20_PATH = BASE_DIR / "human_annotation_20" / "human_annotation_20_completed.csv"
 
