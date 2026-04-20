@@ -9,6 +9,8 @@ venv/
 ~/.ugh_audit/
 *.db
 *.sqlite
+# example demo DB output (examples/basic_audit.py)
+.tmp/
 .pytest_cache/
 .ruff_cache/
 ugh-audit-core-latest.tar.gz
