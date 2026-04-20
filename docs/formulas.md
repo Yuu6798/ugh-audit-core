@@ -1,11 +1,12 @@
 # UGH 計算式 — PoR / ΔE / quality_score / verdict
 
 電卓層 (`ugh_calculator.py`) で算出される数値指標の定義。
-本ドキュメントが扱うのは **core pipeline** (detector tier 1 + calculator + decider) であり、同じ入力に対して決定的に同じ出力を返す。
+本ドキュメントが扱うのは **core pipeline** (detector tier 1 + calculator + decider) であり、同じ Evidence 入力に対して決定的に同じ出力を返す。
 
 cascade layer (SBert ベースの tier 2/3) は core pipeline に対する
 optional な確率的回収補強で、C の上方修正のみを行う（降格はしない）。
-cascade の有無は本書の計算式自体を変えない。2 層の関係は
+cascade の有無は本書の計算式自体を変えない。最終 C/ΔE/verdict は
+cascade 後の Evidence（命題 hit 数）を入力として core 計算式で算出される。2 層の関係は
 [`cascade_design.md § core pipeline と cascade layer の関係`](cascade_design.md#core-vs-cascade)
 を参照。
 

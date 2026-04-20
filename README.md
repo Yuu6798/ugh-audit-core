@@ -64,12 +64,12 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 
 | 層 | 依存 | 決定性 | 役割 |
 |---|---|---|---|
-| **core pipeline** (detect → calculate → decide) | tfidf + YAML 辞書のみ | 決定的（同じ入力なら同じ出力）| S, C, ΔE, verdict の算出 |
+| **core pipeline** (detect → calculate → decide) | tfidf + YAML 辞書のみ | 決定的（同じ入力なら同じ出力）| Evidence から S, C, ΔE, verdict を算出（計算式の本体） |
 | **cascade layer** (cascade_matcher) | SBert embedding | 確率的 | tier 1 (tfidf) で miss した命題の optional 回収補強 |
 
-- **verdict を含む全スコアは core pipeline で確定する**。cascade は C を
-  上方補正することがあるが、下方補正はしない（hit の追加のみ、miss への
-  降格はない）。
+- **計算式と判定規則は core pipeline にある**。cascade 有効時は detect 段で
+  命題 hit が追加され、core に渡る C 入力が上方補正されることがある
+  （hit の追加のみ、miss への降格はない）。
 - **cascade layer は optional**。SBert 未インストール / モデルロード失敗時は
   `cascade_matcher.get_shared_model()` が None を返し、pipeline は tier 1
   のみで完走する（fallback は silent、verdict ロジックに影響なし）。

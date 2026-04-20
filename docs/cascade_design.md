@@ -10,7 +10,7 @@
 - 構成: `detector.py` の tier 1 (tfidf) + `ugh_calculator.py` + `decider.py`
 - 依存: YAML 辞書 (registry/) + 漢字バイグラム + 類義語展開 (`_SYNONYM_MAP`) のみ
 - 決定性: 同じ入力なら同じ出力。embedding / LLM 呼び出しなし
-- 出力: S, C, ΔE, verdict（全て core で確定する最終値）
+- 出力: S, C, ΔE, verdict（同じ Evidence 入力に対しては常に同じ結果）
 
 ### cascade layer
 
@@ -22,10 +22,12 @@
   降格することはない。したがって verdict は tier 1 単独時と比べて同等以上
   （C が上方修正されうる → ΔE が下方修正されうる → verdict が accept 方向に
   移動しうる）のみ
-- **optional**: SBert 未インストール環境、モデルロード失敗、または
-  `UGH_AUDIT_EMBED_CACHE_DISABLE=1` 設定下では `get_shared_model()` が
-  None を返し、cascade 呼び出しは skip される。pipeline は tier 1 のみで
-  完走する（silent fallback）
+- **optional**: SBert 未インストール環境やモデルロード失敗時は
+  `get_shared_model()` が None を返し、cascade 呼び出しは skip される。
+  pipeline は tier 1 のみで完走する（silent fallback）
+- `UGH_AUDIT_EMBED_CACHE_DISABLE=1` は embedding cache の無効化のみ。
+  SBert が利用可能で detector 側の条件（miss/atomic/f4 など）を満たせば
+  tier 2/3 は実行される
 
 ### 決定性声明の扱い
 
