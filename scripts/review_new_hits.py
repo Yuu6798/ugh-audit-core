@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent / "data"
 
 def load_data():
     questions = {}
-    with open(BASE_DIR / "question_sets/ugh-audit-100q-v3-1.json.txtl.txt", encoding="utf-8") as f:
+    with open(BASE_DIR / "question_sets/ugh-audit-100q-v3-1.jsonl", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:

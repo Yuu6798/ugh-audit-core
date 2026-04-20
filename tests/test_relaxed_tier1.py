@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT))
 from audit import audit  # noqa: E402
 
 
-QUESTION_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
+QUESTION_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 RESPONSES_PATH = ROOT / "data" / "phase_c_v0" / "phase_c_raw.jsonl"
 
 

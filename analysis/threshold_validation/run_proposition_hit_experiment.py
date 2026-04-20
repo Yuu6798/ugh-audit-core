@@ -21,7 +21,7 @@ ORIGINAL_CHECK_PROPOSITIONS = detector.check_propositions
 
 
 DATA_DIR = ROOT / "data"
-QUESTION_META_PATH = DATA_DIR / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
+QUESTION_META_PATH = DATA_DIR / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 PHASE_C_RAW_PATH = DATA_DIR / "phase_c_v0" / "phase_c_raw.jsonl"
 HA20_PATH = DATA_DIR / "human_annotation_20" / "human_annotation_20_completed.csv"
 GATE_SUMMARY_PATH = DATA_DIR / "gate_results" / "structural_gate_summary.csv"

@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-QUESTION_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
+QUESTION_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 OUTPUT_PATH = ROOT / "analysis" / "metadata_policy" / "tuned_promotion_policy.json"
 
 

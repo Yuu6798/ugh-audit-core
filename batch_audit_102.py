@@ -2,7 +2,7 @@
 
 Usage:
     python batch_audit_102.py \
-        --questions data/question_sets/ugh-audit-100q-v3-1.jsonl.txt \
+        --questions data/question_sets/ugh-audit-100q-v3-1.jsonl \
         --responses data/phase_c_scored_v1_t0_only.jsonl \
         --structural-gate data/structural_gate_summary.csv \
         --out audit_102_results.csv

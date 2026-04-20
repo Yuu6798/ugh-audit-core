@@ -928,7 +928,7 @@ def main() -> None:
     # 入力ファイル候補
     candidates = [
         project_root / "ugh-audit-100q-v3_jsonl.txt",
-        project_root / "data" / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt",
+        project_root / "data" / "question_sets" / "ugh-audit-100q-v3-1.jsonl",
     ]
 
     input_path = None

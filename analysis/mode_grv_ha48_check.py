@@ -25,7 +25,7 @@ from mode_grv import compute_mode_conditioned_grv  # noqa: E402
 
 # --- データ読み込み ---
 HA48_PATH = ROOT / "data" / "human_annotation_48" / "annotation_48_merged.csv"
-Q_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.json.txtl.txt"
+Q_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 CANONICAL_PATH = ROOT / "data" / "question_sets" / "q_metadata_structural_reviewed_102q.jsonl"
 RESPONSES_PATH = ROOT / "data" / "phase_c_scored_v1_t0_only.jsonl"
 
