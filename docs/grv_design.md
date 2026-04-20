@@ -140,8 +140,11 @@ HA48 分布: mean=0.185, σ=0.051, range=[0.10, 0.31]。
 
 ## L_sem との接続
 
-`semantic_loss.py` の `L_G = clamp(grv)` (δ=0.13) として統合。
-grv=None 時は L_G が除外され、残り6項で正規化。
+`semantic_loss.py` の `L_G = clamp(grv)` として統合。`DEFAULT_WEIGHTS`
+での重みは `L_G=0.35` (LOO-CV 補正後の runtime 値、
+`semantic_loss.py:34-47` 参照)。full-sample 最適では `L_G=0.850` が
+選ばれたが、n=48 で shrinkage=0.128 を確認して過学習抑制のため
+0.35 に補正した。grv=None 時は L_G が除外され、残り 6 項で正規化。
 
 ## 埋め込みバックエンド
 
