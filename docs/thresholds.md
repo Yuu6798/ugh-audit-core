@@ -1,12 +1,36 @@
 # 閾値一覧と導出根拠の索引 (thresholds)
 
-本リポジトリに出現する**全ての数値閾値**の一覧・出典・導出根拠を単一の
-エントリポイントに集約する索引ドキュメント。
+本リポジトリの**パイプライン挙動を調整する (= tunable な) 主要閾値**の
+一覧・出典・導出根拠を単一エントリポイントに集約する索引ドキュメント。
+
+## スコープ
+
+**対象 (本書に載せる):**
+- verdict / gate 判定閾値 (core pipeline)
+- 命題マッチ / 演算子回収の recall / overlap 閾値 (detector)
+- cascade matcher / GoldenStore の類似度・gap 閾値
+- grv / L_sem / Phase E の校正済み閾値
+- 各コンポーネントの重み定数 (S 重み / ΔE 重み / grv 重み等)
+
+**対象外 (本書に載せない):**
+- 関数内 severity state transition (例: f2_unknown 内の
+  `max_severity < 0.5` — state 更新であって調整用ノブではない)
+- 内部合成式の定数 (例: `mode_grv.py` の
+  `cover_soft * 0.7 + (1 - drift) * 0.3` — 式自体の定義で、
+  単独 tune 対象にならない)
+- ハイパラではない制御定数 (例: batch サイズ / ループ上限)
+
+これらの除外対象は各コンポーネント doc および対応するコード行を読むこと。
+
+## 運用ルール
 
 - **数値の定義・計算式・校正方法の詳細は各コンポーネント doc に委ねる**
   (本書は要約と相互リンクのみ)
-- 閾値を変更する際は本書と出典 doc の両方を同期させること
-- 新規閾値を追加する際は本書に必ず 1 行追加する
+- tunable 閾値を変更する際は本書と出典 doc の両方を同期させること
+- 新規 tunable 閾値を追加する際は本書に必ず 1 行追加する
+- 「これは tunable か内部定数か」の判断に迷ったら、設計 doc (`formulas.md`
+  / `detector_design.md` 等) で命名されているか、校正スクリプト
+  (`analysis/`) で探索対象になっているかを確認する
 
 ## 1. 電卓層 (core pipeline)
 
@@ -40,11 +64,20 @@
 | Relaxed Tier1 size≥8 bg | `direct≥0.10 / full≥0.30 / overlap≥2` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_RELAXED_BY_SIZE` |
 | Relaxed Tier1 size≥5 bg | `direct≥0.12 / full≥0.30 / overlap≥2` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_RELAXED_BY_SIZE` |
 | 命題マッチ最小 overlap (`_MIN_OVERLAP`) | `3` | [`detector_design.md`](detector_design.md) | `detector.py:_MIN_OVERLAP` |
+| 命題マッチ 緩和帯ガード (full_recall 0.30–0.35 帯) | `< 0.35` で relaxed tier 流用の厳格検証を発動 | [`detector_design.md`](detector_design.md) | `detector.py:1092` |
+| `check_f1_anchor` coverage 重度 `1.0` | `coverage < 0.3` | [`detector_design.md`](detector_design.md) | `detector.py:300-303` |
+| `check_f1_anchor` coverage 重度 `0.5` | `0.3 ≤ coverage < 0.6` | [`detector_design.md`](detector_design.md) | `detector.py:300-303` |
+| `check_f4_premise` 安全語彙密度 高 | `density ≥ 0.6` AND substantive ≤ 2 → f4=1.0 | [`detector_design.md`](detector_design.md) | `detector.py:633` |
+| `check_f4_premise` 安全語彙密度 中 | `density ≥ 0.4` AND substantive ≤ 2 → f4=0.5 | [`detector_design.md`](detector_design.md) | `detector.py:635` |
 
 **導出根拠**: 命題マッチの 3 閾値はもともと `0.15 / 0.35 / 3` 時代から
 `fr 0.30` に緩和された経緯あり ([`detector_design.md`](detector_design.md))。
 Relaxed Tier1 のサイズ別閾値は `_RELAXED_BY_SIZE` タプル (命題 bigram 数
-に応じた段階的緩和) として定義される。
+に応じた段階的緩和) として定義される。`full_recall < 0.35` 緩和帯ガード
+は `0.30 ≤ fr < 0.35` で通過した命題に対し、relaxed tier より厳格な
+文レベル接地 + 汎用チャンクフィルタを適用して偽陽性を抑える追加防衛線。
+f1_anchor coverage ゲート (< 0.3 / < 0.6) と f4_premise 安全語彙密度
+(≥ 0.4 / ≥ 0.6) は構造ゲートの段階的重度付けに使用。
 実験スクリプト: `analysis/threshold_validation/run_proposition_hit_experiment.py`
 
 ## 3. Cascade Matcher (tier 2/3)
