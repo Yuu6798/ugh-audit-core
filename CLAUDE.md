@@ -319,6 +319,11 @@ python examples/basic_audit.py
 | ΔE: WEIGHT_S | 2 | `ugh_calculator.py` |
 | ΔE: WEIGHT_C | 1 | `ugh_calculator.py` |
 | quality_score | 5 - 4 × ΔE | `ugh_calculator.py` |
+| 命題マッチ: fr 閾値 | 0.30 | `detector.py` |
+| 命題マッチ: direct_recall | ≥ 0.15 | `detector.py` |
+| 命題マッチ: overlap | ≥ 3 | `detector.py` |
+| cascade: θ_sbert | 0.50 | `cascade_matcher.py` |
+| ※ 演算子回収の緩和閾値 | `docs/detector_design.md` 参照 | `detector.py` |
 | verdict: accept | C≠None AND ΔE ≤ 0.10 | `server.py` / `mcp_server.py` |
 | verdict: rewrite | C≠None AND 0.10 < ΔE ≤ 0.25 | 同上 |
 | verdict: regenerate | C≠None AND ΔE > 0.25 | 同上 |
