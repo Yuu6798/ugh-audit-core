@@ -123,16 +123,18 @@ f1_anchor coverage ゲート (< 0.3 / < 0.6) と f4_premise 安全語彙密度
 
 `DEFAULT_WEIGHTS` 全 7 項 (`semantic_loss.py:39-47`)。**full-sample
 最適値**ではなく **LOO-CV 補正後の runtime 値** を記載する (両者は異なる)。
+出典は runtime コード (`semantic_loss.py`) を single source of truth とする
+— 後述のとおり設計 doc 側に既知の stale 値があるため。
 
 | 閾値 / 重み | 値 | 出典 | コード |
 |---|---|---|---|
-| `DEFAULT_WEIGHTS["L_P"]` | `0.27` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
-| `DEFAULT_WEIGHTS["L_Q"]` | `0.02` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
-| `DEFAULT_WEIGHTS["L_R"]` | `0.03` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
-| `DEFAULT_WEIGHTS["L_A"]` | `0.02` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
-| `DEFAULT_WEIGHTS["L_G"]` | `0.35` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
-| `DEFAULT_WEIGHTS["L_F"]` | `0.21` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
-| `DEFAULT_WEIGHTS["L_X"]` | `0.10` | [`semantic_loss.md`](semantic_loss.md) | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_P"]` | `0.27` | `semantic_loss.py:34-47` | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_Q"]` | `0.02` | `semantic_loss.py:34-47` | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_R"]` | `0.03` | `semantic_loss.py:34-47` | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_A"]` | `0.02` | `semantic_loss.py:34-47` | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_G"]` | `0.35` | `semantic_loss.py:34-47` | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_F"]` | `0.21` | `semantic_loss.py:34-47` | `semantic_loss.py:DEFAULT_WEIGHTS` |
+| `DEFAULT_WEIGHTS["L_X"]` | `0.10` | `semantic_loss.py:34-47` | `semantic_loss.py:DEFAULT_WEIGHTS` |
 
 **導出根拠**: HA48 Phase 5 の full-sample 3 項最適化で
 `L_P=0.425 / L_F=0.275 / L_G=0.850` が ρ=-0.6020 を達成
@@ -143,6 +145,18 @@ runtime の `L_P=0.27 / L_F=0.21 / L_G=0.35` (`semantic_loss.py:34-38`
 コメント参照)。`L_X=0.10` は `L_G` 削減分の一部を極性反転検出に
 再配分。`L_Q / L_R / L_A` は HA48 で有意信号なしだが理論的保持
 (低重みで運用)。
+
+### 既知の設計 doc 側 stale 値 (別 PR で同期予定)
+
+下記 2 箇所は LOO-CV 補正**前**の値を documented しており runtime と
+乖離している。閾値索引 (本書) を runtime に同期させた段階で乖離が
+検出可能になったが、修正は scope を分けて別 PR で対応する:
+
+| doc 位置 | documented | runtime | 乖離 |
+|---|---|---|---|
+| `docs/semantic_loss.md:49-56` | `L_P=0.24, L_G=0.48, L_F=0.16, L_X=0.05` | `0.27 / 0.35 / 0.21 / 0.10` | 校正後未反映 |
+| `docs/validation.md:103-109` | `L_P=0.24, L_G=0.48, L_F=0.16, L_X=0.05` | 同上 | 校正後未反映 |
+| `docs/grv_design.md:143` | `L_G = clamp(grv) (δ=0.13)` | `L_G = 0.35` | 実装と乖離 |
 
 ## 7. Phase E verdict_advisory (mode_conditioned_grv)
 
