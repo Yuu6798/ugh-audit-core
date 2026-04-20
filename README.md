@@ -177,7 +177,15 @@ opcodeは `opcodes/runtime_repair_opcodes.yaml` に定義（13種、コスト表
 
 ## インストール
 
+Python 3.10 以降を前提とする。PEP 668 環境（Ubuntu 22.04 以降の system
+Python, Homebrew Python など）では仮想環境での install を推奨する。
+
 ```bash
+# 仮想環境を作成・有効化
+python -m venv .venv
+source .venv/bin/activate           # Linux / macOS
+# .venv\Scripts\activate            # Windows PowerShell
+
 # 基本（テスト + サーバー依存）
 pip install -e ".[dev]"
 
@@ -190,6 +198,9 @@ pip install -e ".[analysis]"
 # 実験基盤 (Claude/GPT オーケストレーション)
 pip install -e ".[experiment]"
 ```
+
+仮想環境を使わない場合は `pip install --user` または `--break-system-packages`
+が必要になる環境がある点に注意。
 
 ---
 
@@ -382,10 +393,73 @@ uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
 | `UGH_AUDIT_DB` | SQLite DB ファイルパス | `~/.ugh_audit/audit.db` |
 | `ANTHROPIC_API_KEY` | Claude API キー（LLM meta 生成用） | なし |
 | `OPENAI_API_KEY` | OpenAI API キー（実験基盤の GPT 回答生成用） | なし |
-| `UGH_META_CACHE_DIR` | meta キャッシュディレクトリ | `~/.ugh_audit/meta_cache/` |
+| `UGH_META_CACHE_DIR` | LLM meta キャッシュディレクトリ | `~/.ugh_audit/meta_cache/` |
+| `UGH_AUDIT_CACHE_DIR` | 埋め込みキャッシュディレクトリ | `~/.ugh_audit/` |
+| `UGH_AUDIT_EMBED_CACHE_DISABLE` | `1/true/yes` で埋め込みキャッシュ無効化 | 無効化しない |
+| `UGH_AUDIT_EMBED_CACHE_MAX` | 埋め込みキャッシュのエントリ上限（hard cap） | 10000 |
+| `HF_HUB_OFFLINE` | `1` で HuggingFace Hub オフラインモード（ローカルキャッシュのみ使用） | なし |
+| `TRANSFORMERS_OFFLINE` | `1` で transformers オフラインモード | なし |
 
-読み取り専用コンテナやサーバーレス環境では `UGH_AUDIT_DB=/tmp/audit.db` のように書き込み可能なパスを指定する。
-`ANTHROPIC_API_KEY` は `auto_generate_meta=true` 時のみ必要。`OPENAI_API_KEY` は `experiments/` の実行時のみ必要。
+読み取り専用コンテナやサーバーレス環境では `UGH_AUDIT_DB=/tmp/audit.db` /
+`UGH_AUDIT_CACHE_DIR=/tmp/ugh_cache` のように書き込み可能なパスを指定する。
+`ANTHROPIC_API_KEY` は `auto_generate_meta=true` 時のみ必要。
+`OPENAI_API_KEY` は `experiments/` の実行時のみ必要。
+`HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1` はモデルダウンロードを
+伴う calibration / cascade 処理をオフライン実行するときに設定する。
+
+### トラブルシューティング
+
+#### SBert モデルダウンロードが進まない / `leak_check n=0` / `anchor_alignment` が全行 None
+
+**典型的な原因**: proxy 環境変数が SBert (sentence-transformers) の
+HuggingFace モデルダウンロードを阻害している。
+
+**診断**:
+
+```bash
+env | grep -iE "^(http|https)_proxy"
+```
+
+`HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` のいずれかに
+到達不能なアドレス（例: `http://127.0.0.1:9`）が設定されている場合、
+モデルダウンロード失敗で cascade layer が silent fallback し、
+`anchor_alignment=None` が大量発生しやすくなる。結果として C の上方補正が
+効かず、スコアが保守的になる。
+
+**復旧手順**:
+
+```bash
+# 1. proxy 環境変数を解除
+unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy
+
+# 2. ローカル HuggingFace キャッシュが存在することを確認
+ls ~/.cache/huggingface/hub/ 2>/dev/null | head -5
+
+# 3. オフライン運用モードで実行
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+python examples/basic_audit.py
+```
+
+ローカルキャッシュに目的のモデル
+（`paraphrase-multilingual-MiniLM-L12-v2`）が存在しない場合は、一度 proxy
+なしで online ダウンロードを通してから上記 offline モードに切り替える。
+
+#### 診断ルール（早期の環境疑い）
+
+以下のいずれかを観測した場合、cascade が silent degrade している可能性が
+高い。計算ロジックの問題として深掘りする前に環境を疑う:
+
+- calibration / 検証スクリプトで `leak_check n=0`
+- HA48 / HA63 評価で `anchor_alignment` が全行 `None`
+- `cascade_matcher.get_shared_model()` が常に `None` を返している
+  （SBert 未インストール、モデルロード失敗、再試行上限到達など）
+
+`UGH_AUDIT_EMBED_CACHE_DISABLE` は埋め込みキャッシュの無効化フラグであり、
+shared model のロード可否には影響しない。
+
+cascade が無効化された状態でも core pipeline（detect tier 1 + calculator + decider）は完走するため、出力自体はエラーにならず verdict は出る。
+ただし C が上方修正されないので scoring が保守的になる。
 
 ---
 
