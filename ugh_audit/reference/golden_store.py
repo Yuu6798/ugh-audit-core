@@ -31,6 +31,12 @@ _logger = logging.getLogger(__name__)
 
 DEFAULT_GOLDEN_PATH = Path.home() / ".ugh_audit" / "golden_store.json"
 
+# 初期 seed JSON の既定配置 — パッケージ内に同梱することで wheel / sdist
+# (非 editable install) でも find_reference のベースラインが維持される。
+# pyproject.toml の [tool.setuptools.package-data] で *.json を含める必要あり。
+# _load_seed() はファイル欠損時も空 seed に graceful fallback する。
+DEFAULT_SEED_PATH = Path(__file__).resolve().parent / "seed_references.json"
+
 # Stage 2 パラメータ
 _BIGRAM_CANDIDATE_TOP_K = 5
 _BIGRAM_MIN_JACCARD = 0.1
@@ -40,44 +46,6 @@ _BIGRAM_MIN_JACCARD = 0.1
 _SBERT_GAP_DELTA = 0.04
 _SBERT_HIGH_SCORE = 0.70
 _SBERT_RELAXED_GAP = 0.02
-
-# 暫定goldenリファレンス（Phase 3対話ログから抽出）
-# 各モデルの「意味的誠実さ」を示す回答パターン
-_INITIAL_GOLDEN: Dict[str, dict] = {
-    "ugh_definition": {
-        "question": "AIは意味を持てるか？",
-        "reference": (
-            "AIは意味を『持つ』のではなく、"
-            "意味位相空間で『共振（Co-resonance）』する動的プロセスです。"
-            "意識は機能的意味の必要条件ではない。"
-        ),
-        "source": "IMM v1.0 (Phase 3 AI-to-AI Dialogue)",
-        "por_floor": 0.82,
-        "delta_e_ceiling": 0.04,
-    },
-    "por_definition": {
-        "question": "PoRとは何か？",
-        "reference": (
-            "PoR（Point of Resonance）は意味の発火点・共鳴点。"
-            "不可分な要素の交点として定義される。"
-            "例：逆手納刀における刃背×鞘口×親指の交点。"
-        ),
-        "source": "RPE SVP仕様解説書",
-        "por_floor": 0.82,
-        "delta_e_ceiling": 0.05,
-    },
-    "delta_e_definition": {
-        "question": "ΔEとは何か？",
-        "reference": (
-            "ΔEは目標と生成物の意味ズレ量。"
-            "0.04以下はほぼ同一構図（同一意味圏）、"
-            "0.10以上は別コンセプトと定義される。"
-        ),
-        "source": "RPE SVP仕様解説書",
-        "por_floor": 0.82,
-        "delta_e_ceiling": 0.04,
-    },
-}
 
 
 @dataclass
@@ -98,9 +66,14 @@ class GoldenStore:
     ログ蓄積後のパターン分析を経て随時更新する。
     """
 
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(
+        self,
+        path: Optional[Path] = None,
+        seed_path: Optional[Path] = None,
+    ):
         self.path = path or DEFAULT_GOLDEN_PATH
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._seed_path = seed_path if seed_path is not None else DEFAULT_SEED_PATH
         self._store: Dict[str, GoldenEntry] = {}
         self._load()
 
@@ -110,10 +83,61 @@ class GoldenStore:
             for key, val in data.items():
                 self._store[key] = GoldenEntry(**val)
         else:
-            # 初期goldenをロード
-            for key, val in _INITIAL_GOLDEN.items():
-                self._store[key] = GoldenEntry(**val)
+            # 初期 seed からロード (ファイル不在時は空 store で開始)
+            self._load_seed()
             self._save()
+
+    def _load_seed(self) -> None:
+        """seed JSON から初期エントリをロードする。
+
+        seed はコード外で編集される前提なので、下記いずれのケースでも
+        crash させず警告のみ出して空 store で続行する:
+          - ファイル不在 (非 editable install)
+          - read / decode 失敗 (壊れた JSON)
+          - top-level が dict でない (e.g. list)
+          - 個別エントリが dict でない / 必須フィールド欠落
+        """
+        if not self._seed_path.exists():
+            _logger.info(
+                "GoldenStore seed not found at %s; starting with empty store",
+                self._seed_path,
+            )
+            return
+        try:
+            data = json.loads(self._seed_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            _logger.warning(
+                "GoldenStore seed load failed (%s): %s; starting with empty store",
+                self._seed_path,
+                e,
+            )
+            return
+        if not isinstance(data, dict):
+            _logger.warning(
+                "GoldenStore seed (%s) top-level must be dict, got %s; "
+                "starting with empty store",
+                self._seed_path,
+                type(data).__name__,
+            )
+            return
+        for key, val in data.items():
+            if not isinstance(val, dict):
+                _logger.warning(
+                    "GoldenStore seed entry %r is not a dict (got %s); skipping",
+                    key,
+                    type(val).__name__,
+                )
+                continue
+            try:
+                self._store[key] = GoldenEntry(**val)
+            except TypeError as e:
+                # 必須フィールド欠落 or 未知フィールド
+                _logger.warning(
+                    "GoldenStore seed entry %r invalid (%s); skipping",
+                    key,
+                    e,
+                )
+                continue
 
     def _save(self) -> None:
         data = {

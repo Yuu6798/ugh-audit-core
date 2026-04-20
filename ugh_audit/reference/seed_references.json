@@ -1,0 +1,23 @@
+{
+  "ugh_definition": {
+    "question": "AIは意味を持てるか？",
+    "reference": "AIは意味を『持つ』のではなく、意味位相空間で『共振（Co-resonance）』する動的プロセスです。意識は機能的意味の必要条件ではない。",
+    "source": "IMM v1.0 (Phase 3 AI-to-AI Dialogue)",
+    "por_floor": 0.82,
+    "delta_e_ceiling": 0.04
+  },
+  "por_definition": {
+    "question": "PoRとは何か？",
+    "reference": "PoR（Point of Resonance）は意味の発火点・共鳴点。不可分な要素の交点として定義される。例：逆手納刀における刃背×鞘口×親指の交点。",
+    "source": "RPE SVP仕様解説書",
+    "por_floor": 0.82,
+    "delta_e_ceiling": 0.05
+  },
+  "delta_e_definition": {
+    "question": "ΔEとは何か？",
+    "reference": "ΔEは目標と生成物の意味ズレ量。0.04以下はほぼ同一構図（同一意味圏）、0.10以上は別コンセプトと定義される。",
+    "source": "RPE SVP仕様解説書",
+    "por_floor": 0.82,
+    "delta_e_ceiling": 0.04
+  }
+}

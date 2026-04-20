@@ -388,7 +388,7 @@ CI 通過 = lint clean + 全テスト pass
 ## Important Notes
 
 - `.gitignore` に `*.db`, `*.sqlite`, `.env` が含まれる — DB・環境ファイルをコミットしない
-- `GoldenStore` は初期データ 3 件をハードコード (ugh_definition, por_definition, delta_e_definition)
+- `GoldenStore` は初期 seed を `examples/seed_references.json` から読む (3 件: ugh_definition, por_definition, delta_e_definition)。seed ファイル不在時は空 store で起動 (非 editable install 対応)
 - テスト時は `_empty_store()` ヘルパーで初期データをクリアして分離する
 - cascade テスト (`tests/test_cascade_tier*.py`) は SBert 未インストール環境で自動 skip
 - 否定極性マーカー (`_NEGATION_POLARITY_FORMS`) は全トークン 2 文字以上の具体形で定義（bare 1 文字トークン禁止）
