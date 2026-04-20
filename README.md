@@ -56,6 +56,27 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 
 **L_sem (意味損失関数)**: 現行 ΔE を分解・拡張した診断用指標。7 項 (L_P, L_Q, L_R, L_A, L_G, L_F, L_X) の線形和で、どの側面が劣化したかを項別に読める。Phase 5 で grv (L_G) を統合し ρ=-0.6020 に到達。詳細は [`docs/semantic_loss.md`](docs/semantic_loss.md) 参照。
 
+### Phase E verdict_advisory 校正結果 (HA63, n=63)
+
+**評価目的: Phase E ship 判定** — `mode_conditioned_grv` (Phase C) の
+`anchor_alignment` / `collapse_risk` 信号を verdict 層に downgrade 方向で
+統合した際、primary verdict (ΔE ベース) に対する副次 verdict (advisory)
+が ρ 改善を示すかを検証する。
+
+| 指標 | 値 | 備考 |
+|------|-----|------|
+| サンプル構成 | HA48 + accept40 batch1 (n=63, accept subset n=40) | |
+| `rho_primary_full` (ΔE ベース) | 0.4408 | 比較基準 |
+| **`rho_advisory_full` (mcg 統合後)** | **0.5225** | **Δρ=+0.082 改善、ship 基準クリア** |
+| `fire_rate` (advisory downgrade 発火率) | 0.225 | 第一目標 10–25% に合致 |
+| leak check `pearson_r(C, anchor_alignment)` | 0.3749 | 独立性確保 |
+| 採用閾値 | `τ_collapse_high=0.28, τ_anchor_low=0.80` | grid search n=63 |
+
+Ship 判定基準: `rho_advisory_full >= rho_primary_full - 0.02` かつ
+`fire_rate ≤ 0.30`。両条件満たし 2026-04-18 に ship。primary verdict は
+非破壊で、advisory は `accept → rewrite` downgrade のみを許可する
+保守運用。詳細: [`docs/phase_e_verdict_integration.md`](docs/phase_e_verdict_integration.md)。
+
 ---
 
 ## アーキテクチャ
@@ -493,10 +514,19 @@ cascade が無効化された状態でも core pipeline（detect tier 1 + calcul
 
 ## フェーズロードマップ
 
-- **Phase 1**: スコアリング基盤 + ログ蓄積
-- **Phase 2（現在）**: Audit Engine — 構造的意味監査パイプライン（detector / calculator / decider）
-- **Phase 3**: referenceセット設計（Human-golden / Cross-model / Self-baseline）
-- **Phase 4**: Phase Map可視化 + パターン分析
+- **Phase 1**: スコアリング基盤 + ログ蓄積 — **実装済み**
+- **Phase 2**: Audit Engine (detector / calculator / decider) — **実装済み**
+- **Phase 3**: reference セット設計 (GoldenStore) — **実装済み**
+- **Phase 4**: Phase Map 可視化 + パターン分析 (`ugh_audit/report/phase_map.py`) — **実装済み**
+- **Phase 5**: L_sem (意味損失関数) + grv 統合校正 — **実装済み** (HA48 ρ=-0.6020)
+- **Phase B**: `mode_affordance` v1 (response_mode_signal) — **実装済み**
+- **Phase C**: `mode_conditioned_grv` v2 (4 成分解釈ベクトル) — **実装済み** (HA48 anchor_alignment ρ=+0.41)
+- **Phase E**: `verdict_advisory` (mcg → downgrade) — **ship 済み** (n=63 校正、詳細 §検証結果 HA63)
+- **Phase D**: support_signal 要否判断 — 設計議論中 (Phase E で暫定達成)
+
+フェーズは並行系 (A-E) と時系列系 (1-5) の 2 軸で進行してきた。Audit Engine
+本体 (Phase 2) の上に、診断指標 (Phase 5 L_sem)、モード信号
+(Phase B/C)、判定層統合 (Phase E) が順次積み上げられた。
 
 ### grv (因果構造損失) — v1.4 実装済み
 
