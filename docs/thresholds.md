@@ -163,17 +163,18 @@ runtime の `L_P=0.27 / L_F=0.21 / L_G=0.35` (`semantic_loss.py:34-38`
 再配分。`L_Q / L_R / L_A` は HA48 で有意信号なしだが理論的保持
 (低重みで運用)。
 
-### 既知の設計 doc 側 stale 値 (別 PR で同期予定)
+### 設計 doc 側の記述との同期
 
-下記 2 箇所は LOO-CV 補正**前**の値を documented しており runtime と
-乖離している。閾値索引 (本書) を runtime に同期させた段階で乖離が
-検出可能になったが、修正は scope を分けて別 PR で対応する:
+`semantic_loss.py:DEFAULT_WEIGHTS` を single source of truth として以下の
+設計 doc と同期済み (L_sem weight sync PR 以降):
 
-| doc 位置 | documented | runtime | 乖離 |
-|---|---|---|---|
-| `docs/semantic_loss.md:49-56` | `L_P=0.24, L_G=0.48, L_F=0.16, L_X=0.05` | `0.27 / 0.35 / 0.21 / 0.10` | 校正後未反映 |
-| `docs/validation.md:103-109` | `L_P=0.24, L_G=0.48, L_F=0.16, L_X=0.05` | 同上 | 校正後未反映 |
-| `docs/grv_design.md:143` | `L_G = clamp(grv) (δ=0.13)` | `L_G = 0.35` | 実装と乖離 |
+- `docs/semantic_loss.md:46-60` および `:372-386` (デフォルト重み表 2 箇所)
+- `docs/validation.md:99-115` (Phase 5 確定 DEFAULT_WEIGHTS Python block)
+- `docs/grv_design.md:141-146` (L_sem との接続パラグラフ)
+
+各 doc は LOO-CV 補正の経緯 (full-sample 最適 `L_G=0.85` → LOO mean
+比率で `0.35`) も記載済み。今後 runtime を変更する際は本書と上記 4 箇所を
+同時更新すること。
 
 ## 7. Phase E verdict_advisory (mode_conditioned_grv)
 
