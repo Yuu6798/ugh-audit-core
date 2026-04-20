@@ -19,7 +19,8 @@
 | S 重み | `f1=5, f2=25, f3=5, f4=5` | [`formulas.md`](formulas.md) | `ugh_calculator.py:WEIGHTS_F` |
 | ΔE 重み | `w_s=2, w_c=1` | [`formulas.md`](formulas.md) | `ugh_calculator.py:WEIGHT_S/C` |
 | quality_score | `5 - 4 × ΔE` | [`formulas.md`](formulas.md) | `ugh_calculator.py` |
-| C_bin / ΔE_bin | 3-bin 分類 | [`formulas.md`](formulas.md) | `ugh_calculator.py` |
+| `C_BIN_THRESHOLDS` | `[0.34, 0.67]` (bin1/2, bin2/3 境界) | [`formulas.md`](formulas.md) | `ugh_calculator.py:C_BIN_THRESHOLDS` |
+| `DELTA_E_BIN_THRESHOLDS` | `[0.10, 0.25]` (= verdict 閾値に同期) | [`formulas.md`](formulas.md) | `ugh_calculator.py:DELTA_E_BIN_THRESHOLDS` |
 
 **導出根拠**: ΔE の `0.10 / 0.25` は HA48 (n=48, ρ=-0.5195) で校正済み
 確定値。詳細は [`validation.md`](validation.md) の HA48 verdict 単調性
@@ -35,11 +36,15 @@
 | 演算子回収 `direct_recall` | `≥ 0.10` | [`detector_design.md`](detector_design.md) | `detector.py` |
 | 演算子回収 `full_recall` | `≥ 0.25` | [`detector_design.md`](detector_design.md) | `detector.py` |
 | 演算子回収 `overlap` | `≥ 2` | [`detector_design.md`](detector_design.md) | `detector.py` |
-| Relaxed Tier1 ΔE ゲート | `≤ 0.04` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py` |
-| Relaxed Tier1 バイグラム別閾値 | 文長に応じた段階値 | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py` |
+| Relaxed Tier1 ΔE ゲート (`_RELAXED_DELTA_E_MAX`) | `≤ 0.04` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_RELAXED_DELTA_E_MAX` |
+| Relaxed Tier1 size≥8 bg | `direct≥0.10 / full≥0.30 / overlap≥2` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_RELAXED_BY_SIZE` |
+| Relaxed Tier1 size≥5 bg | `direct≥0.12 / full≥0.30 / overlap≥2` | [`detector_design.md`](detector_design.md) §Relaxed Tier1 | `detector.py:_RELAXED_BY_SIZE` |
+| 命題マッチ最小 overlap (`_MIN_OVERLAP`) | `3` | [`detector_design.md`](detector_design.md) | `detector.py:_MIN_OVERLAP` |
 
 **導出根拠**: 命題マッチの 3 閾値はもともと `0.15 / 0.35 / 3` 時代から
 `fr 0.30` に緩和された経緯あり ([`detector_design.md`](detector_design.md))。
+Relaxed Tier1 のサイズ別閾値は `_RELAXED_BY_SIZE` タプル (命題 bigram 数
+に応じた段階的緩和) として定義される。
 実験スクリプト: `analysis/threshold_validation/run_proposition_hit_experiment.py`
 
 ## 3. Cascade Matcher (tier 2/3)
