@@ -31,12 +31,11 @@ _logger = logging.getLogger(__name__)
 
 DEFAULT_GOLDEN_PATH = Path.home() / ".ugh_audit" / "golden_store.json"
 
-# 初期 seed JSON の既定配置 (editable install / 開発時のリポジトリ直下 examples/)
-# 非 editable install では存在しない可能性があるので、_load_seed() で
-# ファイル不在時は空 seed に graceful fallback する。
-DEFAULT_SEED_PATH = (
-    Path(__file__).resolve().parents[2] / "examples" / "seed_references.json"
-)
+# 初期 seed JSON の既定配置 — パッケージ内に同梱することで wheel / sdist
+# (非 editable install) でも find_reference のベースラインが維持される。
+# pyproject.toml の [tool.setuptools.package-data] で *.json を含める必要あり。
+# _load_seed() はファイル欠損時も空 seed に graceful fallback する。
+DEFAULT_SEED_PATH = Path(__file__).resolve().parent / "seed_references.json"
 
 # Stage 2 パラメータ
 _BIGRAM_CANDIDATE_TOP_K = 5
