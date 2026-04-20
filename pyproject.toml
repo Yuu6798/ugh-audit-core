@@ -11,11 +11,32 @@ license = {text = "MIT"}
 authors = [{name = "Yuu6798"}]
 requires-python = ">=3.10"
 keywords = ["UGH", "PoR", "semantic", "audit", "AI", "UGHer"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+    "Natural Language :: Japanese",
+    "Typing :: Typed",
+]
 
 dependencies = [
     "numpy>=1.24",
     "PyYAML>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Yuu6798/ugh-audit-core"
+Repository = "https://github.com/Yuu6798/ugh-audit-core"
+Issues = "https://github.com/Yuu6798/ugh-audit-core/issues"
+Documentation = "https://github.com/Yuu6798/ugh-audit-core/tree/main/docs"
 
 [project.optional-dependencies]
 full = [
@@ -28,7 +49,7 @@ ja = [
     "ipadic>=1.0",
 ]
 ugh3 = [
-    "ugh3-metrics-lib @ git+https://github.com/Yuu6798/ugh3-metrics-lib.git",
+    "ugh3-metrics-lib @ git+https://github.com/Yuu6798/ugh3-metrics-lib.git@a0dd7610de9a9b138ceaf8c7d273ea823b3cdf75",
 ]
 server = [
     "fastapi>=0.104",

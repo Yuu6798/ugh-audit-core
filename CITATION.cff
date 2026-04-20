@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software in a research context, please cite it using the
+  metadata below.
+type: software
+title: "UGH Audit Core"
+abstract: >-
+  AI 回答の意味論的監査基盤。UGHer（無意識的重力仮説）の指標 PoR / ΔE / grv
+  により、AI 回答の意味的誠実性を定量評価する決定的パイプライン
+  (detect → calculate → decide)。
+authors:
+  - family-names: "Yuu"
+    given-names: "6798"
+    alias: "Yuu6798"
+version: "0.3.0"
+date-released: "2026-04-20"
+license: "MIT"
+repository-code: "https://github.com/Yuu6798/ugh-audit-core"
+url: "https://github.com/Yuu6798/ugh-audit-core"
+keywords:
+  - "UGH"
+  - "UGHer"
+  - "PoR"
+  - "delta-E"
+  - "semantic audit"
+  - "AI evaluation"
+  - "unconscious gravity hypothesis"
+references:
+  - type: article
+    title: "無意識的重力仮説（UGHer）"
+    authors:
+      - family-names: "Yuu"
+        given-names: "6798"
+        alias: "Yuu6798"
+    url: "https://note.com/kamo6798/n/n5aeea478d12e"
+  - type: software
+    title: "ugh3-metrics-lib"
+    authors:
+      - family-names: "Yuu"
+        given-names: "6798"
+        alias: "Yuu6798"
+    repository-code: "https://github.com/Yuu6798/ugh3-metrics-lib"
