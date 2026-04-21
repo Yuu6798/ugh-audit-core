@@ -78,16 +78,49 @@ def q_meta() -> dict:
     return _load_jsonl(Q_META_PATH)
 
 
+# --- sentinel: parametrize が no-op 化していないことを独立保証する ---
+
+
+def test_ha48_snapshot_csv_is_loadable_and_has_expected_size() -> None:
+    """HA48 snapshot CSV が読めて 40 件以上あることを保証する。
+
+    Codex review P2 対応の二重防御: parametrize が future refactor で
+    silent no-op 化しないよう、非 parametrize な test で CSV 読み込みと
+    行数下限 (>= 40) を独立に assert する。この test が pass しない限り
+    regression guard 全体が機能している前提が崩れる。
+    """
+    ids = _csv_ids()
+    # HA48 は 48 件。下限 40 は accept40 batch 合流前のバッファ。
+    assert len(ids) >= 40, (
+        f"HA48 snapshot too small: {len(ids)} rows "
+        f"(expected >= 40, regression guard cannot reliably catch drift)"
+    )
+    # duplicate id がないこと
+    assert len(set(ids)) == len(ids), "duplicate ids in HA48 snapshot CSV"
+
+
 # --- parametrize で 48 件個別に test 化（drift 発生時に qid が pinpoint される）---
 
 
 def _csv_ids() -> list:
-    """CSV から id リストを module import 時に取得する。parametrize 用。"""
-    try:
-        with open(CSV_PATH, encoding="utf-8") as f:
-            return [row["id"] for row in csv.DictReader(f)]
-    except OSError:
-        return []
+    """CSV から id リストを module import 時に取得する。parametrize 用。
+
+    Codex review P2 (PR #104): 読み込み失敗時に空 list を返すと
+    `pytest.mark.parametrize` が 0 件になって本 test が no-op 化する。
+    OSError / 空 CSV は collection エラーとして **hard-fail** させる。
+    """
+    # OSError を握りつぶさない。CSV が存在しない・読めない場合は
+    # 本 regression guard が無効化されるため、pytest collection が
+    # エラーで止まって CI が赤になるのが正しい挙動。
+    with open(CSV_PATH, encoding="utf-8") as f:
+        ids = [row["id"] for row in csv.DictReader(f)]
+    if not ids:
+        # 空 CSV でも同じく no-op 化するので hard-fail させる
+        raise RuntimeError(
+            f"{CSV_PATH} is empty — HA48 regression guard would be a no-op. "
+            "Regenerate snapshot via analysis pipeline."
+        )
+    return ids
 
 
 @pytest.mark.parametrize("qid", _csv_ids())
