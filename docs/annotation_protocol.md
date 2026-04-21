@@ -286,3 +286,25 @@ python analysis/calibrate_phase_e_thresholds.py
 - ΔE / verdict を UI に表示する機能（anchoring 防止）
 - HA48 全体の倍増（accept subset のみ拡充で十分）
 - production audit.db 抽出（今回スコープ外）
+
+## 8. Future Work: 2nd Annotator と IRR 測定
+
+現行の HA48 / HA20 / HA28 / accept40 は全て **single annotator (プロジェクト
+著者) による作業** で、inter-rater reliability (IRR) は未測定。
+
+本プロトコルを他の annotator に適用して IRR を測ることは原理的に可能で、
+以下の運用で導入できる:
+
+1. 2nd annotator が本 protocol §2–§4 に従って同じ質問セットを独立評価
+2. `data/human_annotation_accept40/snapshots/` の中間成果物を共有せず、
+   独立評価を確保 (anchoring 防止)
+3. 両者の `O / S / C` について Spearman ρ / Cohen's κ を算出
+4. 閾値: `Cohen's κ ≥ 0.60` (substantial agreement) を最低線、
+   `ρ(O_A, O_B) ≥ 0.70` を目標とする
+5. 不一致ケースは第三者仲裁 or 議論で解決し、合意値を reference として採用
+
+これにより `docs/validation.md` の「参照上限 ρ=0.8616」の信頼性区間が
+測定可能になり、Limitations 節の single-annotator 制約が段階的に解消される。
+
+本件は現時点で **未着手**（`docs/validation.md §Limitations` 参照）。
+2nd annotator 合流のタイミングで起動する。

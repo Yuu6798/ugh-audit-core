@@ -3,6 +3,29 @@
 本ドキュメントは `ugh-audit-core` の主要指標 (ΔE / quality_score /
 L_sem) の検証結果を一元管理する。
 
+## 主指標政策 (Primary Metric Policy)
+
+| 指標 | 位置づけ | 根拠 |
+|---|---|---|
+| **ΔE (ΔE_A, system C)** | **主評価指標** | 決定的 core pipeline で算出。`S, C` からの 2 項合成、HA48 で ρ=-0.5195 (p=0.000154)。**verdict 境界 (0.10/0.25) は HA48 校正済み固定値** |
+| **L_sem (Phase 5)** | **診断用指標** | 7 項線形和で劣化側面を項別に識別する用途。HA48 ρ=-0.6020 (Phase 5 full-sample) だが n=48 で LOO-CV shrinkage=0.128 を観測、runtime 重みは保守的に配分 |
+| quality_score | 表示用 | `5 - 4×ΔE` の派生値 |
+| verdict_advisory (Phase E) | 副次判定 | `mode_conditioned_grv` 由来の downgrade-only advisory。primary verdict は不変 |
+
+**運用原則:**
+
+- Deploy 時の go/no-go は **ΔE の verdict 境界** で行う。`is_reliable` も ΔE ベース
+- L_sem は「どの項が悪いか」を debug する診断用。runtime 重みは
+  `semantic_loss.py:DEFAULT_WEIGHTS` で L_P/L_F/L_G を優先、L_Q/L_A/L_X は
+  保守的に保持（HA48 で信号弱いが理論的保持）
+- 論文・レポートで「システムの相関」を主張する際は **ΔE ρ を主数字**として
+  報告し、L_sem は補足診断として併記する
+- 設計判断で「追加指標が必要」になる前に、まず L_sem の 7 項を見て原因分解する
+
+**文脈:** `semantic_loss.py:34-47` の LOO-CV shrinkage コメントは、full-sample
+最適重みと runtime 重みが異なる理由を記録したもの。主指標 ΔE を動かさず、
+L_sem 側で保守的縮小をかける判断の履歴として保持している。
+
 ## HA48 検証結果
 
 n=48, v5 ベースライン 197/310 hits, scipy.stats.spearmanr (タイ補正あり):
@@ -30,6 +53,83 @@ n=48, v5 ベースライン 197/310 hits, scipy.stats.spearmanr (タイ補正あ
 | ΔE (system C) | -0.7737 | <0.001 | n=20 サブセット |
 | ΔE (human C) | -0.9266 | <0.001 | 参照上限 |
 | S (構造完全性) | 0.5770 | 0.008 | f2 が主要寄与因子 |
+
+## 信頼区間 (95% CI, Fisher z 変換)
+
+報告済み Spearman ρ の Fisher z 変換ベース 95% 信頼区間:
+
+| 指標 | n | ρ 点推定 | 95% CI |
+|---|---|---|---|
+| HA48 ΔE vs O (system C) | 48 | -0.5195 | [-0.7003, -0.2761] |
+| HA48 ΔE vs O (human C, 参照上限) | 48 | +0.8616 | [+0.7625, +0.9210] |
+| HA48 L_sem Phase 5 vs O | 48 | -0.6020 | [-0.7567, -0.3835] |
+| HA20 ΔE vs O (system C) | 20 | -0.7737 | [-0.9060, -0.5036] |
+| HA20 ΔE vs O (human C) | 20 | -0.9266 | [-0.9710, -0.8200] |
+
+計算式: `z = atanh(ρ)`, `SE = 1/sqrt(n-3)`, `CI = tanh(z ± 1.96*SE)`。
+再現:
+
+```python
+from scipy.stats import spearmanr
+import math
+def fisher_ci(rho, n, alpha=0.05):
+    z = math.atanh(rho); se = 1.0 / math.sqrt(n - 3)
+    zc = 1.959963984540054
+    return math.tanh(z - zc*se), math.tanh(z + zc*se)
+```
+
+## Limitations
+
+本システムの検証結果を査読・論文・導入判断で利用する際の前提条件:
+
+### n=48 (HA48) の統計的薄さ
+
+HA48 は核評価データだが **n=48 は統計的には小標本**。主指標 `ΔE vs O
+(system C)` の点推定 ρ=-0.5195 は強い相関だが、**95% CI 下端 -0.2761 は
+ρ=-0.50 の運用閾値を下回る**。すなわち「`|ρ| ≥ 0.5` の主張は点推定では
+成立するが、CI ベースでは保証されない」状態。
+
+含意:
+
+- HA48 単独で「相関強度 0.5 超」を断定しない
+- HA20 (n=20) との合算や、accept サブセット拡張 (accept40 = 40 件) で
+  段階的に精度を上げる運用
+- 大規模 (n≥100) での再検証は将来課題。新規アノテーションは `docs/annotation_protocol.md` の手順で計画
+
+Phase 5 L_sem (ρ=-0.6020) も同様で、CI 下端は -0.3835。点推定で ΔE を
+上回るが、CI ベースでの優位は保証されない。
+
+### Single-Annotator Constraint (IRR 不在)
+
+HA48 / HA20 / HA28 の全アノテーションは **single annotator (プロジェクト
+著者) による作業**。複数アノテータによる作業は現状実施されておらず、
+**inter-rater reliability (IRR) は未測定**。
+
+これが意味すること:
+
+- 参照上限 `ρ=0.8616` (ΔE vs O, human C) は **single-annotator 前提下の
+  上限値**。複数アノテータ間で annotator agreement がどの程度か不明のため、
+  真の参照上限を過大評価している可能性がある
+- system C の evaluation は参照 C への一致度を測っているが、参照 C 自体
+  の信頼性区間は本検証では算出されていない
+- 「O スコア」「C スコア」の値は annotator の判断が反映されており、
+  annotator が変われば値も変わりうる
+
+Mitigation（部分的対応）:
+
+- アノテーション手順を `docs/annotation_protocol.md` に codify し、将来
+  2nd annotator が合流した際に IRR 測定を走らせる前提を整備
+- `data/human_annotation_accept40/snapshots/` で annotation 過程の
+  中間成果物を保全し、後追い検証を可能にしている
+
+将来課題として **2nd annotator を入れた IRR 測定** を `docs/annotation_protocol.md`
+の `Future Work` に明示する。
+
+### ベースライン比較の不在（本リポジトリ上で）
+
+現行リポジトリには BERTScore / BLEURT / BLEU 等の既存手法との HA48/HA20
+上での直接比較は収録されていない。将来リリース (`docs/roadmap.md` — WIP)
+で HA48/HA20 上での直接測定を計画。
 
 ## ボトルネックと今後の改善
 

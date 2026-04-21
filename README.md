@@ -54,6 +54,10 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 
 注: scipy.stats.spearmanr（タイ補正あり）で算出。system C の命題照合精度が ΔE のボトルネック。参照上限 ρ=0.862 との差は検出パイプラインの精度改善で縮まる。
 
+**95% 信頼区間 (Fisher z):** 主指標 HA48 ΔE (system C) は **ρ=-0.5195, 95% CI [-0.700, -0.276]**。点推定は -0.5 を下回るが CI 下端は -0.276 で運用閾値 ρ=-0.5 を保証しない。**n=48 は小標本**、アノテーションは **single annotator** による制約があり、IRR 未測定。全指標の CI と Limitations 詳細は [`docs/validation.md`](docs/validation.md) §「信頼区間」「Limitations」。
+
+**主指標政策:** go/no-go は **ΔE を主指標**とする。**L_sem は診断用**（どの項が悪いかの debug 情報）で、LOO-CV shrinkage=0.128 を検出したため runtime 重みは保守的に縮小済み。詳細は [`docs/validation.md#主指標政策-primary-metric-policy`](docs/validation.md#主指標政策-primary-metric-policy) 参照。
+
 **L_sem (意味損失関数)**: 現行 ΔE を分解・拡張した診断用指標。7 項 (L_P, L_Q, L_R, L_A, L_G, L_F, L_X) の線形和で、どの側面が劣化したかを項別に読める。Phase 5 で grv (L_G) を統合し ρ=-0.6020 に到達。詳細は [`docs/semantic_loss.md`](docs/semantic_loss.md) 参照。
 
 ### Phase E verdict_advisory 校正結果 (HA63, n=63)
