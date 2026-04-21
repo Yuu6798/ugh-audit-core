@@ -23,7 +23,7 @@ import json
 import random
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -41,6 +41,8 @@ OUT_CSV = ROOT / "data" / "human_annotation_accept40" / "annotation_accept40_stu
 
 DELTA_E_ACCEPT = 0.10
 DELTA_E_BORDERLINE_MAX = 0.15
+_POLARITY_CHECKER: Optional[Callable[[str], bool]] = None
+_POLARITY_IMPORT_WARNED = False
 
 
 def _load_ha48_ids() -> set:
@@ -101,11 +103,58 @@ def _core_propositions(qmeta: dict) -> List[str]:
     return []
 
 
+def _bucket_priority(name: str) -> int:
+    if name == "v5_unannotated":
+        return 0
+    if name.startswith("orchestrator"):
+        return 1
+    if name == "v5_borderline":
+        return 2
+    return 3
+
+
+def _safe_float(value: object) -> Optional[float]:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _always_false_checker(_proposition: str) -> bool:
+    return False
+
+
+def _polarity_checker() -> Callable[[str], bool]:
+    global _POLARITY_CHECKER, _POLARITY_IMPORT_WARNED
+    if _POLARITY_CHECKER is None:
+        try:
+            from semantic_loss import _is_polarity_bearing  # noqa: WPS433
+
+            _POLARITY_CHECKER = _is_polarity_bearing
+        except (ModuleNotFoundError, ImportError) as err:
+            if not _POLARITY_IMPORT_WARNED:
+                print(
+                    "[warn] polarity-focus fallback: semantic_loss dependency"
+                    f" unavailable ({err}); treating polarity count as 0.",
+                    file=sys.stderr,
+                )
+                _POLARITY_IMPORT_WARNED = True
+            _POLARITY_CHECKER = _always_false_checker
+    return _POLARITY_CHECKER
+
+
+def _count_polarity_bearing(propositions: List[str]) -> int:
+    checker = _polarity_checker()
+    return sum(1 for p in propositions if isinstance(p, str) and checker(p))
+
+
 def collect_priority_a(
     ha48_ids: set,
     v5: Dict[str, dict],
     qmeta: Dict[str, dict],
     responses: Dict[str, str],
+    *,
+    polarity_focus: bool = False,
 ) -> List[dict]:
     """priority A: v5 で未アノテートの accept/borderline 候補."""
     out: List[dict] = []
@@ -130,6 +179,9 @@ def collect_priority_a(
         if not propositions:
             # core_propositions がないと O 判定の基準が立たない
             continue
+        polarity_count = (
+            _count_polarity_bearing(propositions) if polarity_focus else 0
+        )
         out.append(
             {
                 "question_id": qid,
@@ -139,6 +191,8 @@ def collect_priority_a(
                 "core_propositions": json.dumps(propositions, ensure_ascii=False),
                 "hits_total": f"{row.get('hits', '')}/{row.get('total', '')}",
                 "delta_e": f"{de:.4f}",
+                "_delta_e_float": de,
+                "_polarity_count": polarity_count,
             }
         )
     # accept 優先、次に borderline
@@ -146,7 +200,12 @@ def collect_priority_a(
     return out
 
 
-def collect_orchestrator(path: Path, ha48_ids: set) -> List[dict]:
+def collect_orchestrator(
+    path: Path,
+    ha48_ids: set,
+    *,
+    polarity_focus: bool = False,
+) -> List[dict]:
     """priority B: 既存 orchestrator 出力 jsonl を読み込む.
 
     期待する jsonl schema (1 行 1 回答):
@@ -169,8 +228,14 @@ def collect_orchestrator(path: Path, ha48_ids: set) -> List[dict]:
             propositions = d.get("core_propositions")
             if isinstance(propositions, list):
                 propositions_str = json.dumps(propositions, ensure_ascii=False)
+                polarity_count = (
+                    _count_polarity_bearing(propositions)
+                    if polarity_focus
+                    else 0
+                )
             else:
                 propositions_str = str(propositions or "")
+                polarity_count = 0
             if not propositions_str or propositions_str == "[]":
                 continue
             out.append(
@@ -182,6 +247,8 @@ def collect_orchestrator(path: Path, ha48_ids: set) -> List[dict]:
                     "core_propositions": propositions_str,
                     "hits_total": d.get("hits_total", ""),
                     "delta_e": d.get("delta_e", ""),
+                    "_delta_e_float": _safe_float(d.get("delta_e")),
+                    "_polarity_count": polarity_count,
                 }
             )
     return out
@@ -201,22 +268,108 @@ def _stratified_shuffle(candidates: List[dict], seed: int) -> List[dict]:
     for b in buckets.values():
         rng.shuffle(b)
 
-    def bucket_priority(name: str) -> int:
-        if name == "v5_unannotated":
-            return 0
-        if name.startswith("orchestrator"):
-            return 1
-        if name == "v5_borderline":
-            return 2
-        return 3
-
-    ordered_sources = sorted(buckets.keys(), key=bucket_priority)
+    ordered_sources = sorted(buckets.keys(), key=_bucket_priority)
     result: List[dict] = []
     while any(buckets[s] for s in ordered_sources):
         for s in ordered_sources:
             if buckets[s]:
                 result.append(buckets[s].pop(0))
     return result
+
+
+def _focus_reorder(
+    ordered: List[dict], *, polarity_focus: bool, borderline_focus: bool
+) -> List[dict]:
+    """focus option に応じて annotation 候補を再配置する."""
+    if not polarity_focus and not borderline_focus:
+        return ordered
+
+    with_index = list(enumerate(ordered))
+
+    def is_borderline(row: dict) -> bool:
+        return row.get("source") == "v5_borderline"
+
+    def is_accept(row: dict) -> bool:
+        return row.get("source") == "v5_unannotated"
+
+    def is_orchestrator(row: dict) -> bool:
+        source = row.get("source") or ""
+        return isinstance(source, str) and source.startswith("orchestrator")
+
+    def polarity_count(row: dict) -> int:
+        value = row.get("_polarity_count")
+        if isinstance(value, int):
+            return value
+        return 0
+
+    def delta_distance(row: dict) -> float:
+        de = row.get("_delta_e_float")
+        if isinstance(de, float):
+            return abs(de - DELTA_E_ACCEPT)
+        return float("inf")
+
+    def key_both(pair: tuple[int, dict]) -> tuple:
+        idx, row = pair
+        pol = polarity_count(row)
+        border = is_borderline(row)
+        accept = is_accept(row)
+        orch = is_orchestrator(row)
+        if pol > 0 and border:
+            focus_rank = 0
+        elif pol > 0 and accept:
+            focus_rank = 1
+        elif border:
+            focus_rank = 2
+        elif accept:
+            focus_rank = 3
+        elif orch:
+            focus_rank = 4
+        else:
+            focus_rank = 5
+        return (
+            focus_rank,
+            -pol,
+            delta_distance(row) if border else float("inf"),
+            _bucket_priority(str(row.get("source") or "")),
+            idx,
+        )
+
+    def key_polarity(pair: tuple[int, dict]) -> tuple:
+        idx, row = pair
+        pol = polarity_count(row)
+        return (
+            0 if pol > 0 else 1,
+            -pol,
+            idx,
+        )
+
+    def key_borderline(pair: tuple[int, dict]) -> tuple:
+        idx, row = pair
+        border = is_borderline(row)
+        accept = is_accept(row)
+        orch = is_orchestrator(row)
+        if border:
+            focus_rank = 0
+        elif accept:
+            focus_rank = 1
+        elif orch:
+            focus_rank = 2
+        else:
+            focus_rank = 3
+        return (
+            focus_rank,
+            delta_distance(row) if border else float("inf"),
+            _bucket_priority(str(row.get("source") or "")),
+            idx,
+        )
+
+    if polarity_focus and borderline_focus:
+        sorted_pairs = sorted(with_index, key=key_both)
+    elif polarity_focus:
+        sorted_pairs = sorted(with_index, key=key_polarity)
+    else:
+        sorted_pairs = sorted(with_index, key=key_borderline)
+    return [row for _, row in sorted_pairs]
 
 
 def assign_acc40_ids(rows: List[dict], start: int = 1) -> List[dict]:
@@ -269,6 +422,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--append", action="store_true",
         help="既存 stub CSV に追記 (既存 acc40 id は維持)",
     )
+    parser.add_argument(
+        "--polarity-focus", action="store_true",
+        help="極性制約を含む命題を持つ候補を優先（Phase 2 用）",
+    )
+    parser.add_argument(
+        "--borderline-focus", action="store_true",
+        help="accept 閾値近傍 (0.10 < delta_e <= 0.15) の候補を優先（Phase 1 用）",
+    )
     args = parser.parse_args(argv)
 
     ha48_ids = _load_ha48_ids()
@@ -276,9 +437,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     qmeta = _load_qmeta()
     responses = _load_responses()
 
-    candidates = collect_priority_a(ha48_ids, v5, qmeta, responses)
+    candidates = collect_priority_a(
+        ha48_ids, v5, qmeta, responses, polarity_focus=args.polarity_focus
+    )
     if args.orchestrator_jsonl:
-        candidates.extend(collect_orchestrator(args.orchestrator_jsonl, ha48_ids))
+        candidates.extend(
+            collect_orchestrator(
+                args.orchestrator_jsonl,
+                ha48_ids,
+                polarity_focus=args.polarity_focus,
+            )
+        )
 
     # --append 時は既存 stub に含まれる question_id を候補から除外
     # (重複 sampling による question の weight 偏りを防止)
@@ -294,6 +463,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         candidates = [c for c in candidates if c["question_id"] not in excluded_qids]
 
     ordered = _stratified_shuffle(candidates, args.seed)
+    ordered = _focus_reorder(
+        ordered,
+        polarity_focus=args.polarity_focus,
+        borderline_focus=args.borderline_focus,
+    )
     window = ordered[args.offset : args.offset + args.batch_size]
     assigned = assign_acc40_ids(window, start=start_id)
 

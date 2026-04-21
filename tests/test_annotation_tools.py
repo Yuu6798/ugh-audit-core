@@ -128,6 +128,85 @@ def fake_data(tmp_path, monkeypatch):
     }
 
 
+@pytest.fixture
+def fake_data_with_polarity(tmp_path, monkeypatch):
+    """focus option 検証用の sampler 入力データ."""
+    ha48 = tmp_path / "ha48.csv"
+    v5 = tmp_path / "v5.csv"
+    qmeta = tmp_path / "qmeta.jsonl"
+    resp = tmp_path / "resp.jsonl"
+    out_stub = tmp_path / "stub_focus.csv"
+
+    _write_csv(
+        ha48,
+        [],
+        ["id", "category", "S", "C", "O", "propositions_hit", "notes"],
+    )
+    _write_csv(
+        v5,
+        [
+            # accept (non-polarity)
+            {"id": "q010", "category": "x", "trap_type": "", "f1": "0",
+             "f2": "0", "f3": "0", "f4": "0", "hits": "3", "total": "3",
+             "hit_ids": "", "miss_ids": "", "hit_sources": "",
+             "S": "1.0", "C": "1.0", "dE": "0", "decision": "accept"},
+            # accept (polarity-bearing)
+            {"id": "q011", "category": "x", "trap_type": "", "f1": "0",
+             "f2": "0", "f3": "0", "f4": "0", "hits": "3", "total": "3",
+             "hit_ids": "", "miss_ids": "", "hit_sources": "",
+             "S": "1.0", "C": "1.0", "dE": "0", "decision": "accept"},
+            # borderline (near ΔE=0.10)
+            {"id": "q012", "category": "y", "trap_type": "", "f1": "0",
+             "f2": "0", "f3": "0", "f4": "0", "hits": "2", "total": "3",
+             "hit_ids": "", "miss_ids": "", "hit_sources": "",
+             "S": "0.70", "C": "0.60", "dE": "0", "decision": "rewrite"},
+            # borderline (far from ΔE=0.10, but still <=0.15)
+            {"id": "q013", "category": "y", "trap_type": "", "f1": "0",
+             "f2": "0", "f3": "0", "f4": "0", "hits": "2", "total": "3",
+             "hit_ids": "", "miss_ids": "", "hit_sources": "",
+             "S": "0.65", "C": "0.55", "dE": "0", "decision": "rewrite"},
+        ],
+        ["id", "category", "trap_type", "f1", "f2", "f3", "f4", "hits",
+         "total", "hit_ids", "miss_ids", "hit_sources", "S", "C", "dE",
+         "decision"],
+    )
+    _write_jsonl(
+        qmeta,
+        [
+            {"id": "q010", "question": "Q10?",
+             "original_core_propositions": ["通常命題", "別命題"]},
+            {"id": "q011", "question": "Q11?",
+             "original_core_propositions": ["Xはすべきではない", "通常命題"]},
+            {"id": "q012", "question": "Q12?",
+             "original_core_propositions": ["通常命題A"]},
+            {"id": "q013", "question": "Q13?",
+             "original_core_propositions": ["通常命題B"]},
+        ],
+    )
+    _write_jsonl(
+        resp,
+        [
+            {"id": "q010", "response": "A10"},
+            {"id": "q011", "response": "A11"},
+            {"id": "q012", "response": "A12"},
+            {"id": "q013", "response": "A13"},
+        ],
+    )
+
+    monkeypatch.setattr(sampler_mod, "HA48_PATH", ha48)
+    monkeypatch.setattr(sampler_mod, "V5_PATH", v5)
+    monkeypatch.setattr(sampler_mod, "QMETA_PATH", qmeta)
+    monkeypatch.setattr(sampler_mod, "RESPONSES_PATH", resp)
+    monkeypatch.setattr(sampler_mod, "OUT_CSV", out_stub)
+    return {
+        "ha48": ha48,
+        "v5": v5,
+        "qmeta": qmeta,
+        "resp": resp,
+        "stub": out_stub,
+    }
+
+
 def test_sampler_extracts_accept_and_borderline(fake_data):
     assert sampler_mod.main(["--batch-size", "5"]) == 0
     with open(fake_data["stub"], encoding="utf-8") as f:
@@ -166,6 +245,123 @@ def test_sampler_orchestrator_jsonl(fake_data, tmp_path):
         rows = list(csv.DictReader(f))
     sources = [r["source"] for r in rows]
     assert "orchestrator_claude" in sources
+
+
+def test_sampler_polarity_focus_prioritizes_polarity_bearing(
+    fake_data_with_polarity,
+):
+    assert sampler_mod.main(
+        ["--batch-size", "10", "--seed", "7", "--polarity-focus"]
+    ) == 0
+    with open(fake_data_with_polarity["stub"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert rows[0]["question_id"] == "q011"
+
+
+def test_sampler_borderline_focus_prioritizes_borderline(fake_data_with_polarity):
+    assert sampler_mod.main(
+        ["--batch-size", "10", "--seed", "7", "--borderline-focus"]
+    ) == 0
+    with open(fake_data_with_polarity["stub"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    first_four = [r["question_id"] for r in rows[:4]]
+    # q012 (ΔE≈0.113) は q013 (ΔE≈0.149) より閾値 0.10 に近いので先頭
+    assert first_four[:2] == ["q012", "q013"]
+    # borderline を accept より前倒し
+    assert first_four[2:] == ["q010", "q011"]
+
+
+def test_sampler_combined_focus_uses_defined_priority(fake_data_with_polarity, tmp_path):
+    gen = tmp_path / "gen.jsonl"
+    _write_jsonl(
+        gen,
+        [
+            {"question_id": "q900", "source": "orchestrator_claude",
+             "question": "Q900?", "response": "A900",
+             "core_propositions": ["Yはすべきではない"]},
+        ],
+    )
+    assert sampler_mod.main(
+        [
+            "--batch-size", "10",
+            "--seed", "7",
+            "--polarity-focus",
+            "--borderline-focus",
+            "--orchestrator-jsonl", str(gen),
+        ]
+    ) == 0
+    with open(fake_data_with_polarity["stub"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert [r["question_id"] for r in rows] == [
+        "q011",  # polarity ∧ accept
+        "q012",  # borderline (near)
+        "q013",  # borderline (far)
+        "q010",  # accept
+        "q900",  # orchestrator_* (last)
+    ]
+
+
+def test_sampler_focus_flags_default_preserves_existing_order(fake_data, tmp_path):
+    gen = tmp_path / "gen.jsonl"
+    _write_jsonl(
+        gen,
+        [
+            {"question_id": "q005", "source": "orchestrator_claude",
+             "question": "Q5?", "response": "A5",
+             "core_propositions": ["p"]},
+        ],
+    )
+    assert sampler_mod.main(
+        ["--batch-size", "5", "--seed", "3", "--orchestrator-jsonl", str(gen)]
+    ) == 0
+    with open(fake_data["stub"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert [r["source"] for r in rows] == [
+        "v5_unannotated",
+        "orchestrator_claude",
+        "v5_borderline",
+    ]
+
+
+def test_sampler_default_does_not_call_polarity_counter(fake_data, monkeypatch):
+    def _boom(_propositions):
+        raise AssertionError("polarity counter must not run without --polarity-focus")
+
+    monkeypatch.setattr(sampler_mod, "_count_polarity_bearing", _boom)
+    assert sampler_mod.main(["--batch-size", "5"]) == 0
+    with open(fake_data["stub"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 2
+
+
+def test_sampler_polarity_focus_degrades_when_semantic_loss_unavailable(
+    fake_data_with_polarity, monkeypatch
+):
+    import builtins
+
+    assert sampler_mod.main(["--batch-size", "10", "--seed", "7"]) == 0
+    with open(fake_data_with_polarity["stub"], encoding="utf-8") as f:
+        baseline_rows = list(csv.DictReader(f))
+    baseline_order = [r["question_id"] for r in baseline_rows]
+
+    original_import = builtins.__import__
+
+    def _import_with_missing_semantic_loss(name, globals_=None, locals_=None,
+                                           fromlist=(), level=0):
+        if name == "semantic_loss":
+            raise ModuleNotFoundError("No module named 'semantic_loss'")
+        return original_import(name, globals_, locals_, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _import_with_missing_semantic_loss)
+    monkeypatch.setattr(sampler_mod, "_POLARITY_CHECKER", None)
+    monkeypatch.setattr(sampler_mod, "_POLARITY_IMPORT_WARNED", False)
+
+    assert sampler_mod.main(
+        ["--batch-size", "10", "--seed", "7", "--polarity-focus"]
+    ) == 0
+    with open(fake_data_with_polarity["stub"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert [r["question_id"] for r in rows] == baseline_order
 
 
 # ---------------------------------------------------------------------------
