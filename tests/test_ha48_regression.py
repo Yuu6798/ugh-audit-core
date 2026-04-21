@@ -39,6 +39,11 @@ Q_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 # round-trip の誤差を吸収する。
 _ABS_TOL = 1e-3
 
+# 論文 "HA48" の canonical cardinality。accidental truncation を silent に
+# 見逃さないよう exact equality で assert する。データセット拡張時は本定数と
+# CSV 両方を同一コミットで更新する運用。
+EXPECTED_HA48_N = 48
+
 
 def _load_csv() -> dict:
     result: dict = {}
@@ -82,18 +87,24 @@ def q_meta() -> dict:
 
 
 def test_ha48_snapshot_csv_is_loadable_and_has_expected_size() -> None:
-    """HA48 snapshot CSV が読めて 40 件以上あることを保証する。
+    """HA48 snapshot CSV が読めて **canonical 48 件と exact 一致** する。
 
-    Codex review P2 対応の二重防御: parametrize が future refactor で
-    silent no-op 化しないよう、非 parametrize な test で CSV 読み込みと
-    行数下限 (>= 40) を独立に assert する。この test が pass しない限り
-    regression guard 全体が機能している前提が崩れる。
+    Codex review P2 対応の二重防御 (round 2):
+    - parametrize が future refactor で silent no-op 化しないよう、非
+      parametrize な test で CSV 読み込みを独立に assert する
+    - **exact equality** (== EXPECTED_HA48_N) で accidental truncation を
+      silent に見逃さない。前版 `>= 40` は最大 8 行 truncation を pass
+      させる guard 抜けがあった (Codex review P2 round 2)
+
+    運用: HA48 拡張 (accept40 合流 → HA63 など) を行う場合は、`EXPECTED_HA48_N`
+    定数と CSV 両方を同一コミットで更新する。
     """
     ids = _csv_ids()
-    # HA48 は 48 件。下限 40 は accept40 batch 合流前のバッファ。
-    assert len(ids) >= 40, (
-        f"HA48 snapshot too small: {len(ids)} rows "
-        f"(expected >= 40, regression guard cannot reliably catch drift)"
+    # Exact cardinality: 論文の "HA48" claim を row-for-row に lock する
+    assert len(ids) == EXPECTED_HA48_N, (
+        f"HA48 snapshot row count mismatch: expected exactly {EXPECTED_HA48_N} "
+        f"(paper-facing HA48 claim), got {len(ids)}. Accidental truncation or "
+        f"undeclared dataset expansion breaks reproducibility guard."
     )
     # duplicate id がないこと
     assert len(set(ids)) == len(ids), "duplicate ids in HA48 snapshot CSV"
@@ -194,6 +205,14 @@ def test_ha48_overall_hit_rate_matches_snapshot(
 ) -> None:
     """全 48 件の hit 総数が CSV スナップショットと一致 (論文 baseline 合計)"""
     from detector import detect
+
+    # 集約前に cardinality が canonical 48 件であることを再確認する。
+    # これで sentinel 漏れた場合でも本 test が paper-facing "HA48" の前提
+    # 破綻を surface できる。
+    assert len(expected_rows) == EXPECTED_HA48_N, (
+        f"aggregate test の前提破綻: expected {EXPECTED_HA48_N} rows, "
+        f"got {len(expected_rows)}"
+    )
 
     expected_total_hits = sum(int(r["hits"]) for r in expected_rows.values())
     expected_total_props = sum(int(r["total"]) for r in expected_rows.values())
