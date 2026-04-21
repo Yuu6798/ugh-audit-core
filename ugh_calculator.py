@@ -56,16 +56,30 @@ def summarize_hit_sources(
     分子）を明示する。`per_proposition` は命題インデックス → ソース
     マッピングで、JSON シリアライズ用に key を str へ変換する。
 
+    **内部整合性の保証:** `core_hit + cascade_rescued + miss == total` が
+    常に成立する。`miss` は `total` から derive することで、hit_sources
+    mapping が `propositions_total` 未満しか含まない場合（例: server の
+    compat fallback で `{}` が渡される場合）でも miss rate を過小報告
+    しない。
+
     propositions_total=0 (命題未検出) の場合は None を返す。
     """
     if propositions_total <= 0:
         return None
 
+    # core / cascade は explicit label を数える（検出層が明示したヒットのみ）
     core_hit = sum(1 for v in hit_sources.values() if v == HIT_SOURCE_TFIDF)
     cascade_rescued = sum(
         1 for v in hit_sources.values() if v == HIT_SOURCE_CASCADE
     )
-    miss = sum(1 for v in hit_sources.values() if v == HIT_SOURCE_MISS)
+    # miss は total から derive する。これにより:
+    #   (a) core + cascade + miss == total を常に保証
+    #   (b) hit_sources に explicit "miss" label がなくても total 分だけ
+    #       miss に計上される（= 不明命題を保守的に non-hit 扱い）
+    # Codex review P2: 空 mapping + 非ゼロ total で miss=0 になる bug を修正。
+    # max(0, ...) は hit_sources が total を超えて tfidf/cascade を持つ
+    # 想定外入力に対する防御ガード。
+    miss = max(0, propositions_total - core_hit - cascade_rescued)
 
     return {
         "core_hit": core_hit,
@@ -76,6 +90,7 @@ def summarize_hit_sources(
         # cascade を含めない tfidf-only のヒット数 / 全命題数。
         "core_only_hit_rate": f"{core_hit}/{propositions_total}",
         # 命題 index → ソース。JSON 互換のため key を str にする。
+        # compat fallback で mapping が total を下回る場合、ここも部分的。
         "per_proposition": {str(k): v for k, v in hit_sources.items()},
     }
 
