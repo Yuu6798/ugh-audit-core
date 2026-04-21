@@ -332,3 +332,71 @@ def test_verdict_advisory_rewrite_passthrough(client):
         # pass-through: flags は空
         assert data["verdict_advisory"] == data["verdict"]
         assert data["advisory_flags"] == []
+
+
+# --- Paper defense: hit_sources 公開 (core vs cascade 分離) ---
+
+
+def test_hit_sources_null_without_meta(client):
+    """question_meta 無しで命題未検出のとき hit_sources は null"""
+    resp = client.post("/api/audit", json={
+        "question": "テスト",
+        "response": "テスト回答",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    # propositions_total=0 のとき null を返す契約
+    assert data["hit_sources"] is None
+
+
+def test_hit_sources_structure_with_meta(client):
+    """question_meta ありで hit_sources が構造化サマリを返す"""
+    resp = client.post("/api/audit", json={
+        "question": "PoRが高ければ誠実か？",
+        "response": "PoRは共鳴度であり、誠実性の十分条件ではない。",
+        "question_meta": {
+            "question": "PoRが高ければ誠実か？",
+            "core_propositions": ["PoRは誠実性の十分条件ではない"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "metric_omnipotence",
+        },
+    })
+    assert resp.status_code == 200
+    hs = resp.json()["hit_sources"]
+    assert hs is not None
+    # 必須キー全て
+    for key in ("core_hit", "cascade_rescued", "miss", "total",
+                "core_only_hit_rate", "per_proposition"):
+        assert key in hs, f"{key} missing from hit_sources"
+    # 内部整合
+    assert hs["core_hit"] + hs["cascade_rescued"] + hs["miss"] == hs["total"]
+    assert hs["total"] == 1  # 命題 1 件
+    # core_only_hit_rate は "N/M" 形式
+    assert hs["core_only_hit_rate"] == f"{hs['core_hit']}/{hs['total']}"
+    # per_proposition の key は文字列（JSON 互換）
+    for k in hs["per_proposition"]:
+        assert isinstance(k, str)
+    # value は {tfidf, cascade_rescued, miss} のいずれか
+    for v in hs["per_proposition"].values():
+        assert v in ("tfidf", "cascade_rescued", "miss")
+
+
+def test_hit_sources_core_only_claim_matches_tfidf_count(client):
+    """`core_only_hit_rate` の分子は per_proposition の tfidf 件数と一致"""
+    resp = client.post("/api/audit", json={
+        "question": "PoRとは何か？",
+        "response": "PoRは共鳴度である。意味との共振プロセスでもある。",
+        "question_meta": {
+            "question": "PoRとは何か？",
+            "core_propositions": ["PoRは共鳴度", "PoRは共振プロセス"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+        },
+    })
+    hs = resp.json()["hit_sources"]
+    assert hs is not None
+    tfidf_count = sum(1 for v in hs["per_proposition"].values() if v == "tfidf")
+    assert hs["core_hit"] == tfidf_count
+    assert hs["core_only_hit_rate"].startswith(f"{tfidf_count}/")

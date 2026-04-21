@@ -40,6 +40,103 @@ GATE_FAIL = "fail"
 # --- C ビン閾値 ---
 C_BIN_THRESHOLDS = [0.34, 0.67]  # bin1/2境界, bin2/3境界
 
+# --- hit_sources ソース値 (detector.py との契約) ---
+HIT_SOURCE_TFIDF = "tfidf"              # core pipeline deterministic hit
+HIT_SOURCE_CASCADE = "cascade_rescued"  # cascade layer probabilistic hit
+HIT_SOURCE_MISS = "miss"                # no hit in either layer
+
+
+def reconstruct_hit_sources(evidence: object) -> Dict[int, str]:
+    """Evidence-like object から hit_sources mapping を安全に取り出す/再構築する。
+
+    server / mcp の API レスポンス生成で evidence のバージョン差分に対処する。
+    現行の Evidence は `hit_sources` を常に持つが、過去の pickle / mock /
+    legacy rollout では属性が欠落しうる。そのような入力でも `propositions_hit`
+    との整合性を保つ。
+
+    優先順位:
+      1. `evidence.hit_sources` が非空: そのまま返す (現行 detector 出力)
+      2. `evidence.hit_ids` / `miss_ids` が存在: tfidf / miss に attribute
+         (中間版 Evidence)
+      3. `evidence.propositions_hit > 0`: 順序情報なしで hits を core (tfidf) と
+         attribute (legacy、pre-cascade era は全 hit が tfidf)
+      4. それ以外: 空 mapping (detector 未実行相当)
+
+    Codex review P2: server.py が `{}` で fallback すると `summarize_hit_sources`
+    が `miss=total` を返し、同じ response の `hit_rate` = `propositions_hit /
+    propositions_total` と矛盾する問題を解消する。
+    """
+    hs = getattr(evidence, "hit_sources", None)
+    if hs:
+        return dict(hs)
+
+    hit_ids = getattr(evidence, "hit_ids", None) or []
+    miss_ids = getattr(evidence, "miss_ids", None) or []
+    if hit_ids or miss_ids:
+        result: Dict[int, str] = {int(i): HIT_SOURCE_TFIDF for i in hit_ids}
+        result.update({int(i): HIT_SOURCE_MISS for i in miss_ids})
+        return result
+
+    hits = int(getattr(evidence, "propositions_hit", 0) or 0)
+    total = int(getattr(evidence, "propositions_total", 0) or 0)
+    if hits > 0 and total >= hits:
+        # 順序情報なし: hits を 0..hits-1 に置き、残りを miss に。
+        # pre-cascade legacy なので core (tfidf) に attribute する。
+        result = {i: HIT_SOURCE_TFIDF for i in range(hits)}
+        result.update({i: HIT_SOURCE_MISS for i in range(hits, total)})
+        return result
+
+    return {}
+
+
+def summarize_hit_sources(
+    hit_sources: Dict[int, str],
+    propositions_total: int,
+) -> Optional[Dict[str, object]]:
+    """Evidence.hit_sources を API 公開用の構造化サマリへ変換する。
+
+    core / cascade / miss の件数と、core-only hit rate（論文の決定性主張の
+    分子）を明示する。`per_proposition` は命題インデックス → ソース
+    マッピングで、JSON シリアライズ用に key を str へ変換する。
+
+    **内部整合性の保証:** `core_hit + cascade_rescued + miss == total` が
+    常に成立する。`miss` は `total` から derive することで、hit_sources
+    mapping が `propositions_total` 未満しか含まない場合（例: server の
+    compat fallback で `{}` が渡される場合）でも miss rate を過小報告
+    しない。
+
+    propositions_total=0 (命題未検出) の場合は None を返す。
+    """
+    if propositions_total <= 0:
+        return None
+
+    # core / cascade は explicit label を数える（検出層が明示したヒットのみ）
+    core_hit = sum(1 for v in hit_sources.values() if v == HIT_SOURCE_TFIDF)
+    cascade_rescued = sum(
+        1 for v in hit_sources.values() if v == HIT_SOURCE_CASCADE
+    )
+    # miss は total から derive する。これにより:
+    #   (a) core + cascade + miss == total を常に保証
+    #   (b) hit_sources に explicit "miss" label がなくても total 分だけ
+    #       miss に計上される（= 不明命題を保守的に non-hit 扱い）
+    # Codex review P2: 空 mapping + 非ゼロ total で miss=0 になる bug を修正。
+    # max(0, ...) は hit_sources が total を超えて tfidf/cascade を持つ
+    # 想定外入力に対する防御ガード。
+    miss = max(0, propositions_total - core_hit - cascade_rescued)
+
+    return {
+        "core_hit": core_hit,
+        "cascade_rescued": cascade_rescued,
+        "miss": miss,
+        "total": propositions_total,
+        # core-only hit rate: 論文・査読で「決定性」を主張する際の分子。
+        # cascade を含めない tfidf-only のヒット数 / 全命題数。
+        "core_only_hit_rate": f"{core_hit}/{propositions_total}",
+        # 命題 index → ソース。JSON 互換のため key を str にする。
+        # compat fallback で mapping が total を下回る場合、ここも部分的。
+        "per_proposition": {str(k): v for k, v in hit_sources.items()},
+    }
+
 
 @dataclass(frozen=True)
 class Evidence:

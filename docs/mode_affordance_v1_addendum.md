@@ -45,7 +45,7 @@ canonical reviewed  >  inline explicit  >  not_available
 
 以下を非目標リストに追加:
 
-- grv と response_mode_signal を 1 本のスコアに合成してはならない（Phase E で扱う）
+- grv と response_mode_signal を 1 本のスコアに合成してはならない（Phase 8 で扱う）
 - mode_conditioned_grv を v1 で実装してはならない
 - response_mode_signal を grv の重み調整に使ってはならない
 
@@ -54,11 +54,11 @@ canonical reviewed  >  inline explicit  >  not_available
 grv は語彙の重力偏在を見る計測器、mode_affordance は答え方の型。
 両者は直交しており、最初から 1 本のスコアに潰すと何が悪かったか読めなくなる。
 v1 では grv_raw と response_mode_signal を別出力にし、
-最終判定への合成は 48 件以上で人手較正してから行う（Phase E）。
+最終判定への合成は 48 件以上で人手較正してから行う（Phase 8）。
 
 ---
 
-## 4. Phase E 設計メモ（参考情報、v1 では実装しない）
+## 4. Phase 8 設計メモ（参考情報、v1 では実装しない）
 
 以下は v1 のスコープ外だが、将来の Layer C 設計の方向性として記録する。
 v1 実装時にこの構造を意識する必要はないが、v1 の出力が将来この方向に

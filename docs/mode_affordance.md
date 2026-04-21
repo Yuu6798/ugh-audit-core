@@ -120,11 +120,11 @@ Canonical is always preferred unless `mode_affordance_override=true` is set.
 
 ## Non-goals (現行)
 
-- Do NOT merge grv and response_mode_signal into a single verdict score (Phase E)
+- Do NOT merge grv and response_mode_signal into a single verdict score (Phase 8)
 - Do NOT use response_mode_signal to adjust grv weights
-- verdict 判定への合成は 48 件以上で較正後 (Phase E)
+- verdict 判定への合成は 48 件以上で較正後 (Phase 8)
 
-**Phase C 完了**: `mode_conditioned_grv` v2 を実装し、
+**Phase 7 完了**: `mode_conditioned_grv` v2 を実装し、
 4 成分解釈ベクトル (anchor_alignment, balance, boilerplate_risk, collapse_risk) として
 API に統合。verdict には影響しない説明用出力。詳細: [`grv_design.md`](grv_design.md)
 

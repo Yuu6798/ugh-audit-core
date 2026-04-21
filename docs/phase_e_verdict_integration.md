@@ -1,4 +1,4 @@
-# Phase E — Verdict Layer Integration of mode_conditioned_grv
+# Phase 8 — Verdict Layer Integration of mode_conditioned_grv
 
 ローカル Claude Code に渡す実装仕様。
 
@@ -7,7 +7,7 @@
 ## 0. 本稿で固定する判断
 
 - advisory の downgrade は 1 段階のみとし、`accept -> rewrite` だけを許可する
-- `anchor_alignment` の leak check は Phase E.1 の必須項目に含める
+- `anchor_alignment` の leak check は Phase 8.1 の必須項目に含める
 - DB 保存は v1 では行わず、API レスポンスのみを拡張する
 - `is_reliable` は advisory に連動させず、primary verdict 基準のまま維持する
 
@@ -24,7 +24,7 @@
 
 ## 1. 目的とスコープ
 
-**目的:** Phase C で得られた mode_conditioned_grv の信号 (`anchor_alignment` ρ=+0.41, `collapse_risk` ρ=-0.32) を verdict 層に反映させる。
+**目的:** Phase 7 で得られた mode_conditioned_grv の信号 (`anchor_alignment` ρ=+0.41, `collapse_risk` ρ=-0.32) を verdict 層に反映させる。
 
 **スコープ境界:**
 - In: verdict 出力の拡張、downgrade 系ルール、HA48 での閾値校正
@@ -115,11 +115,11 @@ AdvisoryFlag = Literal["mcg_collapse_downgrade", "mcg_anchor_missing"]
 
 ### DB (AuditDB) への保存
 
-v1 では新フィールドは **保存しない**。スキーマ migration は行わず、Phase E.2 以降で primary 昇格が決まった段階で再検討する。
+v1 では新フィールドは **保存しない**。スキーマ migration は行わず、Phase 8.2 以降で primary 昇格が決まった段階で再検討する。
 
 ---
 
-## 4. 閾値 τ の校正プロトコル（Phase E.1）
+## 4. 閾値 τ の校正プロトコル（Phase 8.1）
 
 実装本体の前に、まず校正スクリプトを書いて閾値を決める。
 
@@ -249,7 +249,7 @@ accept subset の collapse_risk の P75–P95、τ_anchor_low は P5–P25）か
 - `ugh_calculator.py` — ΔE threshold と primary verdict ロジックは不変
 - `decider.py` — repair order は primary verdict 基準のまま
 - `storage/audit_db.py` — DB スキーマ不変
-- `grv_calculator.py` — Phase C の計算そのものは不変
+- `grv_calculator.py` — Phase 7 の計算そのものは不変
 - `semantic_loss.py` — 無関係
 
 ### 閾値の配置
@@ -257,12 +257,12 @@ accept subset の collapse_risk の P75–P95、τ_anchor_low は P5–P25）か
 `mode_grv.py` 先頭に module-level 定数で定義する:
 
 ```python
-# Phase E thresholds — HA48 calibrated (n=?, YYYY-MM-DD)
+# Phase 8 thresholds — HA48 calibrated (n=?, YYYY-MM-DD)
 _TAU_COLLAPSE_HIGH: float = ...
 _TAU_ANCHOR_LOW: float = ...
 ```
 
-`engine/calculator.py` には持ち込まない。Phase C と同様に numpy 依存を増やさない。
+`engine/calculator.py` には持ち込まない。Phase 7 と同様に numpy 依存を増やさない。
 
 ---
 
@@ -387,4 +387,4 @@ result["advisory_flags"] = flags
 
 4. **実装順序の崩れによる再作業**
    閾値未確定のまま API 実装へ進むと手戻りが増える。
-   → 先に Phase E.1 を終えて τ を確定し、その後 API 統合に進む。
+   → 先に Phase 8.1 を終えて τ を確定し、その後 API 統合に進む。

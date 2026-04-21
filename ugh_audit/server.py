@@ -50,6 +50,8 @@ from ugh_calculator import (  # noqa: E402
     calculate,
     derive_mode,
     derive_verdict,
+    reconstruct_hit_sources,
+    summarize_hit_sources,
 )
 
 # detector は question_meta がある場合のみ使用
@@ -404,6 +406,15 @@ def _run_pipeline(
         "mode_conditioned_grv": mcg_output,
         "verdict_advisory": verdict_advisory,
         "advisory_flags": advisory_flags,
+        # Phase 1 paper-defense: hit_sources 構造化サマリ。core vs cascade の
+        # 分離を API 出力に surfacing する（詳細は docs/validation.md）。
+        # reconstruct_hit_sources が evidence のバージョン差分を吸収し、
+        # legacy (propositions_hit のみ) でも hit_rate と矛盾しない mapping を
+        # 再構築する (Codex review P2)。
+        "hit_sources": summarize_hit_sources(
+            reconstruct_hit_sources(evidence),
+            evidence.propositions_total,
+        ),
         # DB 保存用メタデータ
         "_session_id": session_id or str(uuid.uuid4()),
         "_question": question,
@@ -521,6 +532,15 @@ class AuditResponse(BaseModel):
             "Phase E: advisory downgrade 発火ルールのリスト。"
             "未知の flag は無視されるべき。"
             "例: mcg_collapse_downgrade, mcg_anchor_missing"
+        ),
+    )
+    hit_sources: Optional[dict] = Field(
+        None,
+        description=(
+            "Paper defense: 命題ヒットの発生源を core (tfidf) / cascade_rescued / "
+            "miss に分離したサマリ。`core_only_hit_rate` は決定性主張の分子 "
+            "(tfidf-only) を示す。命題未検出時は null。"
+            "{core_hit, cascade_rescued, miss, total, core_only_hit_rate, per_proposition}"
         ),
     )
 
@@ -732,6 +752,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         mode_conditioned_grv=result.get("mode_conditioned_grv"),
         verdict_advisory=result.get("verdict_advisory", result["verdict"]),
         advisory_flags=result.get("advisory_flags", []),
+        hit_sources=result.get("hit_sources"),
     )
 
 
