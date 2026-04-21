@@ -138,6 +138,8 @@ def collect_priority_a(
     v5: Dict[str, dict],
     qmeta: Dict[str, dict],
     responses: Dict[str, str],
+    *,
+    polarity_focus: bool = False,
 ) -> List[dict]:
     """priority A: v5 で未アノテートの accept/borderline 候補."""
     out: List[dict] = []
@@ -162,7 +164,9 @@ def collect_priority_a(
         if not propositions:
             # core_propositions がないと O 判定の基準が立たない
             continue
-        polarity_count = _count_polarity_bearing(propositions)
+        polarity_count = (
+            _count_polarity_bearing(propositions) if polarity_focus else 0
+        )
         out.append(
             {
                 "question_id": qid,
@@ -181,7 +185,12 @@ def collect_priority_a(
     return out
 
 
-def collect_orchestrator(path: Path, ha48_ids: set) -> List[dict]:
+def collect_orchestrator(
+    path: Path,
+    ha48_ids: set,
+    *,
+    polarity_focus: bool = False,
+) -> List[dict]:
     """priority B: 既存 orchestrator 出力 jsonl を読み込む.
 
     期待する jsonl schema (1 行 1 回答):
@@ -204,7 +213,11 @@ def collect_orchestrator(path: Path, ha48_ids: set) -> List[dict]:
             propositions = d.get("core_propositions")
             if isinstance(propositions, list):
                 propositions_str = json.dumps(propositions, ensure_ascii=False)
-                polarity_count = _count_polarity_bearing(propositions)
+                polarity_count = (
+                    _count_polarity_bearing(propositions)
+                    if polarity_focus
+                    else 0
+                )
             else:
                 propositions_str = str(propositions or "")
                 polarity_count = 0
@@ -410,9 +423,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     qmeta = _load_qmeta()
     responses = _load_responses()
 
-    candidates = collect_priority_a(ha48_ids, v5, qmeta, responses)
+    candidates = collect_priority_a(
+        ha48_ids, v5, qmeta, responses, polarity_focus=args.polarity_focus
+    )
     if args.orchestrator_jsonl:
-        candidates.extend(collect_orchestrator(args.orchestrator_jsonl, ha48_ids))
+        candidates.extend(
+            collect_orchestrator(
+                args.orchestrator_jsonl,
+                ha48_ids,
+                polarity_focus=args.polarity_focus,
+            )
+        )
 
     # --append 時は既存 stub に含まれる question_id を候補から除外
     # (重複 sampling による question の weight 偏りを防止)

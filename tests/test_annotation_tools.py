@@ -323,6 +323,17 @@ def test_sampler_focus_flags_default_preserves_existing_order(fake_data, tmp_pat
     ]
 
 
+def test_sampler_default_does_not_call_polarity_counter(fake_data, monkeypatch):
+    def _boom(_propositions):
+        raise AssertionError("polarity counter must not run without --polarity-focus")
+
+    monkeypatch.setattr(sampler_mod, "_count_polarity_bearing", _boom)
+    assert sampler_mod.main(["--batch-size", "5"]) == 0
+    with open(fake_data["stub"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 2
+
+
 # ---------------------------------------------------------------------------
 # merge_ha48_accept40
 # ---------------------------------------------------------------------------
