@@ -339,6 +339,11 @@ def test_sampler_polarity_focus_degrades_when_semantic_loss_unavailable(
 ):
     import builtins
 
+    assert sampler_mod.main(["--batch-size", "10", "--seed", "7"]) == 0
+    with open(fake_data_with_polarity["stub"], encoding="utf-8") as f:
+        baseline_rows = list(csv.DictReader(f))
+    baseline_order = [r["question_id"] for r in baseline_rows]
+
     original_import = builtins.__import__
 
     def _import_with_missing_semantic_loss(name, globals_=None, locals_=None,
@@ -356,7 +361,7 @@ def test_sampler_polarity_focus_degrades_when_semantic_loss_unavailable(
     ) == 0
     with open(fake_data_with_polarity["stub"], encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
-    assert len(rows) == 4
+    assert [r["question_id"] for r in rows] == baseline_order
 
 
 # ---------------------------------------------------------------------------

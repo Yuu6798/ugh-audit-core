@@ -340,7 +340,6 @@ def _focus_reorder(
         return (
             0 if pol > 0 else 1,
             -pol,
-            _bucket_priority(str(row.get("source") or "")),
             idx,
         )
 
