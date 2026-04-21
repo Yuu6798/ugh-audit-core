@@ -32,7 +32,7 @@ L_sem) の検証結果を一元管理する。
 | **ΔE (ΔE_A, system C)** | **主評価指標** | 決定的 core pipeline で算出。`S, C` からの 2 項合成、HA48 で ρ=-0.4817 (p=0.000527)。**verdict 境界 (0.10/0.25) は HA48 校正済み固定値** |
 | **L_sem (Phase 5)** | **診断用指標** | 7 項線形和で劣化側面を項別に識別する用途。HA48 ρ=-0.6020 (Phase 5 full-sample) だが n=48 で LOO-CV shrinkage=0.128 を観測、runtime 重みは保守的に配分 |
 | quality_score | 表示用 | `5 - 4×ΔE` の派生値 |
-| verdict_advisory (Phase E) | 副次判定 | `mode_conditioned_grv` 由来の downgrade-only advisory。primary verdict は不変 |
+| verdict_advisory (Phase 8) | 副次判定 | `mode_conditioned_grv` 由来の downgrade-only advisory。primary verdict は不変 |
 
 **運用原則:**
 

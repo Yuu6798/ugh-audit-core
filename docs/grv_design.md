@@ -182,7 +182,7 @@ re.split(r'[。．！？!?.\n]+', text)
 `fugashi` / `ipadic` は過去に `[ja]` / `[full]` / `[server]` extras で
 宣言されていたが、repo 内 Python コードから import されたことが
 一度もなかった (`grep -r "fugashi\|ipadic\|MeCab" --include="*.py"` で
-ヒット 0)。Phase C v0 / v1 の calibration note では「将来の形態素 POS
+ヒット 0)。Phase 7 v0 / v1 の calibration note では「将来の形態素 POS
 filter 導入で不正トークンを完全除去する」計画が言及されていたが、
 実装されないまま 2026-04 に cleanup で extras から削除した。
 
@@ -233,7 +233,7 @@ SentencePiece で完結するため不要。
 | v1.3 | 2成分確定 (collapse 除外) | -0.318 |
 | v1.4 | collapse_v2 (residual型) + cover_soft + wash_index | **-0.357** |
 
-## mode_conditioned_grv v2 (Phase C) — 実装済み
+## mode_conditioned_grv v2 (Phase 7) — 実装済み
 
 grv_raw と mode_affordance を組み合わせ、モード固有の 4 成分解釈ベクトルを生成する。
 grv_raw を置き換えない。説明用ベクトルとして併走。
@@ -263,9 +263,9 @@ grv_raw を置き換えない。説明用ベクトルとして併走。
 
 ## 次ステップ: 判定層ロードマップ
 
-Phase B (mode_affordance v1) 実装済み。response_mode_signal として非破壊信号を提供。
-Phase C (mode_conditioned_grv v2) 実装済み。4成分解釈ベクトルを併走出力。
-Phase D〜E (support_signal + 判定層合成) は anchor_alignment の HA48 ρ=+0.41 を踏まえて設計予定。
+Phase 6 (mode_affordance v1) 実装済み。response_mode_signal として非破壊信号を提供。
+Phase 7 (mode_conditioned_grv v2) 実装済み。4成分解釈ベクトルを併走出力。
+Phase 8 (verdict_advisory, mcg → downgrade) は anchor_alignment の HA48 ρ=+0.41 を踏まえて設計・ship 済み (n=63 校正)。旧 Phase D (support_signal 独立) は廃止、目的は Phase 8 で吸収。
 詳細: [`mode_affordance.md`](mode_affordance.md), [`addendum`](mode_affordance_v1_addendum.md)
 
 ## 関連ファイル

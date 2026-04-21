@@ -1,6 +1,6 @@
 # HA-accept40 アノテーションプロトコル
 
-Phase E 閾値校正のための accept-verdict subset 拡充 (HA48 n=13 → ≥ 28) の手順書。
+Phase 8 閾値校正のための accept-verdict subset 拡充 (HA48 n=13 → ≥ 28) の手順書。
 
 本ドキュメントは `docs/phase_e_verdict_integration.md` の前提タスクであり、
 完走後に `analysis/calibrate_phase_e_thresholds.py` を再実行して
@@ -8,7 +8,7 @@ Phase E 閾値校正のための accept-verdict subset 拡充 (HA48 n=13 → ≥
 
 ## 1. 目的とスコープ
 
-- **目的:** accept subset を n ≥ 28 に拡充し、Phase E の τ を運用閾値に昇格させる
+- **目的:** accept subset を n ≥ 28 に拡充し、Phase 8 の τ を運用閾値に昇格させる
 - **in:** v5 ベースラインの未アノテート分 + experiments/orchestrator 生成分へのアノテート
 - **out:** HA48 全体倍増、production DB 由来、L_X / balance / boilerplate_risk の独立拡充
 

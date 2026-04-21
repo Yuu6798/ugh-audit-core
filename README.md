@@ -62,9 +62,9 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 
 **L_sem (意味損失関数)**: 現行 ΔE を分解・拡張した診断用指標。7 項 (L_P, L_Q, L_R, L_A, L_G, L_F, L_X) の線形和で、どの側面が劣化したかを項別に読める。Phase 5 で grv (L_G) を統合し ρ=-0.6020 に到達。詳細は [`docs/semantic_loss.md`](docs/semantic_loss.md) 参照。
 
-### Phase E verdict_advisory 校正結果 (HA63, n=63)
+### Phase 8 verdict_advisory 校正結果 (HA63, n=63)
 
-**評価目的: Phase E ship 判定** — `mode_conditioned_grv` (Phase C) の
+**評価目的: Phase 8 ship 判定** — `mode_conditioned_grv` (Phase 7) の
 `anchor_alignment` / `collapse_risk` 信号を verdict 層に downgrade 方向で
 統合した際、primary verdict (ΔE ベース) に対する副次 verdict (advisory)
 が ρ 改善を示すかを検証する。
@@ -204,6 +204,10 @@ auto_generate_meta: true
 
 判定が `rewrite` / `regenerate` の場合、検出された問題に応じた修復命令列（repair_order）を生成。
 opcodeは `opcodes/runtime_repair_opcodes.yaml` に定義（13種、コスト表付き）。
+
+> **評価状況:** opcode は verdict 分類の副産物として提示される recipe。
+> 各 opcode の apply 有効性 (適用後 O 改善量) の評価は **本リポジトリの
+> scope 外、別論文の射程**。詳細と将来プロトコル: [`docs/opcode_evaluation_plan.md`](docs/opcode_evaluation_plan.md)
 
 ---
 
@@ -525,14 +529,19 @@ cascade が無効化された状態でも core pipeline（detect tier 1 + calcul
 - **Phase 3**: reference セット設計 (GoldenStore) — **実装済み**
 - **Phase 4**: Phase Map 可視化 + パターン分析 (`ugh_audit/report/phase_map.py`) — **実装済み**
 - **Phase 5**: L_sem (意味損失関数) + grv 統合校正 — **実装済み** (HA48 ρ=-0.6020)
-- **Phase B**: `mode_affordance` v1 (response_mode_signal) — **実装済み**
-- **Phase C**: `mode_conditioned_grv` v2 (4 成分解釈ベクトル) — **実装済み** (HA48 anchor_alignment ρ=+0.41)
-- **Phase E**: `verdict_advisory` (mcg → downgrade) — **ship 済み** (n=63 校正、詳細 §検証結果 HA63)
-- **Phase D**: support_signal 要否判断 — 設計議論中 (Phase E で暫定達成)
+- **Phase 6**: `mode_affordance` v1 (response_mode_signal) — **実装済み**
+- **Phase 7**: `mode_conditioned_grv` v2 (4 成分解釈ベクトル) — **実装済み** (HA48 anchor_alignment ρ=+0.41)
+- **Phase 8**: `verdict_advisory` (mcg → downgrade) — **ship 済み** (n=63 校正、詳細 §検証結果 HA63)
+- ~~**Phase D**: support_signal 要否判断~~ — 独立 phase としては廃止、目的は Phase 8 で吸収達成
 
-フェーズは並行系 (A-E) と時系列系 (1-5) の 2 軸で進行してきた。Audit Engine
-本体 (Phase 2) の上に、診断指標 (Phase 5 L_sem)、モード信号
-(Phase B/C)、判定層統合 (Phase E) が順次積み上げられた。
+Audit Engine 本体 (Phase 2) の上に、診断指標 (Phase 5 L_sem)、モード信号
+(Phase 6/7)、判定層統合 (Phase 8) が順次積み上げられた。Phase 番号は単調
+増加の時系列系で統一 (旧 Phase B/C/D/E 命名は 2026-04-21 に 6/7/(D 廃止)/8
+へ整理済み)。
+
+> **命名履歴:** 歴史的 file 名 `docs/phase_e_verdict_integration.md` は
+> リンク互換性維持のため rename せず、`Phase E` は `Phase 8` の旧称として
+> file 内で相互参照する。
 
 ### grv (因果構造損失) — v1.4 実装済み
 
@@ -566,10 +575,11 @@ cue-list ベースの決定的 scorer。verdict に影響しない。
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 検証結果 (HA48 / HA20) | [`docs/validation.md`](docs/validation.md) |
 | Self-Audit 実験 | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
-| Phase E verdict_advisory 統合 | [`docs/phase_e_verdict_integration.md`](docs/phase_e_verdict_integration.md) |
+| Phase 8 verdict_advisory 統合 | [`docs/phase_e_verdict_integration.md`](docs/phase_e_verdict_integration.md) |
 | HA-accept40 アノテーションプロトコル | [`docs/annotation_protocol.md`](docs/annotation_protocol.md) |
 | 閾値一覧と導出根拠の索引 (tunable な主要閾値のみ、対象外は scope 節で明示) | [`docs/thresholds.md`](docs/thresholds.md) |
 | SVP-RPE 統合実装プラン（関連プロジェクト） | [`docs/svp_rpe_implementation_plan.md`](docs/svp_rpe_implementation_plan.md) |
+| 修復 opcode 評価プロトコル (plan, scope 外) | [`docs/opcode_evaluation_plan.md`](docs/opcode_evaluation_plan.md) |
 
 ---
 

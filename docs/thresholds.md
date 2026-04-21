@@ -9,7 +9,7 @@
 - verdict / gate 判定閾値 (core pipeline)
 - 命題マッチ / 演算子回収の recall / overlap 閾値 (detector)
 - cascade matcher / GoldenStore の類似度・gap 閾値
-- grv / L_sem / Phase E の校正済み閾値
+- grv / L_sem / Phase 8 の校正済み閾値
 - 各コンポーネントの重み定数 (S 重み / ΔE 重み / grv 重み等)
 
 **対象外 (本書に載せない):**
@@ -176,7 +176,7 @@ runtime の `L_P=0.27 / L_F=0.21 / L_G=0.35` (`semantic_loss.py:34-38`
 比率で `0.35`) も記載済み。今後 runtime を変更する際は本書と上記 4 箇所を
 同時更新すること。
 
-## 7. Phase E verdict_advisory (mode_conditioned_grv)
+## 7. Phase 8 verdict_advisory (mode_conditioned_grv)
 
 | 閾値 | 値 | 出典 | コード |
 |---|---|---|---|
@@ -212,7 +212,7 @@ runtime の `L_P=0.27 / L_F=0.21 / L_G=0.35` (`semantic_loss.py:34-38`
 | grv | 48 | -0.357 | σ=0.051 |
 | anchor_alignment | 48 | +0.4063 | p=0.004 |
 | collapse_risk | 48 | -0.3191 | p=0.027 |
-| rho_advisory_full | 63 | +0.5225 | Phase E verdict_advisory |
+| rho_advisory_full | 63 | +0.5225 | Phase 8 verdict_advisory |
 
 ## 10. 変更時チェックリスト
 

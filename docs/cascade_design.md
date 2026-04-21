@@ -96,10 +96,10 @@ cascade_matcher.py
 | 日本語対応 | 50言語対応。日本語パラフレーズで学習済み |
 | サイズ | 471MB。CI/ローカルで実行可能 |
 | 速度 | CPU でも実用的（~100文/秒） |
-| 実績 | Phase C v0/v1 で使用済み。calibration_notes.md に結果蓄積あり |
+| 実績 | Phase 7 v0/v1 で使用済み。calibration_notes.md に結果蓄積あり |
 | 弁別幅 | 日本語で Δ≈0.1–0.3（狭い）→ θ 設計で考慮必須 |
 
-**既知の制約（Phase C v0 からの知見）:**
+**既知の制約（Phase 7 v0 からの知見）:**
 - PoC hit 率 0.850 だが ρ=0.160（順位相関が低い → 過剰マッチ傾向）
 - θ=0.50 で F1 最大化した経験あり
 - **SBert は過剰マッチしやすい → Tier 3 フィルタが必須**
@@ -107,7 +107,7 @@ cascade_matcher.py
 ## パラメータ校正手順
 
 ### θ_sbert（cosine similarity 閾値）
-- 初期値: **0.55**（Phase C の θ=0.50 より保守的）
+- 初期値: **0.55**（Phase 7 の θ=0.50 より保守的）
 - 校正: dev_cascade_20 上で grid search（0.45–0.65、0.05 刻み）
 - 評価指標: should_rescue の rescue 率、must_reject の false rescue 率
 
