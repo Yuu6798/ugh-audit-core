@@ -3,6 +3,28 @@
 本ドキュメントは `ugh-audit-core` の主要指標 (ΔE / quality_score /
 L_sem) の検証結果を一元管理する。
 
+## core vs cascade の分離 (API `hit_sources`)
+
+`/api/audit` レスポンスの `hit_sources` フィールドで、命題ヒットを以下の 3
+ソースに分離して公開している:
+
+```jsonc
+"hit_sources": {
+  "core_hit": 2,              // tfidf hits (core pipeline, 決定的)
+  "cascade_rescued": 1,       // cascade layer 回収 (SBert, 確率的)
+  "miss": 0,
+  "total": 3,
+  "core_only_hit_rate": "2/3", // 決定性主張の分子 (tfidf-only)
+  "per_proposition": {"0": "tfidf", "1": "cascade_rescued", "2": "tfidf"}
+}
+```
+
+論文で「core pipeline は決定的」と主張する際の分子は **`core_only_hit_rate`**
+の tfidf-only 件数。cascade を含む拡張結果は `core_hit + cascade_rescued`。
+この分離により、査読で「決定性主張の scope」を外部から検証可能にする。
+
+未検出 (命題総数 0) の場合は `"hit_sources": null`。詳細: `ugh_calculator.summarize_hit_sources()`。
+
 ## 主指標政策 (Primary Metric Policy)
 
 | 指標 | 位置づけ | 根拠 |

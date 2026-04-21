@@ -269,3 +269,82 @@ def test_constructor_path_does_not_leak_advisory_between_calls():
     # ここでは「両方が空リスト」かつ「verdict_advisory が primary と一致」で十分。
     assert s1["verdict_advisory"] == s1["verdict"]
     assert s2["verdict_advisory"] == s2["verdict"]
+
+
+# --- Paper defense: hit_sources 公開 ---
+
+
+def test_audit_answer_returns_hit_sources_field():
+    """MCP tool 出力に hit_sources フィールドが存在する"""
+    _, structured = _run(mcp.call_tool("audit_answer", {
+        "question": "テスト",
+        "response": "テスト回答",
+    }))
+    # 命題未検出時は null
+    assert "hit_sources" in structured
+    assert structured["hit_sources"] is None
+
+
+def test_audit_answer_hit_sources_schema_in_outputSchema():
+    """outputSchema に hit_sources が含まれる"""
+    tools = _run(mcp.list_tools())
+    audit_tool = next(t for t in tools if t.name == "audit_answer")
+    out = audit_tool.outputSchema
+    assert out is not None
+    assert "hit_sources" in out["properties"]
+
+
+def test_proxy_audit_relays_hit_sources(monkeypatch):
+    """proxy 経路でも hit_sources が転送される"""
+    import json
+
+    from ugh_audit import mcp_server as m
+
+    fake_response = {
+        "schema_version": "2.0.0",
+        "S": 0.9,
+        "C": 0.67,
+        "delta_e": 0.1,
+        "quality_score": 4.6,
+        "verdict": "accept",
+        "hit_rate": "2/3",
+        "structural_gate": {
+            "f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": 0.0,
+            "gate_verdict": "pass", "primary_fail": "none",
+        },
+        "mode": "computed",
+        "is_reliable": True,
+        "matched_id": "qTEST",
+        "metadata_source": "inline",
+        "verdict_advisory": "accept",
+        "advisory_flags": [],
+        "hit_sources": {
+            "core_hit": 1,
+            "cascade_rescued": 1,
+            "miss": 1,
+            "total": 3,
+            "core_only_hit_rate": "1/3",
+            "per_proposition": {"0": "tfidf", "1": "cascade_rescued", "2": "miss"},
+        },
+    }
+
+    class _FakeResp:
+        def __init__(self, body): self._body = body
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return self._body
+
+    def _fake_urlopen(req, timeout=60):
+        return _FakeResp(json.dumps(fake_response).encode("utf-8"))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    result = m._proxy_audit(
+        "http://fake.invalid",
+        question="q", response="r",
+        reference=None, session_id=None,
+        question_meta=None, auto_generate_meta=False, retry_of=None,
+    )
+    assert result.hit_sources is not None
+    assert result.hit_sources["core_hit"] == 1
+    assert result.hit_sources["cascade_rescued"] == 1
+    assert result.hit_sources["core_only_hit_rate"] == "1/3"

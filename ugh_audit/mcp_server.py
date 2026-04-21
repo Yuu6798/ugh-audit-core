@@ -44,6 +44,7 @@ from ugh_calculator import (  # noqa: E402
     calculate,
     derive_mode,
     derive_verdict,
+    summarize_hit_sources,
 )
 
 # detector（検出層）— 利用可能な場合のみ使用
@@ -176,6 +177,7 @@ class AuditOutput:
     response_mode_signal: Optional[Dict] = None
     mode_conditioned_grv: Optional[Dict] = None
     advisory_flags: List[str] = field(default_factory=list)
+    hit_sources: Optional[Dict] = None  # paper defense: core vs cascade 分離サマリ
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +250,7 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         response_mode_signal=result.get("response_mode_signal"),
         mode_conditioned_grv=result.get("mode_conditioned_grv"),
         advisory_flags=result.get("advisory_flags", []),
+        hit_sources=result.get("hit_sources"),
     )
 
 
@@ -608,6 +611,10 @@ def audit_answer(
         response_mode_signal=_ms_output,
         mode_conditioned_grv=mcg_output,
         advisory_flags=list(advisory_flags),
+        hit_sources=summarize_hit_sources(
+            evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
+            evidence.propositions_total,
+        ),
     )
 
 

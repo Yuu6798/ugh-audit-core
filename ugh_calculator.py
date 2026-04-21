@@ -40,6 +40,45 @@ GATE_FAIL = "fail"
 # --- C ビン閾値 ---
 C_BIN_THRESHOLDS = [0.34, 0.67]  # bin1/2境界, bin2/3境界
 
+# --- hit_sources ソース値 (detector.py との契約) ---
+HIT_SOURCE_TFIDF = "tfidf"              # core pipeline deterministic hit
+HIT_SOURCE_CASCADE = "cascade_rescued"  # cascade layer probabilistic hit
+HIT_SOURCE_MISS = "miss"                # no hit in either layer
+
+
+def summarize_hit_sources(
+    hit_sources: Dict[int, str],
+    propositions_total: int,
+) -> Optional[Dict[str, object]]:
+    """Evidence.hit_sources を API 公開用の構造化サマリへ変換する。
+
+    core / cascade / miss の件数と、core-only hit rate（論文の決定性主張の
+    分子）を明示する。`per_proposition` は命題インデックス → ソース
+    マッピングで、JSON シリアライズ用に key を str へ変換する。
+
+    propositions_total=0 (命題未検出) の場合は None を返す。
+    """
+    if propositions_total <= 0:
+        return None
+
+    core_hit = sum(1 for v in hit_sources.values() if v == HIT_SOURCE_TFIDF)
+    cascade_rescued = sum(
+        1 for v in hit_sources.values() if v == HIT_SOURCE_CASCADE
+    )
+    miss = sum(1 for v in hit_sources.values() if v == HIT_SOURCE_MISS)
+
+    return {
+        "core_hit": core_hit,
+        "cascade_rescued": cascade_rescued,
+        "miss": miss,
+        "total": propositions_total,
+        # core-only hit rate: 論文・査読で「決定性」を主張する際の分子。
+        # cascade を含めない tfidf-only のヒット数 / 全命題数。
+        "core_only_hit_rate": f"{core_hit}/{propositions_total}",
+        # 命題 index → ソース。JSON 互換のため key を str にする。
+        "per_proposition": {str(k): v for k, v in hit_sources.items()},
+    }
+
 
 @dataclass(frozen=True)
 class Evidence:
