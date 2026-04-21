@@ -334,6 +334,31 @@ def test_sampler_default_does_not_call_polarity_counter(fake_data, monkeypatch):
     assert len(rows) == 2
 
 
+def test_sampler_polarity_focus_degrades_when_semantic_loss_unavailable(
+    fake_data_with_polarity, monkeypatch
+):
+    import builtins
+
+    original_import = builtins.__import__
+
+    def _import_with_missing_semantic_loss(name, globals_=None, locals_=None,
+                                           fromlist=(), level=0):
+        if name == "semantic_loss":
+            raise ModuleNotFoundError("No module named 'semantic_loss'")
+        return original_import(name, globals_, locals_, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _import_with_missing_semantic_loss)
+    monkeypatch.setattr(sampler_mod, "_POLARITY_CHECKER", None)
+    monkeypatch.setattr(sampler_mod, "_POLARITY_IMPORT_WARNED", False)
+
+    assert sampler_mod.main(
+        ["--batch-size", "10", "--seed", "7", "--polarity-focus"]
+    ) == 0
+    with open(fake_data_with_polarity["stub"], encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 4
+
+
 # ---------------------------------------------------------------------------
 # merge_ha48_accept40
 # ---------------------------------------------------------------------------

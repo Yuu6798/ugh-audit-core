@@ -42,6 +42,7 @@ OUT_CSV = ROOT / "data" / "human_annotation_accept40" / "annotation_accept40_stu
 DELTA_E_ACCEPT = 0.10
 DELTA_E_BORDERLINE_MAX = 0.15
 _POLARITY_CHECKER: Optional[Callable[[str], bool]] = None
+_POLARITY_IMPORT_WARNED = False
 
 
 def _load_ha48_ids() -> set:
@@ -119,12 +120,26 @@ def _safe_float(value: object) -> Optional[float]:
         return None
 
 
-def _polarity_checker() -> Callable[[str], bool]:
-    global _POLARITY_CHECKER
-    if _POLARITY_CHECKER is None:
-        from semantic_loss import _is_polarity_bearing  # noqa: WPS433
+def _always_false_checker(_proposition: str) -> bool:
+    return False
 
-        _POLARITY_CHECKER = _is_polarity_bearing
+
+def _polarity_checker() -> Callable[[str], bool]:
+    global _POLARITY_CHECKER, _POLARITY_IMPORT_WARNED
+    if _POLARITY_CHECKER is None:
+        try:
+            from semantic_loss import _is_polarity_bearing  # noqa: WPS433
+
+            _POLARITY_CHECKER = _is_polarity_bearing
+        except (ModuleNotFoundError, ImportError) as err:
+            if not _POLARITY_IMPORT_WARNED:
+                print(
+                    "[warn] polarity-focus fallback: semantic_loss dependency"
+                    f" unavailable ({err}); treating polarity count as 0.",
+                    file=sys.stderr,
+                )
+                _POLARITY_IMPORT_WARNED = True
+            _POLARITY_CHECKER = _always_false_checker
     return _POLARITY_CHECKER
 
 
