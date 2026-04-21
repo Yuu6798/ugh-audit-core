@@ -46,6 +46,49 @@ HIT_SOURCE_CASCADE = "cascade_rescued"  # cascade layer probabilistic hit
 HIT_SOURCE_MISS = "miss"                # no hit in either layer
 
 
+def reconstruct_hit_sources(evidence: object) -> Dict[int, str]:
+    """Evidence-like object から hit_sources mapping を安全に取り出す/再構築する。
+
+    server / mcp の API レスポンス生成で evidence のバージョン差分に対処する。
+    現行の Evidence は `hit_sources` を常に持つが、過去の pickle / mock /
+    legacy rollout では属性が欠落しうる。そのような入力でも `propositions_hit`
+    との整合性を保つ。
+
+    優先順位:
+      1. `evidence.hit_sources` が非空: そのまま返す (現行 detector 出力)
+      2. `evidence.hit_ids` / `miss_ids` が存在: tfidf / miss に attribute
+         (中間版 Evidence)
+      3. `evidence.propositions_hit > 0`: 順序情報なしで hits を core (tfidf) と
+         attribute (legacy、pre-cascade era は全 hit が tfidf)
+      4. それ以外: 空 mapping (detector 未実行相当)
+
+    Codex review P2: server.py が `{}` で fallback すると `summarize_hit_sources`
+    が `miss=total` を返し、同じ response の `hit_rate` = `propositions_hit /
+    propositions_total` と矛盾する問題を解消する。
+    """
+    hs = getattr(evidence, "hit_sources", None)
+    if hs:
+        return dict(hs)
+
+    hit_ids = getattr(evidence, "hit_ids", None) or []
+    miss_ids = getattr(evidence, "miss_ids", None) or []
+    if hit_ids or miss_ids:
+        result: Dict[int, str] = {int(i): HIT_SOURCE_TFIDF for i in hit_ids}
+        result.update({int(i): HIT_SOURCE_MISS for i in miss_ids})
+        return result
+
+    hits = int(getattr(evidence, "propositions_hit", 0) or 0)
+    total = int(getattr(evidence, "propositions_total", 0) or 0)
+    if hits > 0 and total >= hits:
+        # 順序情報なし: hits を 0..hits-1 に置き、残りを miss に。
+        # pre-cascade legacy なので core (tfidf) に attribute する。
+        result = {i: HIT_SOURCE_TFIDF for i in range(hits)}
+        result.update({i: HIT_SOURCE_MISS for i in range(hits, total)})
+        return result
+
+    return {}
+
+
 def summarize_hit_sources(
     hit_sources: Dict[int, str],
     propositions_total: int,

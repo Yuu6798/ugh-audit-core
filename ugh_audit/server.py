@@ -50,6 +50,7 @@ from ugh_calculator import (  # noqa: E402
     calculate,
     derive_mode,
     derive_verdict,
+    reconstruct_hit_sources,
     summarize_hit_sources,
 )
 
@@ -407,8 +408,11 @@ def _run_pipeline(
         "advisory_flags": advisory_flags,
         # Phase 1 paper-defense: hit_sources 構造化サマリ。core vs cascade の
         # 分離を API 出力に surfacing する（詳細は docs/validation.md）。
+        # reconstruct_hit_sources が evidence のバージョン差分を吸収し、
+        # legacy (propositions_hit のみ) でも hit_rate と矛盾しない mapping を
+        # 再構築する (Codex review P2)。
         "hit_sources": summarize_hit_sources(
-            evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
+            reconstruct_hit_sources(evidence),
             evidence.propositions_total,
         ),
         # DB 保存用メタデータ

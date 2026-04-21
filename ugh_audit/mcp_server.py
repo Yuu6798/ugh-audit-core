@@ -44,6 +44,7 @@ from ugh_calculator import (  # noqa: E402
     calculate,
     derive_mode,
     derive_verdict,
+    reconstruct_hit_sources,
     summarize_hit_sources,
 )
 
@@ -612,7 +613,9 @@ def audit_answer(
         mode_conditioned_grv=mcg_output,
         advisory_flags=list(advisory_flags),
         hit_sources=summarize_hit_sources(
-            evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
+            # legacy evidence (hit_sources 属性欠落) も hit_rate と整合する
+            # mapping に reconstruct する (Codex review P2)
+            reconstruct_hit_sources(evidence),
             evidence.propositions_total,
         ),
     )

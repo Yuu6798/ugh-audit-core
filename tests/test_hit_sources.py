@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, ".")
 
-from ugh_calculator import summarize_hit_sources  # noqa: E402
+from ugh_calculator import reconstruct_hit_sources, summarize_hit_sources  # noqa: E402
 
 
 class TestSummarizeHitSources:
@@ -183,3 +183,113 @@ class TestInternalConsistencyInvariant:
         )
         # miss は常に非負
         assert result["miss"] >= 0
+
+
+# --- reconstruct_hit_sources: evidence バージョン差分の吸収 ---
+
+
+class _LegacyEvidenceMinimal:
+    """propositions_hit / propositions_total のみ持つ legacy 相当 mock。
+
+    hit_sources / hit_ids 属性なし。pre-cascade era の Evidence を模擬する。
+    """
+
+    def __init__(self, hits: int, total: int):
+        self.propositions_hit = hits
+        self.propositions_total = total
+
+
+class _LegacyEvidenceWithHitIds:
+    """hit_ids / miss_ids は持つが hit_sources 属性が欠落している中間版。"""
+
+    def __init__(self, hit_ids, miss_ids, total):
+        self.hit_ids = hit_ids
+        self.miss_ids = miss_ids
+        self.propositions_hit = len(hit_ids)
+        self.propositions_total = total
+
+
+class _ModernEvidence:
+    """現行 Evidence を模擬: hit_sources を直接持つ"""
+
+    def __init__(self, hit_sources, total):
+        self.hit_sources = hit_sources
+        self.hit_ids = [i for i, v in hit_sources.items() if v != "miss"]
+        self.miss_ids = [i for i, v in hit_sources.items() if v == "miss"]
+        self.propositions_hit = len(self.hit_ids)
+        self.propositions_total = total
+
+
+class TestReconstructHitSources:
+    """evidence のバージョン差分を吸収するフォールバック"""
+
+    def test_modern_evidence_uses_hit_sources_directly(self):
+        ev = _ModernEvidence({0: "tfidf", 1: "cascade_rescued", 2: "miss"}, 3)
+        result = reconstruct_hit_sources(ev)
+        assert result == {0: "tfidf", 1: "cascade_rescued", 2: "miss"}
+
+    def test_intermediate_evidence_rebuilds_from_hit_ids(self):
+        """hit_sources 属性なし、hit_ids/miss_ids あり → tfidf/miss に attribute"""
+        ev = _LegacyEvidenceWithHitIds(hit_ids=[0, 2], miss_ids=[1], total=3)
+        # hit_sources 属性を欠落させる
+        assert not hasattr(ev, "hit_sources")
+        result = reconstruct_hit_sources(ev)
+        assert result == {0: "tfidf", 2: "tfidf", 1: "miss"}
+
+    def test_legacy_evidence_with_only_aggregate_counts(self):
+        """propositions_hit だけ持つ legacy → hits を core に attribute"""
+        ev = _LegacyEvidenceMinimal(hits=2, total=3)
+        result = reconstruct_hit_sources(ev)
+        # 順序情報なしのため 0..1 が hit, 2 が miss
+        assert result == {0: "tfidf", 1: "tfidf", 2: "miss"}
+
+    def test_legacy_evidence_with_all_hits(self):
+        """全命題 hit の legacy ケース"""
+        ev = _LegacyEvidenceMinimal(hits=3, total=3)
+        result = reconstruct_hit_sources(ev)
+        assert result == {0: "tfidf", 1: "tfidf", 2: "tfidf"}
+
+    def test_legacy_evidence_with_zero_hits(self):
+        """hits=0 の legacy: 全て miss に attribute"""
+        ev = _LegacyEvidenceMinimal(hits=0, total=3)
+        result = reconstruct_hit_sources(ev)
+        # hits==0 なので最小 legacy path は発火しない (空 dict 返却)
+        # 残りは total=3 からの reconstruction に任せる挙動
+        # 現実装では hits>0 条件があるため、empty mapping を返す
+        assert result == {}
+
+    def test_no_usable_fields_returns_empty(self):
+        """何の hit 情報もない object → 空 mapping"""
+        class Empty:
+            pass
+        result = reconstruct_hit_sources(Empty())
+        assert result == {}
+
+    def test_empty_hit_sources_falls_through_to_hit_ids(self):
+        """hit_sources={} が truthy 判定で false のため hit_ids にフォールバックする"""
+        class Mixed:
+            hit_sources = {}  # 空
+            hit_ids = [0]
+            miss_ids = [1]
+            propositions_hit = 1
+            propositions_total = 2
+        result = reconstruct_hit_sources(Mixed())
+        # 空 hit_sources は skip され、hit_ids/miss_ids に fallback
+        assert result == {0: "tfidf", 1: "miss"}
+
+    def test_legacy_reconstruction_is_consistent_with_summarize(self):
+        """legacy reconstruct + summarize で hit_rate と矛盾しないことを確認
+
+        Codex review P2 の本丸: 以前は server.py が {} を渡し summarize が
+        core=0, miss=total を返して propositions_hit と矛盾していた。
+        reconstruct を介せば hit_rate と summary の core_hit が一致する。
+        """
+        ev = _LegacyEvidenceMinimal(hits=5, total=10)
+        reconstructed = reconstruct_hit_sources(ev)
+        summary = summarize_hit_sources(reconstructed, ev.propositions_total)
+        assert summary is not None
+        # core_hit = propositions_hit と一致 (hit_rate = 5/10 に整合)
+        assert summary["core_hit"] == ev.propositions_hit
+        assert summary["miss"] == ev.propositions_total - ev.propositions_hit
+        assert summary["total"] == ev.propositions_total
+        assert summary["core_only_hit_rate"] == f"{ev.propositions_hit}/{ev.propositions_total}"
