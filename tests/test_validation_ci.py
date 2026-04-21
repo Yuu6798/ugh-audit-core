@@ -25,8 +25,10 @@ def fisher_ci(rho: float, n: int, alpha: float = 0.05) -> tuple[float, float]:
 
 
 # (label, rho, n, expected_lo, expected_hi) — docs/validation.md §信頼区間 と同期
+# HA48 ΔE (system C) は current pipeline snapshot (2026-04-21) の値。
+# 前版 (Apr 6, pipeline pre-#95): ρ=-0.5195, CI=[-0.7003, -0.2761]。
 REPORTED_CIS = [
-    ("HA48 ΔE (system C)", -0.5195, 48, -0.7003, -0.2761),
+    ("HA48 ΔE (system C)", -0.4817, 48, -0.6736, -0.2289),
     ("HA48 ΔE (human C, 参照上限)", +0.8616, 48, +0.7647, +0.9204),
     ("HA48 L_sem Phase 5", -0.6020, 48, -0.7567, -0.3835),
     ("HA20 ΔE (system C)", -0.7737, 20, -0.9060, -0.5036),

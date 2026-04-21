@@ -41,20 +41,22 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 | **regenerate** | C≠None AND ΔE > 0.25 | 再生成が必要 |
 | **degraded** | C=None OR ΔE=None | メタデータ不足で本計算不能 |
 
-### 検証結果（HA48, n=48, v5 ベースライン 197/310 hits）
+### 検証結果（HA48, n=48, current pipeline snapshot 2026-04-21）
 
 **評価目的: 主評価** — システム自動算出 C と人手参照 C の相関を比較し、検出パイプラインの上限性能を評価する。
 
 | 指標 | Spearman ρ | p値 | 備考 |
 |------|-----------|-----|------|
-| ΔE vs O (system C) | -0.5195 | 0.000154 | ΔE baseline |
-| L_sem vs O (Phase 4) | -0.5563 | <0.001 | L_P+L_F 2項最適化 |
-| **L_sem vs O (Phase 5)** | **-0.6020** | **<0.001** | **L_P+L_F+L_G 3項 (grv 統合)** |
+| ΔE vs O (system C) | -0.4817 | 0.000527 | ΔE baseline (current) |
+| L_sem vs O (Phase 4) | -0.5563 | <0.001 | L_P+L_F 2項最適化 (Phase 5 snapshot) |
+| **L_sem vs O (Phase 5)** | **-0.6020** | **<0.001** | **L_P+L_F+L_G 3項 (grv 統合, Phase 5 snapshot)** |
 | ΔE vs O (human C) | 0.8616 | <0.001 | 参照上限（ターゲット情報含む） |
 
 注: scipy.stats.spearmanr（タイ補正あり）で算出。system C の命題照合精度が ΔE のボトルネック。参照上限 ρ=0.862 との差は検出パイプラインの精度改善で縮まる。
 
-**95% 信頼区間 (Fisher z):** 主指標 HA48 ΔE (system C) は **ρ=-0.5195, 95% CI [-0.700, -0.276]**。点推定は -0.5 を下回るが CI 下端は -0.276 で運用閾値 ρ=-0.5 を保証しない。**n=48 は小標本**、アノテーションは **single annotator** による制約があり、IRR 未測定。全指標の CI と Limitations 詳細は [`docs/validation.md`](docs/validation.md) §「信頼区間」「Limitations」。
+**測定精度履歴:** ΔE vs O (system C) は Apr 6 snapshot で ρ=-0.5195、検出層精度改善 (PR #95 等) を反映した current snapshot で ρ=-0.4817。両版とも旧 CI の範囲内で統計的に重なるが、主数字は current 値を採用する。詳細: [`docs/validation.md`](docs/validation.md) §「HA48 検証結果 → 測定精度履歴」。
+
+**95% 信頼区間 (Fisher z):** 主指標 HA48 ΔE (system C, current) は **ρ=-0.4817, 95% CI [-0.6736, -0.2289]**。CI 下端は運用閾値 ρ=-0.5 を保証しない（点推定も 0.5 を僅かに下回る）。**n=48 は小標本**、アノテーションは **single annotator** による制約があり、IRR 未測定。全指標の CI と Limitations 詳細は [`docs/validation.md`](docs/validation.md) §「信頼区間」「Limitations」。
 
 **主指標政策:** go/no-go は **ΔE を主指標**とする。**L_sem は診断用**（どの項が悪いかの debug 情報）で、LOO-CV shrinkage=0.128 を検出したため runtime 重みは保守的に縮小済み。詳細は [`docs/validation.md#主指標政策-primary-metric-policy`](docs/validation.md#主指標政策-primary-metric-policy) 参照。
 
