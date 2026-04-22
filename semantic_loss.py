@@ -4,9 +4,9 @@ Evidence から L_P, L_Q, L_X, L_R, L_A, L_F を算出し、
 オプショナルな grv 値から L_G を導出する。
 
 デフォルト重みは HA48 (n=48) で Spearman ρ 最大化により校正済み。
-- 現行 ΔE: ρ = -0.5195
-- L_sem Phase 4 (L_P, L_F のみ): ρ = -0.5563
-- L_sem Phase 5 (L_P, L_F, L_G): ρ = -0.6020
+- 現行 ΔE: ρ = -0.4817 (system C, post-#95)
+- L_sem Phase 4 (L_P, L_F のみ): ρ = -0.4693
+- L_sem Phase 5 (L_P, L_F, L_G): ρ = -0.5477
 
 参照: docs/semantic_loss.md, analysis/calibrate_grv_lsem.py
 """
@@ -32,9 +32,9 @@ except ModuleNotFoundError as _err:
 
 
 # --- デフォルト重み (Phase 5: HA48 grv 統合校正 + LOO-CV 補正) ---
-# Full-sample 3項最適化: ρ=-0.6020 (L_P=0.425, L_F=0.275, L_G=0.850)
-# LOO-CV: ρ=-0.4743 (shrinkage=0.128) — L_G の最適重みが n=48 で不安定
-# LOO mean 比率 L_P:L_F:L_G ≈ 0.41:0.30:0.91 → 正規化して保守的に配分
+# Full-sample 3項最適化 (post-#95): ρ=-0.5477 (L_P=0.075, L_F=0.075, L_G=0.325)
+# LOO-CV 再測定: ρ=-0.3479 (shrinkage=0.1997) — n=48 では fold 分散が大きい
+# 運用方針: runtime DEFAULT_WEIGHTS は据え置き (過学習回避を優先)
 # L_G は単独有意 (ρ=-0.3565, p=0.013) だが過学習リスクを考慮し抑制
 DEFAULT_WEIGHTS: Dict[str, float] = {
     "L_P": 0.27,   # 命題損失 (LOO mean 比率ベース)

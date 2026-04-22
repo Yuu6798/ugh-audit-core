@@ -238,6 +238,17 @@ README の運用ルール:
    - docs: 計算式の導出、検証データ、1 コンポーネントの仕様詳細、
      トラブルシューティング事例、実装 recipe
 
+### 測定精度履歴運用ルール (validation; combo F/G)
+
+- **Combo F: dual-snapshot transparency**
+  - `docs/validation.md` の ΔE / L_sem は `pre-#95` と `current` を履歴表で併記する
+  - current は HA48 主表と CI table に反映し、旧値は履歴表へ退避する
+- **Combo G: internal consistency test pattern**
+  - 数値更新時は `docs/validation.md` と `semantic_loss.py` のコメント値を同期する
+  - `tests/test_validation_ci.py` (Fisher CI 逆算) を必須で通す
+  - ΔE current snapshot を更新した場合は `tests/test_ha48_regression.py` も再実行し、
+    docs 主指標値との齟齬を残さない
+
 ## Development Setup
 
 ```bash
