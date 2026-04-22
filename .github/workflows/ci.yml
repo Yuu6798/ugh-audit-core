@@ -25,6 +25,17 @@ jobs:
         run: |
           pip install -e ".[dev]"
 
+      - name: Check README line count
+        # 上限は CLAUDE.md §README 管理ポリシー参照
+        run: |
+          LINES=$(wc -l < README.md)
+          LIMIT=350
+          if [ "$LINES" -gt "$LIMIT" ]; then
+            echo "::error::README.md has $LINES lines (limit: $LIMIT). Extract sections over 30 lines to docs/<topic>.md. See CLAUDE.md §README 管理ポリシー."
+            exit 1
+          fi
+          echo "README.md: $LINES / $LIMIT lines"
+
       - name: Lint
         run: ruff check .
 
