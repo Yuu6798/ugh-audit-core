@@ -1,16 +1,99 @@
 % =============================================================
 %  参考文献 (BibTeX)
 %
-%  TODO[(b)]: docs/related_metrics_comparison.md の survey と同期して
-%             以下のカテゴリの主要文献を追加する
+%  詳細な survey と位置付け: docs/related_metrics_comparison.md
 %
 %  カテゴリ:
-%    1. 表層類似度: BLEU (Papineni 2002), ROUGE (Lin 2004), METEOR
-%    2. 埋め込み類似度: BERTScore (Zhang 2020), BLEURT (Sellam 2020)
-%    3. LLM-as-judge: G-Eval (Liu 2023), Prometheus (Kim 2024), GPTScore
-%    4. RAG 評価: RAGAS (Es 2024), ARES
-%    5. 解釈可能評価: SHAP-based, attention-based
-%    6. LLM 評価 survey: Chang et al. 2024
+%    1. 表層類似度: BLEU, ROUGE
+%    2. 埋め込み類似度: BERTScore, BLEURT
+%    3. LLM 駆動評価: G-Eval, Prometheus, RAGAS, LLM-as-Judge
+%    4. LLM 評価サーベイ
 % =============================================================
 
-% [PLACEHOLDER - エントリは (b) フェーズで追加]
+% ---- (1) 表層類似度 ----
+
+@inproceedings{papineni2002bleu,
+  title     = {{BLEU}: a Method for Automatic Evaluation of Machine Translation},
+  author    = {Papineni, Kishore and Roukos, Salim and Ward, Todd and Zhu, Wei-Jing},
+  booktitle = {Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics (ACL)},
+  pages     = {311--318},
+  year      = {2002}
+}
+
+@inproceedings{lin2004rouge,
+  title     = {{ROUGE}: A Package for Automatic Evaluation of Summaries},
+  author    = {Lin, Chin-Yew},
+  booktitle = {Text Summarization Branches Out: Proceedings of the ACL-04 Workshop},
+  pages     = {74--81},
+  year      = {2004}
+}
+
+% ---- (2) 埋め込み類似度 ----
+
+@inproceedings{zhang2020bertscore,
+  title     = {{BERTScore}: Evaluating Text Generation with {BERT}},
+  author    = {Zhang, Tianyi and Kishore, Varsha and Wu, Felix and Weinberger, Kilian Q. and Artzi, Yoav},
+  booktitle = {Proceedings of the 8th International Conference on Learning Representations (ICLR)},
+  year      = {2020}
+}
+
+@inproceedings{sellam2020bleurt,
+  title     = {{BLEURT}: Learning Robust Metrics for Text Generation},
+  author    = {Sellam, Thibault and Das, Dipanjan and Parikh, Ankur P.},
+  booktitle = {Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics (ACL)},
+  pages     = {7881--7892},
+  year      = {2020}
+}
+
+% ---- (3) LLM 駆動評価 ----
+
+@inproceedings{liu2023geval,
+  title     = {{G-Eval}: {NLG} Evaluation using {GPT-4} with Better Human Alignment},
+  author    = {Liu, Yang and Iter, Dan and Xu, Yichong and Wang, Shuohang and Xu, Ruochen and Zhu, Chenguang},
+  booktitle = {Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  pages     = {2511--2522},
+  year      = {2023}
+}
+
+@inproceedings{kim2024prometheus,
+  title     = {Prometheus: Inducing Fine-grained Evaluation Capability in Language Models},
+  author    = {Kim, Seungone and Shin, Jamin and Cho, Yejin and Jang, Joel and Longpre, Shayne and Lee, Hwaran and Yun, Sangdoo and Shin, Seongjin and Kim, Sungdong and Thorne, James and Seo, Minjoon},
+  booktitle = {Proceedings of the 12th International Conference on Learning Representations (ICLR)},
+  year      = {2024}
+}
+
+@inproceedings{kim2024prometheus2,
+  title     = {Prometheus 2: An Open Source Language Model Specialized in Evaluating Other Language Models},
+  author    = {Kim, Seungone and Suk, Juyoung and Longpre, Shayne and Lin, Bill Yuchen and Shin, Jamin and Welleck, Sean and Neubig, Graham and Lee, Moontae and Lee, Kyungjae and Seo, Minjoon},
+  booktitle = {Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  pages     = {4334--4353},
+  year      = {2024}
+}
+
+@inproceedings{es2024ragas,
+  title     = {{RAGAs}: Automated Evaluation of Retrieval Augmented Generation},
+  author    = {Es, Shahul and James, Jithin and Espinosa Anke, Luis and Schockaert, Steven},
+  booktitle = {Proceedings of the 18th Conference of the European Chapter of the Association for Computational Linguistics: System Demonstrations (EACL)},
+  pages     = {150--158},
+  year      = {2024}
+}
+
+@inproceedings{zheng2023judging,
+  title     = {Judging {LLM-as-a-Judge} with {MT-Bench} and {Chatbot Arena}},
+  author    = {Zheng, Lianmin and Chiang, Wei-Lin and Sheng, Ying and Zhuang, Siyuan and Wu, Zhanghao and Zhuang, Yonghao and Lin, Zi and Li, Zhuohan and Li, Dacheng and Xing, Eric P. and Zhang, Hao and Gonzalez, Joseph E. and Stoica, Ion},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS) Datasets and Benchmarks Track},
+  year      = {2023}
+}
+
+% ---- (4) LLM 評価サーベイ ----
+
+@article{chang2024survey,
+  title   = {A Survey on Evaluation of Large Language Models},
+  author  = {Chang, Yupeng and Wang, Xu and Wang, Jindong and Wu, Yuan and Yang, Linyi and Zhu, Kaijie and Chen, Hao and Yi, Xiaoyuan and Wang, Cunxiang and Wang, Yidong and Ye, Wei and Zhang, Yue and Chang, Yi and Yu, Philip S. and Yang, Qiang and Xie, Xing},
+  journal = {ACM Transactions on Intelligent Systems and Technology},
+  volume  = {15},
+  number  = {3},
+  pages   = {1--45},
+  year    = {2024},
+  doi     = {10.1145/3641289}
+}

@@ -5,34 +5,70 @@
 %
 % 分量目安: 1 ページ (2 段組換算で約 800 字)
 %
-% TODO[(b)]: docs/related_metrics_comparison.md の対応表をもとに本文化
-%
-% カバーすべき先行研究 (最低限):
-%   1. 表層類似度系: BLEU, ROUGE, METEOR
-%   2. 埋め込み類似度系: BERTScore, BLEURT, MoverScore
-%   3. LLM-as-judge 系: G-Eval, Prometheus, GPTScore
-%   4. RAG 評価系: RAGAS, ARES
-%   5. 解釈可能性系: SHAP-based metrics, attention-based analysis
+% 詳細サーベイ・全比較表は docs/related_metrics_comparison.md を参照
+% (本論文の external reference として機能、camera-ready で URL 化)
 
 \section{関連研究}
 \label{sec:related_work}
 
-% TODO: 2.1 表層・埋め込み類似度指標
+LLM/NLG 応答の自動評価指標は、計算機構の観点から
+(a) 表層類似度系、
+(b) 埋め込み類似度系、
+(c) LLM 駆動評価系
+の 3 系統に大別できる。本節では各系統の代表的指標を概観し、本研究が
+どの空白を埋めるかを示す。
+
 \subsection{表層・埋め込み類似度指標}
-% [PLACEHOLDER]
+\label{sec:rw:surface_embedding}
 
-% TODO: 2.2 LLM-as-judge による評価
-\subsection{LLM-as-judge による評価}
-% [PLACEHOLDER]
+% TODO: 本文 (約 200 字)
+% BLEU/ROUGE → 単一の overlap ratio で構造と内容を区別できない
+% BERTScore/BLEURT → paraphrase 耐性は向上したが、score の解釈は依然不透明
 
-% TODO: 2.3 解釈可能な評価指標
-\subsection{解釈可能な評価指標}
-% [PLACEHOLDER]
+BLEU~\cite{papineni2002bleu} および ROUGE~\cite{lin2004rouge} は
+n-gram overlap に基づく古典的指標であり、計算コストの低さと再現性から
+広く採用されてきたが、構造的整合性と内容的妥当性を単一スコアに混合する
+という限界を持つ。BERTScore~\cite{zhang2020bertscore} と
+BLEURT~\cite{sellam2020bleurt} は事前学習言語モデルの埋め込み距離または
+回帰モデルにより paraphrase 耐性を獲得したが、出力は依然として単一
+スカラ (BLEURT) または P/R/F1 の限定的分解 (BERTScore) であり、応答の
+どの側面 (構造 / 内容) で失点したかの診断情報を提供しない。
 
-% TODO: 2.4 本研究の位置付け
-% 既存手法は (a) 構造と内容を分離できない、(b) ブラックボックス、(c)
-% LLM judge 自体の bias、のいずれかの問題を持つ。本研究は PoR の
-% 2 軸 (S 軸: 構造完全性、C 軸: 命題カバレッジ) で分離評価し、
-% L_sem 分解により解釈可能性を担保する。
+\subsection{LLM 駆動評価}
+\label{sec:rw:llm_judge}
+
+% TODO: 本文 (約 250 字)
+% G-Eval / Prometheus / RAGAS / LLM-as-Judge
+% 共通の限界: 軸分離が prompt/rubric 設計に依存、judge LLM 依存で再現性不安定
+
+近年、評価そのものに LLM を用いる手法が急速に普及している。
+G-Eval~\cite{liu2023geval} は GPT-4 に評価基準と Chain-of-Thought
+を与え、確率重み付きスコアを生成する。Prometheus~\cite{kim2024prometheus,
+kim2024prometheus2} は GPT-4 由来データで open-source LM を fine-tune
+し、rubric 条件付きスコアと自然言語フィードバックを返す。
+RAGAS~\cite{es2024ragas} は RAG パイプライン特化で 4 軸 (faithfulness,
+answer relevancy, context precision/recall) に分解する。MT-Bench を
+含む LLM-as-Judge~\cite{zheng2023judging} は GPT-4 を judge として
+holistic スコアを生成する。これらは柔軟性が高い反面、(i) 評価軸の
+分離が prompt / rubric 設計に完全依存し architectural な保証を持たない、
+(ii) judge LLM のバージョン更新で評価が変動する再現性問題、という
+共通の限界を抱える。LLM 評価論全体の俯瞰は Chang らのサーベイ
+\cite{chang2024survey} に詳しい。
+
 \subsection{本研究の位置付け}
-% [PLACEHOLDER]
+\label{sec:rw:positioning}
+
+% TODO: 本文 (約 350 字)
+% 上記 (a)(b)(c) に対して PoR/ΔE が埋める空白を 3 点で明示
+
+上記いずれの系統も、応答の構造完全性 (どの程度、文として壊れていないか)
+と命題カバレッジ (どの程度、問いの核心を拾っているか) を**計算機構の
+段階で分離して評価する**枠組みを持たない。表層・埋め込み系は両者を単一
+スコアに混合し、LLM 駆動系は分離を prompt 設計に委譲するため、軸の
+排他性も網羅性も保証されない。本研究は次の 3 点でこの空白を埋める:
+(i) 構造完全性 (S 軸) と命題カバレッジ (C 軸) を 2 次元座標 PoR として
+architectural に分離する、(ii) 意味損失関数 $L_{\mathrm{sem}}$ を
+3 項 (演算子・未知性・因果構造) に分解することで、判定根拠を再利用可能な
+診断 primitive として提供する、(iii) judge LLM を計算経路に持たず、
+事前学習文埋め込み (SBert) と cascade matcher のみで評価を完結することで
+判定の再現性を担保する。
