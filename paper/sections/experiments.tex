@@ -1,58 +1,150 @@
 % ===== 4. 実験 (Experiments) =====
 % 役割:
 %   - HA48 アノテーションデータでの予備検証
-%   - ベースライン比較 (G-Eval / BERTScore 最低 1 本)
-%   - 数値の正直さ: 公式論文と docs/validation.md の同期を保つ
+%   - 既存ベースライン (BLEU, BERTScore, SBert cos) との比較
 %
-% 分量目安: 2 ページ
+% 数値の出典: docs/validation.md current snapshot (2026-04-22, post-#95)
+% 再現スクリプト: analysis/baseline_comparison.py
 %
-% TODO: 並行 backlog 完了後に最終数値を埋める
-%   - HA48 → HA100 拡充版での再評価
-%   - 第二 annotator + IAA (Cohen's κ)
-%   - ベースライン (G-Eval) 比較
+% locked-in 反映:
+%   - G-Eval は API key 依存のため現時点では scope 外、Limitations で言及
 
 \section{実験}
 \label{sec:experiments}
 
-% ----- 4.1 設定 -----
 \subsection{実験設定}
 \label{sec:exp:setup}
 
-% TODO: 4.1.1 データセット
-% HA48: 48 件の人手アノテーション付き LLM 応答
-% (拡充後は HA100 に差し替え)
-\subsubsection{データセット}
-% [PLACEHOLDER]
-% data/human_annotation_48/annotation_48_merged.csv
+\paragraph{データセット.}
+本研究では HA48 (Human Annotation 48) を主要評価セットとする。
+HA48 は 20 件の初期評価セット HA20 と 28 件の拡張セット HA28 を統一
+スキーマ $\{\text{id}, \text{category}, S, C, O, \text{propositions\_hit},
+\text{notes}\}$ で統合した $n = 48$ の人手アノテーションデータで
+ある。各サンプルは問い・応答・核心命題集合 $\mathcal{P}$ に加え、
+アノテータによる構造完全性スコア $S$、命題カバレッジ参照値 $C$
+(参照上限算出用)、および全体品質スコア $O \in \{1, \ldots, 5\}$ を
+付与している。
 
-% TODO: 4.1.2 比較手法 (ベースライン)
-\subsubsection{比較手法}
-% [PLACEHOLDER]
-% - BERTScore
-% - G-Eval (LLM-as-judge)
-% - 提案手法 (PoR/ΔE)
+\paragraph{比較手法.}
+本研究は提案手法 PoR/$\Delta E$ を、3 系統の既存指標と比較する:
+(i) 表層類似度系: BLEU (sacrebleu, char tokenization);
+(ii) 埋め込み類似度系: BERTScore F1 (xlm-roberta-base, lang='ja');
+(iii) 意味埋め込み距離: SBert cosine (paraphrase-multilingual-MiniLM-L12-v2)。
+全ベースラインは「高い値 = 良応答」方向に揃え、提案手法側は
+$1 - \Delta E$ に変換して対称性を保つ。
+LLM 駆動評価 (G-Eval, Prometheus, LLM-as-Judge) は
+judge LLM API 依存による再現性の問題から本論文の scope 外とし、
+\S\ref{sec:limitations} で議論する。
 
-% TODO: 4.1.3 評価指標
-\subsubsection{評価指標}
-% [PLACEHOLDER]
-% - 人手評価との相関 (Spearman / Pearson)
-% - verdict 分布と人手 verdict の一致率
-% - Cohen's κ (annotator 間)
+\paragraph{評価指標.}
+人手品質スコア $O$ と各自動指標との Spearman 順位相関 $\rho$
+(scipy, タイ補正あり) を主指標とする。95\% 信頼区間は Fisher $z$ 変換
+$\mathrm{CI} = \tanh(z \pm 1.96 / \sqrt{n - 3})$ により算出する。
+提案手法と各ベースラインの $\rho$ 差 $\Delta \rho$ については、
+同一サンプル上の相関差を検定する Steiger's $Z$ test を適用する。
+さらに verdict 4 値 (accept / rewrite / regenerate / degraded) の
+単調性を確認する。
 
-% ----- 4.2 結果 -----
-\subsection{結果}
+\subsection{HA48 における相関結果}
 \label{sec:exp:results}
 
-% TODO: 表 1 - 主要結果 (相関係数)
-% docs/validation.md の current snapshot から転記
+\begin{table}[t]
+\centering
+\caption{HA48 ($n = 48$) における各指標と人手スコア $O$ の Spearman
+$\rho$。符号は「高い値 = 良応答」に統一 ($\Delta E$ は $1 - \Delta E$
+で変換、$L_{\mathrm{sem}}$ のみ構造上の理由で負符号を保持)。}
+\label{tab:ha48_correlation}
+\begin{tabular}{lrrr}
+\toprule
+指標 & $\rho$ & 95\% CI & $p$ \\
+\midrule
+BLEU & $+0.318$ & $[+0.037, +0.552]$ & $0.028$ \\
+BERTScore F1 & $+0.331$ & $[+0.052, +0.562]$ & $0.022$ \\
+SBert cos & $+0.261$ & $[-0.025, +0.507]$ & $0.074$ \\
+\midrule
+\textbf{Ours ($1 - \Delta E$)} & $\bm{+0.482}$ & $\bm{[+0.229, +0.674]}$ & $\bm{0.0005}$ \\
+\textbf{Ours ($L_{\mathrm{sem}}$)} & $\bm{-0.548}$ & $\bm{[-0.720, -0.312]}$ & $\bm{< 0.001}$ \\
+\midrule
+参照上限 (human $C$) & $+0.862$ & $[+0.765, +0.920]$ & $< 0.001$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-% TODO: 表 2 - verdict 分布の混同行列
+表~\ref{tab:ha48_correlation} に HA48 上の主要結果を示す。提案手法
+$\Delta E$ は $\rho = +0.482$ ($p = 0.0005$) で、評価した 3 系統の
+ベースライン (BLEU: $+0.318$、BERTScore F1: $+0.331$、SBert cos:
+$+0.261$) をすべて点推定で上回った。さらに診断用指標
+$L_{\mathrm{sem}}$ (Phase 5: $L_P + L_F + L_G$ 3 項分解) は
+$\rho = -0.548$ ($p < 0.001$) と、主指標 $\Delta E$ を上回る予測力を
+示した。参照上限は $\rho = +0.862$ であり、提案手法の改善余地は
+今後の検出層精度向上で縮められる。
 
-% TODO: 図 1 - PoR 座標上での応答プロット
+\subsection{ベースラインとの相関差の検定}
+\label{sec:exp:steiger}
 
-% ----- 4.3 考察 -----
-\subsection{結果の解釈}
-\label{sec:exp:discussion}
+同一サンプル上での $\rho$ 差を Steiger's $Z$ test で検定した結果を
+表~\ref{tab:steiger} に示す。$\Delta \rho$ は提案手法 ($1 - \Delta E$)
+とベースラインの差である。
 
-% TODO: L_sem 分解の効用 (どの損失項が verdict に効くか)
-% TODO: 既存指標との差分 (S/C 分離の意義)
+\begin{table}[t]
+\centering
+\caption{HA48 における提案手法とベースラインの相関差 (Steiger's $Z$
+検定、両側)。全ペアで $\alpha = 0.05$ の有意差は観測されず、
+$n = 48$ の検出力不足を示唆する。}
+\label{tab:steiger}
+\begin{tabular}{lrrr}
+\toprule
+vs baseline & $\Delta \rho$ & $Z$ & $p$ \\
+\midrule
+BLEU & $+0.164$ & $+0.984$ & $0.325$ \\
+BERTScore F1 & $+0.151$ & $+0.910$ & $0.363$ \\
+SBert cos & $+0.221$ & $+1.380$ & $0.168$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+提案手法は点推定で 3 指標をすべて上回るが ($\Delta \rho = +0.15$ から
+$+0.22$)、$n = 48$ の検出力では $\alpha = 0.05$ 水準での有意差には
+到達していない。参考として HA20 ($n = 20$) のサブセットでは提案手法
+vs SBert cos が $p = 0.079$ を示し $\alpha = 0.10$ 水準では優位方向
+であるものの、$\alpha = 0.05$ での確立には $n \geq 100$ への
+アノテーション拡張が実質的に必要となる (\S\ref{sec:limitations})。
+
+\subsection{verdict の単調性}
+\label{sec:exp:verdict}
+
+\begin{table}[t]
+\centering
+\caption{HA48 における verdict 別の平均人手スコア。期待される単調性
+$\mathrm{accept} > \mathrm{rewrite} > \mathrm{regenerate}$ が確認
+された。}
+\label{tab:verdict_monotonicity}
+\begin{tabular}{lr}
+\toprule
+verdict & 平均 $O$ \\
+\midrule
+accept & $3.44$ \\
+rewrite & $2.67$ \\
+regenerate & $1.25$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+表~\ref{tab:verdict_monotonicity} に、verdict 閾値
+$\Delta E \leq 0.10$ / $0.10 < \Delta E \leq 0.25$ / $\Delta E > 0.25$
+による離散化と人手スコア $O$ の対応を示す。期待される単調性が成立し、
+accept 判定の応答は regenerate 判定の応答より平均 $2.19$ ポイント
+高い $O$ を得た。この結果は $\Delta E$ の閾値校正が人手判断と整合的に
+機能していることを支持する。
+
+\subsection{$L_{\mathrm{sem}}$ の分解分析}
+\label{sec:exp:l_sem_breakdown}
+
+主構成 3 項の単独 Spearman $\rho$ は、$L_P = -0.306$ ($p = 0.034$),
+$L_F = -0.385$ ($p = 0.007$), $L_G = -0.357$ ($p = 0.013$) であり、
+いずれも $\alpha = 0.05$ 水準で有意だった。3 項を合成した
+$L_{\mathrm{sem}}$ は $\rho = -0.548$ で、各項単独よりも高い予測力を
+示した。この結果は、命題の欠落 ($L_P$)、用語の捏造 ($L_F$)、語彙
+重力の構造的崩壊 ($L_G$) が独立した誤差軸として $O$ に寄与することを
+示唆する。判定の解釈可能性という観点から、各項の分解は具体的な改善
+方向 (どの誤差軸に対処すべきか) を示す診断信号として機能する。

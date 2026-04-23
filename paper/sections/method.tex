@@ -102,10 +102,11 @@ L_G = \mathrm{grv}(t) \in [0, 1],
 は紙幅の都合により本稿では割愛する。
 
 \paragraph{重み校正.}
-HA48 ($n = 48$) 校正で、3 項主構成 $L_P + L_F + L_G$ は人手評価
-との Spearman 相関 $\rho = -0.602$ を達成し、現行 $\Delta E$ 単独
-($\rho = -0.520$) を上回る予測力を示した。LOO-CV 補正後の運用重みは
-$\alpha = 0.27,\ \eta = 0.21,\ \delta = 0.35$ である。
+HA48 ($n = 48$) 現行パイプライン snapshot で、3 項主構成 $L_P + L_F + L_G$
+は人手評価との Spearman 相関 $\rho = -0.548$ ($p < 0.001$) を達成し、
+現行 $\Delta E$ 単独 ($\rho = -0.482$, $p = 0.0005$) を上回る予測力を
+示した。運用重みは $\alpha = 0.27,\ \eta = 0.21,\ \delta = 0.35$ で、
+full-sample 最適値から LOO-CV で補正した保守的な値である。
 
 \subsection{verdict 判定と補助的 advisory 機構}
 \label{sec:method:verdict}

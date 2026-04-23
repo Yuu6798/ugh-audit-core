@@ -8,20 +8,34 @@
 \section{おわりに}
 \label{sec:conclusion}
 
-% TODO: 第一段落 - 本研究の要約
-% 本稿では LLM 応答の意味的整合性を 2 軸 (S 軸: 構造完全性、
-% C 軸: 命題カバレッジ) で評価する PoR/ΔE フレームワークを
-% 提案し、HA48 における予備検証を行った。
+本稿では、LLM 応答の意味的整合性を構造完全性 (S 軸) と命題カバレッジ
+(C 軸) の 2 軸で分離評価する PoR/$\Delta E$ フレームワークを提案し、
+意味損失関数 $L_{\mathrm{sem}}$ の 3 項分解 (命題損失 $L_P$、用語捏造
+損失 $L_F$、因果構造損失 $L_G$) により判定根拠の解釈可能性を担保した。
+48 件の人手アノテーションデータ HA48 における予備検証では、$\Delta E$
+が人手品質スコアとの間で Spearman $\rho = +0.482$ ($p < 0.001$) の
+有意な相関を示し、BLEU・BERTScore・SBert cosine の 3 ベースラインを
+点推定で上回った。また $L_{\mathrm{sem}}$ は $\rho = -0.548$ と
+$\Delta E$ を上回る予測力を示し、主構成 3 項がそれぞれ独立した誤差軸
+として寄与することを確認した。verdict 4 値判定の単調性も成立し、
+閾値校正が人手判断と整合的に機能することを支持する結果を得た。
 
-% TODO: 第二段落 - 今後の展望 (Future Work)
-% - HA100 規模への拡充と Cohen's κ による信頼性検証
-% - mode_conditioned_grv による advisory 機構の本格的評価
-% - 他ドメイン (要約品質評価、対話応答品質評価) への適用検証
+\paragraph{今後の展望.}
+本論文の限界 (\S\ref{sec:limitations}) に対応して、以下 3 点を今後の
+課題とする。(i) アノテーションを $n = 100$ 規模に拡充し、第二
+アノテータを導入して Cohen's $\kappa$ により inter-annotator
+agreement を定量化する。これによりベースラインとの相関差の統計的
+有意性を $\alpha = 0.05$ 水準で確立する。(ii) $\Delta E$ の verdict
+を補正する mode\_conditioned\_grv による advisory 機構
+($n = 63$ 校正で $\rho = +0.523$) の本格的な ablation と、モード別
+評価を別途実施する。(iii) 要約品質評価および対話応答評価という他
+ドメインへの適用可能性を検証し、本フレームワークの汎化性を示す。
 
 % ===== 謝辞 (Acknowledgments) =====
 % TODO[最終調整]: 査読中は省略、camera-ready で追加
 
 % ===== Data Availability =====
-% TODO[最終調整]:
-% locked-in: ugh-audit-core は査読中匿名化、Data Availability で
-%            「コードとデータは採択後に GitHub 上で公開予定」と記載
+% TODO[最終調整]: locked-in 方針
+%   「コードおよび HA48 アノテーションデータは、採択後に GitHub 上で
+%    MIT ライセンスで公開予定である。査読中のアクセスが必要な場合は
+%    program chair を経由して著者に連絡されたい。」
