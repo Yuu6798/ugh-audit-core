@@ -67,6 +67,16 @@ analysis = [
     "scipy>=1.10",
     "matplotlib>=3.7",
 ]
+baseline = [
+    # baseline comparison (analysis/baseline_comparison.py) 専用、self-contained。
+    # docs/validation.md §ベースライン比較 の数字を再現するために必要な全依存。
+    # sentence-transformers / scipy は [server] / [analysis] にも含まれるが、
+    # `pip install -e ".[baseline]"` 単独で script が動くよう重複明記している。
+    "bert-score>=0.3.13",
+    "sacrebleu>=2.0",
+    "sentence-transformers>=2.2",  # compute_sbert_cosines で使う
+    "scipy>=1.10",                 # _spearman で使う
+]
 experiment = [
     "anthropic>=0.40",
     "openai>=1.0",
