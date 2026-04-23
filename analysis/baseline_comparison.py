@@ -247,6 +247,107 @@ def _spearman(a: List[float], b: List[float]) -> Tuple[float, float]:
     return float(rho), float(p)
 
 
+def steiger_z_test(
+    r_xy: float, r_zy: float, r_xz: float, n: int,
+) -> Tuple[float, float]:
+    """Steiger's Z test for dependent correlations (same sample, 2 predictors).
+
+    同一サンプルで 2 つの指標 (X, Z) が共通の人間評価 (Y) とそれぞれどれだけ
+    相関するかを比較する。ρ の差 `r_xy - r_zy` が統計的に有意かを検定する。
+
+    Args:
+        r_xy: 指標 X と Y (O スコア) の Spearman ρ
+        r_zy: 指標 Z と Y の Spearman ρ
+        r_xz: 指標 X と Z の Spearman ρ (同一サンプル上)
+        n:    サンプルサイズ
+
+    Returns:
+        (Z, two-tailed p): Z 統計量と両側 p 値
+
+    参考: Steiger, J. H. (1980). Tests for comparing elements of a correlation
+    matrix. Psychological Bulletin, 87(2), 245-251. 標準的な dependent
+    correlations 比較検定。
+    """
+    from scipy.stats import norm
+
+    # 分散共分散調整項 (Steiger 1980, eq 11)
+    det = (1.0 - r_xy * r_xy) * (1.0 - r_zy * r_zy)
+    if det <= 0:
+        return float("nan"), float("nan")
+    numer = r_xz * (1.0 - r_xy * r_xy - r_zy * r_zy) - 0.5 * r_xy * r_zy * (
+        1.0 - r_xy * r_xy - r_zy * r_zy - r_xz * r_xz
+    )
+    s = numer / det
+
+    # Fisher z 変換してから差の標準誤差で割る
+    z_xy = math.atanh(r_xy)
+    z_zy = math.atanh(r_zy)
+    se_sq = (2.0 - 2.0 * s) / (n - 3)
+    if se_sq <= 0:
+        return float("nan"), float("nan")
+    Z = (z_xy - z_zy) / math.sqrt(se_sq)
+
+    # 両側 p 値
+    p = 2.0 * (1.0 - float(norm.cdf(abs(Z))))
+    return float(Z), p
+
+
+def pairwise_steiger_table(
+    pairs: List[Pair], metrics: Dict[str, List[float]],
+    primary: str = "UGHer_1mdE",
+) -> List[dict]:
+    """primary (UGHer) vs 他 baseline の pairwise Steiger's Z を算出。
+
+    Returns: [{
+      'metric_a': 'UGHer_1mdE', 'metric_b': 'BLEU', 'n': 48,
+      'rho_a': 0.48, 'rho_b': 0.32, 'delta_rho': 0.16,
+      'rho_ab': 0.75, 'Z': 1.23, 'p': 0.22,
+      'sig_05': False
+    }, ...]
+
+    primary が metrics に無いときは空 list を返す。
+    """
+    if primary not in metrics:
+        return []
+    o = [p.o for p in pairs]
+    vals_a = metrics[primary]
+
+    rows: List[dict] = []
+    for name, vals_b in metrics.items():
+        if name == primary:
+            continue
+        # 3 相関すべてで finite なサンプル集合で比較
+        triples = [
+            (a, b, oo)
+            for a, b, oo in zip(vals_a, vals_b, o)
+            if not (math.isnan(a) or math.isnan(b) or math.isnan(oo))
+        ]
+        if len(triples) < 5:
+            continue
+        a_arr = [t[0] for t in triples]
+        b_arr = [t[1] for t in triples]
+        o_arr = [t[2] for t in triples]
+        n = len(triples)
+
+        r_xy, _ = _spearman(a_arr, o_arr)   # UGHer vs O
+        r_zy, _ = _spearman(b_arr, o_arr)   # baseline vs O
+        r_xz, _ = _spearman(a_arr, b_arr)   # UGHer vs baseline (共変量)
+        Z, p = steiger_z_test(r_xy, r_zy, r_xz, n)
+        rows.append({
+            "metric_a": primary,
+            "metric_b": name,
+            "n": n,
+            "rho_a": r_xy,
+            "rho_b": r_zy,
+            "delta_rho": r_xy - r_zy,
+            "rho_ab": r_xz,
+            "Z": Z,
+            "p": p,
+            "sig_05": (not math.isnan(p)) and p < 0.05,
+        })
+    return rows
+
+
 def _filter_finite(
     xs: List[float], ys: List[float],
 ) -> Tuple[List[float], List[float]]:
@@ -279,7 +380,7 @@ def _summarize(
     dataset: str, pairs: List[Pair], metrics: Dict[str, List[float]],
 ) -> dict:
     o = [p.o for p in pairs]
-    result = {"dataset": dataset, "n": len(pairs), "rows": []}
+    result = {"dataset": dataset, "n": len(pairs), "rows": [], "pairwise": []}
     # 指標ごとに O との Spearman + CI
     # 向き: O が高い = 良回答、UGHer/BERTScore/SBert は高 sim = 良、BLEU は高 = 良
     # → 全て正相関を期待する (ΔE のみ「ΔE↓ = 良」だったが UGHer は 1-ΔE に変換済み)
@@ -297,6 +398,9 @@ def _summarize(
             "metric": name, "n_valid": len(ox),
             "rho": rho, "p": pval, "ci_lo": lo, "ci_hi": hi,
         })
+
+    # Steiger's Z pairwise: UGHer vs 各 baseline
+    result["pairwise"] = pairwise_steiger_table(pairs, metrics, primary="UGHer_1mdE")
     return result
 
 
@@ -317,6 +421,8 @@ def write_summary_md(summaries: List[dict]) -> None:
     for s in summaries:
         lines.append(f"## {s['dataset']} (n={s['n']})")
         lines.append("")
+        lines.append("### O スコアとの相関 (個別)")
+        lines.append("")
         lines.append("| 指標 | n_valid | Spearman ρ | p | 95% CI |")
         lines.append("|---|---|---|---|---|")
         for row in s["rows"]:
@@ -330,14 +436,43 @@ def write_summary_md(summaries: List[dict]) -> None:
                 )
         lines.append("")
 
+        # Steiger's Z pairwise: UGHer vs 各 baseline
+        if s.get("pairwise"):
+            lines.append("### UGHer vs baseline: Steiger's Z (dependent correlations)")
+            lines.append("")
+            lines.append(
+                "同一サンプル上で 2 指標が共通の O スコアとの相関でどれだけ差があるかを検定。"
+                "Δρ > 0 は UGHer が高い点推定。p < 0.05 が統計的有意。"
+            )
+            lines.append("")
+            lines.append(
+                "| vs baseline | n | ρ(UGHer,O) | ρ(base,O) | Δρ | ρ(UGHer,base) | Steiger Z | p | sig(α=0.05) |"
+            )
+            lines.append("|---|---|---|---|---|---|---|---|---|")
+            for pr in s["pairwise"]:
+                sig = "**yes**" if pr["sig_05"] else "no"
+                p_str = f"{pr['p']:.4f}" if not math.isnan(pr["p"]) else "—"
+                z_str = f"{pr['Z']:+.3f}" if not math.isnan(pr["Z"]) else "—"
+                lines.append(
+                    f"| {pr['metric_b']} | {pr['n']} | "
+                    f"{pr['rho_a']:+.4f} | {pr['rho_b']:+.4f} | "
+                    f"{pr['delta_rho']:+.4f} | {pr['rho_ab']:+.4f} | "
+                    f"{z_str} | {p_str} | {sig} |"
+                )
+            lines.append("")
+
     lines.append("## 解釈")
     lines.append("")
     lines.append("- 本表は「UGHer が既存 baseline に対してどの程度強い信号を示すか」の")
-    lines.append("  直接比較を提供する。CI overlap が大きければ 3 指標は統計的に区別")
-    lines.append("  困難、overlap が小さければ UGHer の優位性が検証される。")
+    lines.append("  直接比較を提供する。個別 CI overlap が大きければ 3 指標は統計的に区別")
+    lines.append("  困難、Steiger's Z が p<0.05 なら Δρ は有意な差と判定される。")
     lines.append("- 現状 `docs/validation.md §Limitations` に記載した「ベースライン比較の")
-    lines.append("  不在」を本 script で埋める。n=48 / n=20 の CI 幅は広いため、結論は")
-    lines.append("  「点推定の順位 + CI overlap の定量開示」に留める。")
+    lines.append("  不在」を本 script で埋める。n=48 / n=20 の検出力は低く、Δρ が")
+    lines.append("  medium effect size (0.15–0.20 程度) でも Steiger's Z で有意差を検出")
+    lines.append("  するには n≥100 程度の拡張が必要と予想される。")
+    lines.append("- 査読で「UGHer > baseline が統計有意に成立」と主張するには Steiger's Z")
+    lines.append("  p<0.05 が前提。現 n で非有意なら「点推定では全方位優位だが統計有意性は")
+    lines.append("  n 拡張後に確定」と正直に報告する。")
     lines.append("")
     lines.append("## 再現")
     lines.append("")

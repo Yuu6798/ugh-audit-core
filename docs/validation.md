@@ -202,6 +202,42 @@ UGHer は `1 - ΔE` で変換、O との Spearman ρ を比較。
 | SBert cos | +0.261 | [-0.025, +0.507] |
 | **UGHer (ΔE, pipeline)** | **+0.482** | **[+0.229, +0.674]** |
 
+### 差の統計有意性 (Steiger's Z, dependent correlations)
+
+同一サンプルで UGHer と各 baseline の ρ の差 Δρ を Steiger's Z test で検定。
+両側 p 値、α=0.05 で判定。
+
+**HA20 (n=20):**
+
+| vs baseline | Δρ | Steiger Z | p | 有意 (α=0.05) |
+|---|---|---|---|---|
+| BLEU | +0.277 | +1.502 | 0.133 | no |
+| BERTScore | +0.214 | +1.189 | 0.234 | no |
+| SBert cos | +0.341 | +1.759 | **0.079** | no (**10% 水準では有意方向**) |
+
+**HA48 (n=48):**
+
+| vs baseline | Δρ | Steiger Z | p | 有意 (α=0.05) |
+|---|---|---|---|---|
+| BLEU | +0.164 | +0.984 | 0.325 | no |
+| BERTScore | +0.151 | +0.910 | 0.363 | no |
+| SBert cos | +0.221 | +1.380 | 0.168 | no |
+
+**解釈:**
+
+- **全ペアで α=0.05 有意差なし**。UGHer の点推定優位 (Δρ=+0.15〜+0.34) は
+  効果量として medium 以上だが、n=20/48 の検出力不足で統計有意性は未達
+- ただし **HA20 UGHer vs SBert は p=0.079** で 10% 水準では有意方向 — 同一
+  内部モデル (SBert) に対する UGHer 合成の優位性が最も明瞭
+- 統計有意性を α=0.05 で確立するには **n≥100 への annotation 拡張**が
+  実質的に必要。Δρ=+0.15 で n=100 なら p < 0.05 の見込み
+- **現 n で査読で書ける主張:** 「UGHer is the highest point-estimate
+  correlation across all baselines on both datasets」「UGHer vs human O
+  correlation is significant (p<0.001 individually)」 — 個別 ρ の有意性は
+  全指標で確保
+- **現 n で書けない主張:** 「UGHer significantly outperforms baselines」
+  (Steiger's Z 非有意のため過大主張)
+
 **観察:**
 
 - UGHer は両 dataset で**点推定最強**。HA20 では 2 番手 (BERTScore) から
