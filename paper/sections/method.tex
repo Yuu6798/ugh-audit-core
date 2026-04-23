@@ -1,51 +1,137 @@
 % ===== 3. 提案手法 (Method) =====
-% 役割:
-%   - PoR / ΔE / quality_score の定義を formal に提示
-%   - L_sem 分解の数式
-%   - Phase 8 advisory は末尾で「補足機構」として浅めに言及 (locked-in)
+% locked-in 反映:
+%   - PoR / ΔE / L_sem を主軸として展開 (Variant 1)
+%   - Phase 8 advisory は §3.4 末尾で「補足機構」として浅めに、過大主張禁止
 %
-% 分量目安: 2-2.5 ページ (本論文の主要部分)
-%
-% TODO[(c)]: 既存コード (ugh_calculator.py, semantic_loss.py, mode_grv.py)
-%            の数式を LaTeX 化して転写する
+% 数式の出典:
+%   - PoR / ΔE / quality_score: docs/formulas.md, ugh_calculator.py
+%   - L_sem 3 項分解: docs/semantic_loss.md, semantic_loss.py
+%   - verdict 閾値: docs/formulas.md (HA48 確定値)
+%   - Phase 8 advisory: docs/phase_e_verdict_integration.md, mode_grv.py
 
 \section{提案手法}
 \label{sec:method}
 
-% TODO: 3.1 PoR (Point of Resonance) の定義
-% S 軸 (構造完全性) と C 軸 (命題カバレッジ) の 2 軸座標
-% 詳細: docs/formulas.md を参照
-\subsection{PoR: 2 軸座標による応答位置付け}
+本研究は、LLM 応答 $t$ の品質を、参照応答との 2 軸座標 PoR と距離指標
+$\Delta E$ で表現し、さらに意味損失関数 $L_{\mathrm{sem}}$ の 3 項分解
+により判定根拠を解釈可能にする。本節では各構成要素の定式化を順に示す。
+
+\subsection{PoR: 構造完全性と命題カバレッジの 2 軸座標}
 \label{sec:method:por}
 
-% [PLACEHOLDER]
-% S = Σ w_fi * f_i / Σ w_fi  (i ∈ {1, 2, 3, 4})
-% C ∈ [0, 1]: 命題マッチによる被覆度
+応答 $t$ を、構造完全性 $S \in [0, 1]$ と命題カバレッジ
+$C \in [0, 1]$ の 2 軸からなる座標
+$\mathrm{PoR}(t) = (S, C)$ で表現する。
 
-% TODO: 3.2 ΔE 距離指標
-\subsection{$\Delta$E: 理想応答からの距離}
+\paragraph{S 軸 (構造完全性).}
+応答が構造的に破綻していないかを、検出層が抽出した
+$k$ 項の f-flag $f_k \in [0, 1]$ の加重平均で定量化する:
+\begin{equation}
+\label{eq:s}
+S = 1 - \frac{\sum_{k} w_k f_k}{\sum_{k} w_k},
+\end{equation}
+ここで $w = \{w_{f_1}, w_{f_2}, w_{f_3}, w_{f_4}\}
+= \{5, 25, 5, 5\}$ である。$f_2$ (用語捏造) に最大重み 25 を配置するのは、
+応答の信頼性を最も損なう失敗モードが命題の捏造であるとの校正結果に
+基づく。$f_4$ が未計算の場合は当該重みを除外し $\sum w_k = 35$ で
+正規化する。
+
+\paragraph{C 軸 (命題カバレッジ).}
+問いの核心命題集合 $\mathcal{P}$ に対する応答の被覆率を:
+\begin{equation}
+\label{eq:c}
+C = \frac{\mathrm{hits}(t, \mathcal{P})}{|\mathcal{P}|},
+\end{equation}
+で定義する。$\mathrm{hits}(\cdot)$ は cascade matcher
+(Tier 1: tfidf bigram, Tier 2: SBert 文埋め込み類似度) により決定される。
+$|\mathcal{P}| = 0$ (命題未提供) の場合は $C$ を未定義 (degraded) とする。
+
+\subsection{$\Delta E$: 理想応答からの距離}
 \label{sec:method:delta_e}
 
-% [PLACEHOLDER]
-% ΔE = sqrt(w_S * (1-S)^2 + w_C * (1-C)^2) / sqrt(w_S + w_C)
-% quality_score = 5 - 4 * ΔE
+理想応答 $(S, C) = (1, 1)$ からの加重二乗和距離として
+$\Delta E \in [0, 1]$ を:
+\begin{equation}
+\label{eq:delta_e}
+\Delta E = \frac{w_S (1 - S)^2 + w_C (1 - C)^2}{w_S + w_C},
+\end{equation}
+で定義する。$w_S = 2,\ w_C = 1$ は HA48 校正で人手評価との相関を
+最大化する重みである。さらに人手 5 段階評価との対応のため、
+パラメータフリーな線形変換:
+\begin{equation}
+\label{eq:quality_score}
+\mathrm{quality\_score} = 5 - 4 \cdot \Delta E \in [1, 5],
+\end{equation}
+を quality\_score として併記する ($\Delta E = 0 \Rightarrow 5$,
+$\Delta E = 1 \Rightarrow 1$)。
 
-% TODO: 3.3 L_sem: 意味損失分解
-\subsection{$L_{\mathrm{sem}}$: 意味損失の分解}
+\subsection{$L_{\mathrm{sem}}$: 意味損失の 3 項分解}
 \label{sec:method:l_sem}
 
-% [PLACEHOLDER]
-% L_Q (演算子ロス), L_F (未知性ロス), L_G (因果構造損失) の 3 項分解
-% 詳細: docs/semantic_loss.md
+$\Delta E$ は単一スカラに収束するため、判定がどの誤差項に駆動された
+かを直接読み取れない。これを補うため、意味損失関数:
+\begin{equation}
+\label{eq:l_sem}
+L_{\mathrm{sem}} = \alpha L_P + \eta L_F + \delta L_G + \mathrm{(appendix\ 4\ \mbox{項})},
+\end{equation}
+を導入する。本研究では HA48 校正で単独 $\rho$ が有意であった主構成
+3 項を中心に議論する (appendix 4 項 $L_Q, L_R, L_A, L_X$ は理論的整合性
+のため保持し、本論文の主評価からは除外する)。
 
-% TODO: 3.4 verdict と判定機構 (浅め)
-\subsection{応答判定機構}
+\paragraph{$L_P$ — 命題損失.} 命題の \emph{欠落} を測る:
+\begin{equation}
+L_P = 1 - C,
+\end{equation}
+これは C 軸の補数であり、命題未提供時は未定義となる。
+
+\paragraph{$L_F$ — 用語捏造損失.} 偽命題の \emph{混入} を測る:
+\begin{equation}
+L_F = f_2 \in \{0,\, 0.5,\, 1\},
+\end{equation}
+$L_P$ が命題の欠落を捉えるのに対し、$L_F$ は文脈 $c$ の参照集合
+$\mathcal{R}_s$ に存在しない用語・概念の混入を捉え、$L_P$ と直交する
+独立の誤差軸を成す。
+
+\paragraph{$L_G$ — 因果構造損失.} 応答内の語彙重力分布 (grv) を
+3 項式 (drift / dispersion / collapse) で集約した値:
+\begin{equation}
+L_G = \mathrm{grv}(t) \in [0, 1],
+\end{equation}
+を用いる。長文応答での論点拡散や、複数論点の単一塊への collapse を
+検出する。grv の詳細な定式化 (drift / dispersion / collapse の 3 項式)
+は紙幅の都合により本稿では割愛する。
+
+\paragraph{重み校正.}
+HA48 ($n = 48$) 校正で、3 項主構成 $L_P + L_F + L_G$ は人手評価
+との Spearman 相関 $\rho = -0.602$ を達成し、現行 $\Delta E$ 単独
+($\rho = -0.520$) を上回る予測力を示した。LOO-CV 補正後の運用重みは
+$\alpha = 0.27,\ \eta = 0.21,\ \delta = 0.35$ である。
+
+\subsection{verdict 判定と補助的 advisory 機構}
 \label{sec:method:verdict}
 
-% [PLACEHOLDER]
-% verdict ∈ {accept, rewrite, regenerate, degraded}
-% 閾値: ΔE ≤ 0.10 → accept, ≤ 0.25 → rewrite, > 0.25 → regenerate
-%
-% Phase 8 advisory (locked-in: 浅めに言及):
-%   モード条件付き重力指標 (mode_conditioned_grv) による
-%   advisory downgrade を補助機構として導入。詳細は Future Work で議論。
+$\Delta E$ の閾値により、応答の判定 verdict を 4 値で離散化する:
+\begin{equation}
+\mathrm{verdict}(t) =
+\begin{cases}
+\mathrm{accept}     & \text{if } C \neq \mathrm{None} \land \Delta E \leq 0.10 \\
+\mathrm{rewrite}    & \text{if } C \neq \mathrm{None} \land 0.10 < \Delta E \leq 0.25 \\
+\mathrm{regenerate} & \text{if } C \neq \mathrm{None} \land \Delta E > 0.25 \\
+\mathrm{degraded}   & \text{if } C = \mathrm{None} \lor \Delta E = \mathrm{None}
+\end{cases}
+\end{equation}
+閾値 $0.10 / 0.25$ は HA48 校正で確定済みであり、本論文では再校正を
+行わず固定値として用いる。
+
+\paragraph{補助的 advisory 機構 (簡略).}
+応答モード (definitional, comparative, evaluative ほか) に条件付けた
+重力解釈ベクトル (mode\_conditioned\_grv) を補助信号として導入し、
+$\mathrm{verdict} = \mathrm{accept}$ かつ collapse\_risk が高く
+anchor\_alignment が低い場合に限り、advisory として
+$\mathrm{rewrite}$ への降格を提示する。これは主判定 verdict を
+書き換えず、補助的な flag として併走する。
+HA48+accept40 の拡充データ ($n = 63$) で校正した閾値は
+$\tau_{\mathrm{collapse}} = 0.28,\ \tau_{\mathrm{anchor}} = 0.80$ で、
+拡充検証データ上で $\rho = 0.523$ (主判定 $\rho = 0.441$) を達成した。
+本機構の本格評価とモード別 ablation は本論文の scope 外であり、
+\S\ref{sec:conclusion} の Future Work で議論する。
