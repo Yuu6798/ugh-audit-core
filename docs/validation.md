@@ -217,7 +217,7 @@ UGHer は `1 - ΔE` で変換、O との Spearman ρ を比較。
 **再現:**
 
 ```bash
-pip install bert-score sacrebleu
+pip install -e ".[baseline]"   # bert-score + sacrebleu + sentence-transformers + scipy を self-contained で導入
 python analysis/baseline_comparison.py
 ```
 

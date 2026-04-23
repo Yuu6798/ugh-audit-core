@@ -20,8 +20,13 @@ contextual embedding baseline を担当する。
   - analysis/baseline_comparison_summary.md (ρ / CI / 対比表)
 
 使い方:
-  pip install bert-score sacrebleu
+  pip install -e ".[baseline]"   # bert-score + sacrebleu + sentence-transformers + scipy
   python analysis/baseline_comparison.py
+
+`[baseline]` extra は self-contained で、この script の全 import
+(bert_score / sacrebleu / sentence_transformers / scipy) を pyproject.toml
+内に明記している。個別 pip も可:
+  pip install bert-score sacrebleu sentence-transformers scipy
 
 再現性のため全 metric を 1 script で算出。計算時間目安 (CPU): HA48 で ~5 分
 (BERTScore の XLM-R load が dominant)。
