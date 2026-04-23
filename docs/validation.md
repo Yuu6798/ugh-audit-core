@@ -231,12 +231,20 @@ UGHer は `1 - ΔE` で変換、O との Spearman ρ を比較。
   内部モデル (SBert) に対する UGHer 合成の優位性が最も明瞭
 - 統計有意性を α=0.05 で確立するには **n≥100 への annotation 拡張**が
   実質的に必要。Δρ=+0.15 で n=100 なら p < 0.05 の見込み
-- **現 n で査読で書ける主張:** 「UGHer is the highest point-estimate
-  correlation across all baselines on both datasets」「UGHer vs human O
-  correlation is significant (p<0.001 individually)」 — 個別 ρ の有意性は
-  全指標で確保
-- **現 n で書けない主張:** 「UGHer significantly outperforms baselines」
-  (Steiger's Z 非有意のため過大主張)
+- **現 n で査読で書ける主張:**
+  - 「UGHer is the highest point-estimate correlation across all baselines
+    on both datasets」
+  - 「UGHer's correlation with human O is statistically significant
+    (HA20 p<0.001, HA48 p<0.001)」 — **UGHer 単独の有意性のみ言明**
+  - 「BLEU and BERTScore are also individually significant
+    (HA20 p=0.027, 0.011; HA48 p=0.028, 0.022)」 — 個別 baseline の
+    有意性は指標別に明示する
+- **現 n で書けない主張:**
+  - 「UGHer significantly outperforms baselines」 (Steiger's Z 非有意のため
+    過大主張)
+  - 「All metrics are individually significant」 — **SBert cos は両 dataset
+    で α=0.05 非有意** (HA20 p=0.0596, HA48 p=0.0735)、全指標一括の有意性
+    主張は SBert で破綻する。SBert の扱いは個別に記述する必要がある
 
 **観察:**
 
