@@ -1,0 +1,38 @@
+% ===== 2. 関連研究 (Related Work) =====
+% 役割:
+%   - LLM 応答評価の 3 系統を整理し、本研究の位置付けを明示
+%   - 査読で必ず聞かれる「既存手法と何が違うか」への先回り回答
+%
+% 分量目安: 1 ページ (2 段組換算で約 800 字)
+%
+% TODO[(b)]: docs/related_metrics_comparison.md の対応表をもとに本文化
+%
+% カバーすべき先行研究 (最低限):
+%   1. 表層類似度系: BLEU, ROUGE, METEOR
+%   2. 埋め込み類似度系: BERTScore, BLEURT, MoverScore
+%   3. LLM-as-judge 系: G-Eval, Prometheus, GPTScore
+%   4. RAG 評価系: RAGAS, ARES
+%   5. 解釈可能性系: SHAP-based metrics, attention-based analysis
+
+\section{関連研究}
+\label{sec:related_work}
+
+% TODO: 2.1 表層・埋め込み類似度指標
+\subsection{表層・埋め込み類似度指標}
+% [PLACEHOLDER]
+
+% TODO: 2.2 LLM-as-judge による評価
+\subsection{LLM-as-judge による評価}
+% [PLACEHOLDER]
+
+% TODO: 2.3 解釈可能な評価指標
+\subsection{解釈可能な評価指標}
+% [PLACEHOLDER]
+
+% TODO: 2.4 本研究の位置付け
+% 既存手法は (a) 構造と内容を分離できない、(b) ブラックボックス、(c)
+% LLM judge 自体の bias、のいずれかの問題を持つ。本研究は PoR の
+% 2 軸 (S 軸: 構造完全性、C 軸: 命題カバレッジ) で分離評価し、
+% L_sem 分解により解釈可能性を担保する。
+\subsection{本研究の位置付け}
+% [PLACEHOLDER]

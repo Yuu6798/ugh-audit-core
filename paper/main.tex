@@ -1,0 +1,41 @@
+% =============================================================
+%  NLP2027 投稿論文 (和文)
+%  貢献: PoR/ΔE による LLM 出力評価フレームワークと HA48 における予備検証
+%
+%  TODO[NLP2027-template]:
+%    NLP2027 公式テンプレート公開後 (2026 年秋頃)、以下の
+%    documentclass / usepackage を公式版に置き換えること。
+%    現状は jsarticle ベースの portable な暫定構成。
+% =============================================================
+
+\documentclass[a4paper,11pt,twocolumn]{jsarticle}
+
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{xcolor}
+
+% 査読中匿名化: 著者情報は最終調整時に置換
+\title{LLM 応答の意味的整合性評価\\
+       --- PoR/$\Delta$E 指標と HA48 における予備検証 ---}
+\author{Anonymous Author \\ Anonymous Affiliation \\ \texttt{anonymous@example.com}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\input{sections/abstract}
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/method}
+\input{sections/experiments}
+\input{sections/discussion}
+\input{sections/conclusion}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,51 @@
+% ===== 3. 提案手法 (Method) =====
+% 役割:
+%   - PoR / ΔE / quality_score の定義を formal に提示
+%   - L_sem 分解の数式
+%   - Phase 8 advisory は末尾で「補足機構」として浅めに言及 (locked-in)
+%
+% 分量目安: 2-2.5 ページ (本論文の主要部分)
+%
+% TODO[(c)]: 既存コード (ugh_calculator.py, semantic_loss.py, mode_grv.py)
+%            の数式を LaTeX 化して転写する
+
+\section{提案手法}
+\label{sec:method}
+
+% TODO: 3.1 PoR (Point of Resonance) の定義
+% S 軸 (構造完全性) と C 軸 (命題カバレッジ) の 2 軸座標
+% 詳細: docs/formulas.md を参照
+\subsection{PoR: 2 軸座標による応答位置付け}
+\label{sec:method:por}
+
+% [PLACEHOLDER]
+% S = Σ w_fi * f_i / Σ w_fi  (i ∈ {1, 2, 3, 4})
+% C ∈ [0, 1]: 命題マッチによる被覆度
+
+% TODO: 3.2 ΔE 距離指標
+\subsection{$\Delta$E: 理想応答からの距離}
+\label{sec:method:delta_e}
+
+% [PLACEHOLDER]
+% ΔE = sqrt(w_S * (1-S)^2 + w_C * (1-C)^2) / sqrt(w_S + w_C)
+% quality_score = 5 - 4 * ΔE
+
+% TODO: 3.3 L_sem: 意味損失分解
+\subsection{$L_{\mathrm{sem}}$: 意味損失の分解}
+\label{sec:method:l_sem}
+
+% [PLACEHOLDER]
+% L_Q (演算子ロス), L_F (未知性ロス), L_G (因果構造損失) の 3 項分解
+% 詳細: docs/semantic_loss.md
+
+% TODO: 3.4 verdict と判定機構 (浅め)
+\subsection{応答判定機構}
+\label{sec:method:verdict}
+
+% [PLACEHOLDER]
+% verdict ∈ {accept, rewrite, regenerate, degraded}
+% 閾値: ΔE ≤ 0.10 → accept, ≤ 0.25 → rewrite, > 0.25 → regenerate
+%
+% Phase 8 advisory (locked-in: 浅めに言及):
+%   モード条件付き重力指標 (mode_conditioned_grv) による
+%   advisory downgrade を補助機構として導入。詳細は Future Work で議論。

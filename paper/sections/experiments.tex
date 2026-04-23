@@ -1,0 +1,58 @@
+% ===== 4. 実験 (Experiments) =====
+% 役割:
+%   - HA48 アノテーションデータでの予備検証
+%   - ベースライン比較 (G-Eval / BERTScore 最低 1 本)
+%   - 数値の正直さ: 公式論文と docs/validation.md の同期を保つ
+%
+% 分量目安: 2 ページ
+%
+% TODO: 並行 backlog 完了後に最終数値を埋める
+%   - HA48 → HA100 拡充版での再評価
+%   - 第二 annotator + IAA (Cohen's κ)
+%   - ベースライン (G-Eval) 比較
+
+\section{実験}
+\label{sec:experiments}
+
+% ----- 4.1 設定 -----
+\subsection{実験設定}
+\label{sec:exp:setup}
+
+% TODO: 4.1.1 データセット
+% HA48: 48 件の人手アノテーション付き LLM 応答
+% (拡充後は HA100 に差し替え)
+\subsubsection{データセット}
+% [PLACEHOLDER]
+% data/human_annotation_48/annotation_48_merged.csv
+
+% TODO: 4.1.2 比較手法 (ベースライン)
+\subsubsection{比較手法}
+% [PLACEHOLDER]
+% - BERTScore
+% - G-Eval (LLM-as-judge)
+% - 提案手法 (PoR/ΔE)
+
+% TODO: 4.1.3 評価指標
+\subsubsection{評価指標}
+% [PLACEHOLDER]
+% - 人手評価との相関 (Spearman / Pearson)
+% - verdict 分布と人手 verdict の一致率
+% - Cohen's κ (annotator 間)
+
+% ----- 4.2 結果 -----
+\subsection{結果}
+\label{sec:exp:results}
+
+% TODO: 表 1 - 主要結果 (相関係数)
+% docs/validation.md の current snapshot から転記
+
+% TODO: 表 2 - verdict 分布の混同行列
+
+% TODO: 図 1 - PoR 座標上での応答プロット
+
+% ----- 4.3 考察 -----
+\subsection{結果の解釈}
+\label{sec:exp:discussion}
+
+% TODO: L_sem 分解の効用 (どの損失項が verdict に効くか)
+% TODO: 既存指標との差分 (S/C 分離の意義)
