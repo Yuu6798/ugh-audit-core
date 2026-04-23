@@ -301,8 +301,21 @@ python analysis/calibrate_phase_e_thresholds.py
 2. `data/human_annotation_accept40/snapshots/` の中間成果物を共有せず、
    独立評価を確保 (anchoring 防止)
 3. 両者の `O / S / C` について Spearman ρ / Cohen's κ を算出
-4. 閾値: `Cohen's κ ≥ 0.60` (substantial agreement) を最低線、
-   `ρ(O_A, O_B) ≥ 0.70` を目標とする
+
+   **運用ツール**: `analysis/cohen_kappa.py`
+   ```bash
+   # 標準 3 列 (O/S/C) で weighted linear κ を一括測定
+   python analysis/cohen_kappa.py \
+       data/human_annotation_XXX/annot_A.csv \
+       data/human_annotation_XXX/annot_B.csv \
+       --cols O,S,C --weights linear --bootstrap 1000 \
+       --out-csv diff_ha100.csv
+   ```
+   出力: κ 点推定 + 95% bootstrap CI + percent agreement + confusion matrix。
+   `--out-csv` で per-item diff を書き出し、reconciliation (step 5) に使用。
+
+4. 閾値: `Cohen's κ ≥ 0.60` (substantial agreement, Landis-Koch 1977) を
+   最低線、`ρ(O_A, O_B) ≥ 0.70` を目標とする
 5. 不一致ケースは第三者仲裁 or 議論で解決し、合意値を reference として採用
 
 これにより `docs/validation.md` の「参照上限 ρ=0.8616」の信頼性区間が
