@@ -50,6 +50,11 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 **Limitations:** n=48 は小標本、**single annotator**、IRR 未測定。
 全指標 CI + Limitations 詳細: [`docs/validation.md`](docs/validation.md)。
 
+**ベースライン比較 (HA20 / HA48):** UGHer (ΔE) は BLEU / BERTScore / SBert
+cos 全てを点推定で上回る。HA20 で UGHer ρ=0.770 vs BERTScore 0.556、
+HA48 で UGHer ρ=0.482 vs BERTScore 0.331。詳細:
+[`docs/validation.md#ベースライン比較`](docs/validation.md#ベースライン比較)。
+
 ### Phase 8 verdict_advisory (HA63, n=63 校正、ship 済み)
 
 `mode_conditioned_grv` の `anchor_alignment` / `collapse_risk` を verdict 層に

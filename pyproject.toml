@@ -67,6 +67,12 @@ analysis = [
     "scipy>=1.10",
     "matplotlib>=3.7",
 ]
+baseline = [
+    # baseline comparison (analysis/baseline_comparison.py) 専用
+    # docs/validation.md §ベースライン比較 の数字を再現するために使う
+    "bert-score>=0.3.13",
+    "sacrebleu>=2.0",
+]
 experiment = [
     "anthropic>=0.40",
     "openai>=1.0",

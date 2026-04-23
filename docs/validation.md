@@ -172,11 +172,58 @@ Mitigation（部分的対応）:
 将来課題として **2nd annotator を入れた IRR 測定** を `docs/annotation_protocol.md`
 の `Future Work` に明示する。
 
-### ベースライン比較の不在（本リポジトリ上で）
+### ベースライン比較
 
-現行リポジトリには BERTScore / BLEURT / BLEU 等の既存手法との HA48/HA20
-上での直接比較は収録されていない。将来リリース (`docs/roadmap.md` — WIP)
-で HA48/HA20 上での直接測定を計画。
+本リポジトリで HA20 / HA48 上の (response, reference, human O) トリプルに
+対し、以下 3 baseline との直接比較を実施済み:
+
+- **BLEU (sacrebleu, char tokenization)** — 古典的 lexical overlap
+- **BERTScore F1 (xlm-roberta-base, lang='ja')** — 多言語 contextual embedding
+- **SBert cosine (paraphrase-multilingual-MiniLM-L12-v2)** — semantic 距離
+
+**向きの統一:** 全 metric を "高 similarity = 良回答" に揃え正相関を期待。
+UGHer は `1 - ΔE` で変換、O との Spearman ρ を比較。
+
+**HA20 (n=20):**
+
+| 指標 | ρ | 95% CI |
+|---|---|---|
+| BLEU | +0.492 | [+0.064, +0.768] |
+| BERTScore F1 | +0.556 | [+0.150, +0.801] |
+| SBert cos | +0.428 | [-0.018, +0.732] |
+| **UGHer (ΔE, pipeline)** | **+0.770** | **[+0.496, +0.904]** |
+
+**HA48 (n=48):**
+
+| 指標 | ρ | 95% CI |
+|---|---|---|
+| BLEU | +0.318 | [+0.037, +0.552] |
+| BERTScore F1 | +0.331 | [+0.052, +0.562] |
+| SBert cos | +0.261 | [-0.025, +0.507] |
+| **UGHer (ΔE, pipeline)** | **+0.482** | **[+0.229, +0.674]** |
+
+**観察:**
+
+- UGHer は両 dataset で**点推定最強**。HA20 では 2 番手 (BERTScore) から
+  Δρ=+0.21、HA48 では Δρ=+0.15 離して最上位
+- CI overlap は存在する (small sample size の影響) が、HA20 では UGHer 下端
+  0.496 が BERTScore の点推定 0.556 に届く近さまで押し上げる
+- SBert cos (UGHer の cascade 経路で使っているのと同じモデル) が最弱で、
+  **UGHer の強みは単なる semantic embedding ではなく命題カバレッジ + 構造
+  完全性の合成にある**ことを示唆
+- BLEURT は TF + 専用 checkpoint 依存で本 PR では scope 外。BERTScore が
+  contextual embedding baseline を代表する
+
+**再現:**
+
+```bash
+pip install bert-score sacrebleu
+python analysis/baseline_comparison.py
+```
+
+詳細: [`analysis/baseline_comparison.py`](../analysis/baseline_comparison.py),
+per-qid score CSV (`analysis/baseline_comparison_ha{48,20}.csv`),
+[`analysis/baseline_comparison_summary.md`](../analysis/baseline_comparison_summary.md)。
 
 ## ボトルネックと今後の改善
 
