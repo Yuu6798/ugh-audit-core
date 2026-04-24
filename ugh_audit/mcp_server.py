@@ -15,7 +15,6 @@ import json as _json
 import logging
 import os
 import sys
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, TYPE_CHECKING
@@ -23,89 +22,35 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 from mcp.server.fastmcp import FastMCP
 
 from . import dependencies as _deps
-from .metadata_generator import detect_missing_metadata
-from .soft_rescue import maybe_build_soft_rescue
 
 if TYPE_CHECKING:
     from .reference.golden_store import GoldenStore
     from .storage.audit_db import AuditDB
 
-# パイプライン A のインポート
+# パイプライン A の共有基盤 (server.py と同一ロジックを参照)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
-    Evidence,
-    GATE_FAIL,
-    META_SOURCE_FALLBACK,
-    META_SOURCE_INLINE,
     META_SOURCE_LLM,
-    META_SOURCE_NONE,
-    VALID_MODES,
-    VALID_VERDICTS,
-    calculate,
-    derive_mode,
-    derive_verdict,
-    reconstruct_hit_sources,
-    summarize_hit_sources,
 )
 
-# detector（検出層）— 利用可能な場合のみ使用
+from . import pipeline as _pipeline  # noqa: E402
+from .pipeline import SCHEMA_VERSION  # noqa: E402
+
+# 後方互換: test_pipeline_a が直接 import する
+from .pipeline import _gate_verdict_safe  # noqa: E402, F401
+from .pipeline import _primary_fail  # noqa: E402, F401
+from .pipeline import _primary_fail_safe  # noqa: E402, F401
+
+# detector (検出層) — 利用可能な場合のみ使用。
+# _HAS_DETECTOR / _detect は test の monkeypatch 互換のため module level に残す。
 try:
     from detector import detect as _detect  # noqa: E402
     _HAS_DETECTOR = True
 except ImportError:
     _HAS_DETECTOR = False
+    _detect = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
-
-# --- 定数 ---
-# 2.1.0: degraded_reason に detector_unavailable / detector_error:<type> を追加
-# (additive — 既存 consumer は新しい enum 値を unknown string として無視可能)
-SCHEMA_VERSION = "2.1.0"
-
-
-def _is_field_filled(value: object) -> bool:
-    """自動生成フィールドが有意な値を持つか判定する。
-
-    リスト型は空でないこと、それ以外は None でないことを要求する。
-    trap_type="" は「罠なし」の明示指定として有意。
-    """
-    if value is None:
-        return False
-    if isinstance(value, list):
-        return len(value) > 0
-    return True
-
-
-def _gate_verdict_safe(f1: float, f2: float, f3: float, f4: Optional[float]) -> str:
-    vals = [f1, f2, f3] + ([f4] if f4 is not None else [])
-    fail_max = max(vals) if vals else 0.0
-    if fail_max >= 1.0:
-        return GATE_FAIL
-    if f4 is None:
-        return "incomplete"
-    if fail_max == 0.0:
-        return "pass"
-    return "warn"
-
-
-def _primary_fail(f1: float, f2: float, f3: float, f4: float) -> str:
-    worst = max(f1, f2, f3, f4)
-    if worst == 0.0:
-        return "none"
-    labels: Dict[str, float] = {"f1": f1, "f2": f2, "f3": f3, "f4": f4}
-    return max(labels, key=labels.get)
-
-
-def _primary_fail_safe(
-    f1: float, f2: float, f3: float, f4: Optional[float],
-) -> str:
-    labels: Dict[str, float] = {"f1": f1, "f2": f2, "f3": f3}
-    if f4 is not None:
-        labels["f4"] = f4
-    worst = max(labels.values()) if labels else 0.0
-    if worst == 0.0:
-        return "none"
-    return max(labels, key=labels.get)
 
 
 # ---------------------------------------------------------------------------
@@ -297,341 +242,73 @@ def audit_answer(
 
     db = _get_db()
     golden = _get_golden()
-
     ref = reference or golden.find_reference(question)
-    errors: List[str] = []
-    metadata_source = META_SOURCE_NONE
 
-    # LLM meta 自動生成（opt-in）
-    # 部分的な inline メタデータが提供された場合は欠損フィールドのみ補完する
-    missing_fields = detect_missing_metadata(question_meta)
-    if missing_fields and auto_generate_meta and _HAS_DETECTOR:
-        try:
-            from experiments.meta_generator import generate_meta
-            generated = generate_meta(question)
-            # 空リストは unfilled、空文字列は filled（trap_type="" は「罠なし」の明示指定）
-            actually_filled = any(
-                fld in generated and _is_field_filled(generated[fld])
-                for fld in missing_fields
-            )
-            # core_propositions が欠損のまま残っていたら detect は無意味
-            if "core_propositions" in missing_fields and not generated.get(
-                "core_propositions"
-            ):
-                actually_filled = False
-            if question_meta:
-                merged = dict(question_meta)
-                for fld in missing_fields:
-                    if fld in generated and _is_field_filled(generated[fld]):
-                        merged[fld] = generated[fld]
-                question_meta = merged
-            else:
-                if actually_filled:
-                    question_meta = generated
-            if actually_filled:
-                if generated.get("_is_fallback"):
-                    errors.append("auto_generate_fallback")
-                    if "core_propositions" in missing_fields:
-                        # core_propositions がフォールバック由来 → degraded
-                        metadata_source = META_SOURCE_FALLBACK
-                    # else: optional フィールドのみ補完 → inline として扱う
-                else:
-                    metadata_source = META_SOURCE_LLM
-            else:
-                logger.warning(
-                    "auto meta generation returned empty values for %s", missing_fields
-                )
-                errors.append("auto_generate_empty")
-        except Exception:
-            logger.exception("auto meta generation failed")
-            errors.append("auto_generate_failed")
-    matched_id: Optional[str] = None
-
-    # detect → calculate パイプライン
-    detected = False
-    detector_failed = False
-    if question_meta and _HAS_DETECTOR:
-        if metadata_source not in (META_SOURCE_LLM, META_SOURCE_FALLBACK):
-            metadata_source = META_SOURCE_INLINE
-        question_id = question_meta.get("id", "unknown")
-        matched_id = question_id
-        if "question" not in question_meta:
-            question_meta = {**question_meta, "question": question}
-        try:
-            evidence = _detect(question_id, response, question_meta)
-            detected = True
-        except Exception as exc:
-            logger.exception("detector raised for question_id=%s", question_id)
-            evidence = Evidence(question_id=question_id, f4_premise=None)
-            errors.append(f"detector_error:{type(exc).__name__}")
-            detector_failed = True
-    else:
-        question_id = (
-            question_meta.get("id", "unknown") if question_meta else "unknown"
-        )
-        evidence = Evidence(question_id=question_id, f4_premise=None)
-        if not question_meta:
-            errors.append("question_meta_missing")
-        elif not _HAS_DETECTOR:
-            errors.append("detector_unavailable")
-
-    state = calculate(evidence)
-
-    # computed_components / missing_components
-    computed: List[str] = ["S"]
-    missing: List[str] = []
-
-    if detected:
-        computed.extend(["f1", "f2", "f3"])
-        if evidence.f4_premise is not None:
-            computed.append("f4")
-        else:
-            missing.append("f4")
-            errors.append("f4_trap_type_missing")
-    else:
-        missing.extend(["f1", "f2", "f3", "f4"])
-        # detector_failed 時は detector_error:<type> で理由が明示されている
-        if not detector_failed:
-            errors.append("detection_skipped")
-
-    if state.C is not None:
-        computed.append("C")
-    else:
-        missing.append("C")
-        # detector_failed 時は core_propositions は実際に提供されていた
-        if "question_meta_missing" not in errors and not detector_failed:
-            errors.append("core_propositions_missing")
-
-    # verdict / mode (集約関数で導出)
-    verdict = derive_verdict(state)
-    mode = derive_mode(state, metadata_source=metadata_source)
-    if mode in ("computed", "computed_ai_draft"):
-        computed.extend(["delta_e", "quality_score"])
-    else:
-        missing.extend(["delta_e", "quality_score"])
-
-    # フォールバック meta は degraded に強制（analytics 汚染を防止）
-    # computed_components/missing_components も degraded 契約に合わせる
-    if metadata_source == META_SOURCE_FALLBACK:
-        mode = "degraded"
-        verdict = "degraded"
-        for fld in ("C", "delta_e", "quality_score"):
-            if fld in computed:
-                computed.remove(fld)
-            if fld not in missing:
-                missing.append(fld)
-
-    # fail-closed: verdict/mode が想定値であることを保証
-    assert verdict in VALID_VERDICTS, f"invalid verdict: {verdict}"
-    assert mode in VALID_MODES, f"invalid mode: {mode}"
-
-    hit_rate: Optional[str] = None
-    if evidence.propositions_total > 0:
-        hit_rate = f"{evidence.propositions_hit}/{evidence.propositions_total}"
-
-    # soft rescue (AI 草案メタデータで C=0 のとき部分ヒットを回収)
-    raw_confidence = (question_meta or {}).get("metadata_confidence")
-    try:
-        metadata_confidence = float(raw_confidence) if raw_confidence is not None else None
-    except (TypeError, ValueError):
-        metadata_confidence = None
-    rescue = maybe_build_soft_rescue(
+    result = _pipeline.run_audit(
         question=question,
         response=response,
+        reference=ref,
         question_meta=question_meta,
-        mode=mode,
-        metadata_confidence=metadata_confidence,
-        S=state.S,
-        C=state.C,
-        f2=evidence.f2_unknown,
-        f3=evidence.f3_operator,
+        session_id=session_id,
+        auto_generate_meta=auto_generate_meta,
+        detect_fn=_detect if _HAS_DETECTOR else None,
     )
 
-    gate_v = _gate_verdict_safe(
-        evidence.f1_anchor, evidence.f2_unknown,
-        evidence.f3_operator, evidence.f4_premise,
-    )
-    is_reliable = (
-        mode in ("computed", "computed_ai_draft")
-        and verdict in {"accept", "rewrite", "regenerate"}
-        and gate_v != GATE_FAIL
-        and metadata_source != META_SOURCE_FALLBACK
-    )
-
-    gate = {
-        "f1": evidence.f1_anchor,
-        "f2": evidence.f2_unknown,
-        "f3": evidence.f3_operator,
-        "f4": evidence.f4_premise,
-        "gate_verdict": gate_v,
-        "primary_fail": _primary_fail_safe(
-            evidence.f1_anchor, evidence.f2_unknown,
-            evidence.f3_operator, evidence.f4_premise,
-        ),
-    }
-
-    # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
+    # degraded 時は DB に保存しない (未計算ログでベースラインを汚染させない)
     saved_id: Optional[int] = None
-    if mode in ("computed", "computed_ai_draft"):
+    if result["mode"] in ("computed", "computed_ai_draft"):
+        gate = result["structural_gate"]
         saved_id = db.save(
-            session_id=session_id or str(uuid.uuid4()),
-            question=question,
-            response=response,
-            reference=ref,
-            S=state.S,
-            C=state.C,
-            delta_e=state.delta_e,
-            quality_score=state.quality_score,
-            verdict=verdict,
-            f1=evidence.f1_anchor,
-            f2=evidence.f2_unknown,
-            f3=evidence.f3_operator,
-            f4=evidence.f4_premise if evidence.f4_premise is not None else 0.0,
-            hit_rate=hit_rate or "",
-            metadata_source=metadata_source,
+            session_id=result["_session_id"],
+            question=result["_question"],
+            response=result["_response"],
+            reference=result["_reference"],
+            S=result["S"],
+            C=result["C"],
+            delta_e=result["delta_e"],
+            quality_score=result["quality_score"],
+            verdict=result["verdict"],
+            f1=gate["f1"],
+            f2=gate["f2"],
+            f3=gate["f3"],
+            f4=gate["f4"] if gate["f4"] is not None else 0.0,
+            hit_rate=result["hit_rate"] or "",
+            metadata_source=result["metadata_source"],
             generated_meta=_json.dumps(
-                question_meta or {}, ensure_ascii=False,
-            ) if metadata_source == META_SOURCE_LLM else "",
+                result.get("_question_meta") or {}, ensure_ascii=False,
+            ) if result["metadata_source"] == META_SOURCE_LLM else "",
             hit_sources=_json.dumps(
-                evidence.hit_sources if hasattr(evidence, "hit_sources") else {},
-                ensure_ascii=False,
+                result.get("_hit_sources", {}), ensure_ascii=False,
             ),
             retry_of=retry_of,
         )
 
-    degraded_reason = errors if mode == "degraded" else []
-
-    # grv 計算 (SBert 依存、未導入時は None)
-    grv_result = None
-    grv_output: Optional[Dict] = None
-    try:
-        from grv_calculator import compute_grv
-        grv_result = compute_grv(
-            question=question,
-            response_text=response,
-            question_meta=question_meta,
-            metadata_source=metadata_source,
-            c_normalized=state.C,
-        )
-        if grv_result is not None:
-            grv_output = {
-                "grv": grv_result.grv,
-                "grv_tag_provisional": grv_result.grv_tag,
-                "grv_components": {
-                    "drift": grv_result.drift,
-                    "dispersion": grv_result.dispersion,
-                    "collapse_v2": grv_result.collapse_v2,
-                },
-                "cover_soft": grv_result.cover_soft,
-                "wash_index": grv_result.wash_index,
-                "wash_index_c": grv_result.wash_index_c,
-                "grv_meta": {
-                    "n_sentences": grv_result.n_sentences,
-                    "n_propositions": grv_result.n_propositions,
-                    "collapse_v2_applicable": grv_result.collapse_v2_applicable,
-                    "meta_source": grv_result.meta_source,
-                    "ref_confidence": grv_result.ref_confidence,
-                    "embedding_backend": "paraphrase-multilingual-MiniLM-L12-v2",
-                    "grv_version": "v1.4",
-                    "weights": grv_result.weights,
-                },
-                "grv_debug": {
-                    "prop_affinity_per_sentence": grv_result.prop_affinity_per_sentence,
-                    "cover_soft_per_proposition": grv_result.cover_soft_per_proposition,
-                    "drift_raw_cosine": grv_result.drift_raw_cosine,
-                },
-            }
-    except Exception:  # grv は補助計測器 — 失敗時は null フォールバック
-        pass
-
-    # response_mode_signal (deterministic, non-binding — fails silently)
-    # Lookup priority: canonical reviewed > inline explicit > not_available
-    # _ma_out is populated from the resolved source (same as signal scoring)
-    _ms_output: Optional[Dict] = None
-    _ma_out: Optional[Dict] = None
-    try:
-        from mode_signal import run_mode_signal
-        _ms_output, _ma_out = run_mode_signal(
-            response_text=response,
-            question_id=question_id,
-            question_meta=question_meta,
-            evidence_primary=evidence.mode_affordance_primary,
-            evidence_secondary=evidence.mode_affordance_secondary,
-            evidence_closure=evidence.mode_affordance_closure,
-            evidence_action_required=evidence.mode_affordance_action_required,
-        )
-    except Exception:
-        _ms_output = None
-
-    # mode_conditioned_grv (grv + mode_affordance → 4成分解釈ベクトル)
-    mcg_output: Optional[Dict] = None
-    mcg_obj = None
-    if grv_result is not None and _ma_out and _ma_out.get("primary"):
-        try:
-            from mode_grv import compute_mode_conditioned_grv
-            mcg_obj = compute_mode_conditioned_grv(
-                grv_result=grv_result,
-                response_text=response,
-                mode_affordance_primary=_ma_out["primary"],
-                action_required=_ma_out.get("action_required", False),
-            )
-            if mcg_obj is not None:
-                mcg_output = {
-                    "anchor_alignment": mcg_obj.anchor_alignment,
-                    "balance": mcg_obj.balance,
-                    "boilerplate_risk": mcg_obj.boilerplate_risk,
-                    "collapse_risk": mcg_obj.collapse_risk,
-                    "mode": mcg_obj.mode,
-                    "focus_components": mcg_obj.focus_components,
-                    "grv_raw": mcg_obj.grv_raw,
-                    "version": mcg_obj.version,
-                }
-        except Exception:
-            mcg_output = None
-            mcg_obj = None
-
-    # Phase E verdict advisory (downgrade-only, accept -> rewrite)
-    # 設計: docs/phase_e_verdict_integration.md
-    try:
-        from mode_grv import derive_verdict_advisory
-        verdict_advisory, advisory_flags = derive_verdict_advisory(verdict, mcg_obj)
-    except Exception:
-        verdict_advisory = verdict
-        advisory_flags = []
-
     return AuditOutput(
-        schema_version=SCHEMA_VERSION,
-        S=state.S,
-        C=None if metadata_source == META_SOURCE_FALLBACK else state.C,
-        delta_e=None if metadata_source == META_SOURCE_FALLBACK else state.delta_e,
-        quality_score=(
-            None if metadata_source == META_SOURCE_FALLBACK else state.quality_score
-        ),
-        verdict=verdict,
-        hit_rate=hit_rate,
-        structural_gate=gate,
+        schema_version=result["schema_version"],
+        S=result["S"],
+        C=result["C"],
+        delta_e=result["delta_e"],
+        quality_score=result["quality_score"],
+        verdict=result["verdict"],
+        hit_rate=result["hit_rate"],
+        structural_gate=result["structural_gate"],
         saved_id=saved_id,
-        mode=mode,
-        is_reliable=is_reliable,
-        matched_id=matched_id,
-        metadata_source=metadata_source,
-        verdict_advisory=verdict_advisory,
-        computed_components=sorted(computed),
-        missing_components=sorted(missing),
-        errors=errors,
-        degraded_reason=degraded_reason,
-        mode_affordance=_ma_out,
-        soft_rescue=rescue,
-        grv=grv_output,
-        response_mode_signal=_ms_output,
-        mode_conditioned_grv=mcg_output,
-        advisory_flags=list(advisory_flags),
-        hit_sources=summarize_hit_sources(
-            # legacy evidence (hit_sources 属性欠落) も hit_rate と整合する
-            # mapping に reconstruct する (Codex review P2)
-            reconstruct_hit_sources(evidence),
-            evidence.propositions_total,
-        ),
+        mode=result["mode"],
+        is_reliable=result["is_reliable"],
+        matched_id=result["matched_id"],
+        metadata_source=result["metadata_source"],
+        verdict_advisory=result["verdict_advisory"],
+        computed_components=result["computed_components"],
+        missing_components=result["missing_components"],
+        errors=result["errors"],
+        degraded_reason=result["degraded_reason"],
+        mode_affordance=result["mode_affordance"],
+        soft_rescue=result.get("soft_rescue"),
+        grv=result.get("grv"),
+        response_mode_signal=result.get("response_mode_signal"),
+        mode_conditioned_grv=result.get("mode_conditioned_grv"),
+        advisory_flags=list(result.get("advisory_flags", [])),
+        hit_sources=result.get("hit_sources"),
     )
 
 
