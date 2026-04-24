@@ -221,7 +221,7 @@ from ugh_audit import (
 )
 ```
 
-プログラムから監査を行う場合は REST `POST /audit` または MCP ツール
+プログラムから監査を行う場合は REST `POST /api/audit` または MCP ツール
 `audit_answer` を利用する (詳細は [`docs/server_api.md`](docs/server_api.md))。
 
 > **Deprecated (v0.4, removal v0.5)**: `AuditCollector` / `SessionCollector` は

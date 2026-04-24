@@ -379,7 +379,7 @@ from ugh_audit import (
 )
 ```
 
-プログラムから監査を実行する場合は REST `POST /audit` または MCP ツール
+プログラムから監査を実行する場合は REST `POST /api/audit` または MCP ツール
 `audit_answer` を利用する (`question_meta` を渡せる唯一の経路)。詳細:
 [`docs/server_api.md`](docs/server_api.md)。
 

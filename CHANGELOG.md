@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`AuditCollector` / `SessionCollector`** (`ugh_audit.collector`) — 現行パイプラインでは
   `question_meta` を受け取らないため常に `verdict="degraded"` を返し、実監査に到達
   できない。import 時に `DeprecationWarning` が発生するようになった。**v0.5 で削除予定**。
-  - 移行先: REST `POST /audit` (`ugh_audit.server:app`) または MCP ツール
+  - 移行先: REST `POST /api/audit` (`ugh_audit.server:app`) または MCP ツール
     `audit_answer` (`ugh_audit.mcp_server`) — いずれも `question_meta` を受け取り
     実監査を実行する。詳細は [`docs/server_api.md`](docs/server_api.md)。
 
