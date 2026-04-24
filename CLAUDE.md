@@ -372,14 +372,22 @@ python examples/basic_audit.py
 ```python
 from ugh_audit import (
     AuditDB,          # SQLite保存
-    AuditCollector,   # パイプライン (audit + save)
-    SessionCollector, # セッション単位収集
     GoldenStore,      # リファレンス管理
     GoldenEntry,      # リファレンスエントリ
     generate_text_report,  # テキストレポート
     generate_csv,     # CSVエクスポート
 )
 ```
+
+プログラムから監査を実行する場合は REST `POST /audit` または MCP ツール
+`audit_answer` を利用する (`question_meta` を渡せる唯一の経路)。詳細:
+[`docs/server_api.md`](docs/server_api.md)。
+
+### Deprecated (removal v0.5)
+
+- `AuditCollector` / `SessionCollector` — `question_meta` を受け取らないため常に
+  `verdict="degraded"` を返す。import 時に `DeprecationWarning` 発火。
+  programmatic API が必要な場合は REST/MCP を利用する。
 
 ## Git Workflow
 

@@ -215,11 +215,18 @@ examples/ tests/ docs/ analysis/
 
 ```python
 from ugh_audit import (
-    AuditDB, AuditCollector, SessionCollector,
+    AuditDB,
     GoldenStore, GoldenEntry,
     generate_text_report, generate_csv,
 )
 ```
+
+プログラムから監査を行う場合は REST `POST /audit` または MCP ツール
+`audit_answer` を利用する (詳細は [`docs/server_api.md`](docs/server_api.md))。
+
+> **Deprecated (v0.4, removal v0.5)**: `AuditCollector` / `SessionCollector` は
+> `question_meta` を受け取らないため常に `verdict="degraded"` を返す欠陥 API。
+> import すると `DeprecationWarning` が発生する。v0.5 で削除予定。
 
 ---
 

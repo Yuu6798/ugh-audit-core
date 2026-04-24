@@ -2,25 +2,21 @@
 ugh_audit/collector/audit_collector.py
 AuditCollector — AI回答ログの収集・監査パイプライン（パイプライン A 対応）
 
-使い方:
-    collector = AuditCollector()
+**DEPRECATED (v0.4, removal scheduled v0.5)**:
+本モジュールは ``question_meta`` を受け取らない古いシグネチャで作られており、
+現行パイプラインでは必然的に ``verdict="degraded"`` を返し実監査に到達できない。
+programmatic API が必要な場合は REST/MCP 経由を利用すること。
 
-    # 1回の Q&A を監査して自動保存
-    result = collector.collect(
-        question="AIは意味を持てるか？",
-        response="AIは意味と共振する動的プロセスです。",
-    )
+- REST: ``POST /audit``  (``ugh_audit.server:app``)
+- MCP:  ``audit_answer`` tool (``ugh_audit.mcp_server``)
 
-    # セッション単位で複数ターンを記録
-    with collector.session("session-abc") as s:
-        s.collect(question=..., response=...)
-        s.collect(question=..., response=...)
-    summary = s.summary()
+マイグレーション詳細: docs/server_api.md
 """
 from __future__ import annotations
 
 import sys
 import uuid
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, List, Optional
@@ -45,9 +41,21 @@ def _verdict(delta_e: float) -> str:
     return "regenerate"
 
 
+_DEPRECATION_MESSAGE = (
+    "AuditCollector / SessionCollector are deprecated and will be removed in v0.5. "
+    "They never receive question_meta and therefore always return verdict='degraded'. "
+    "Use the REST endpoint POST /audit (ugh_audit.server) or the MCP tool "
+    "audit_answer (ugh_audit.mcp_server) instead. See docs/server_api.md."
+)
+
+
 class AuditCollector:
     """
     Q&A ペアを受け取り、パイプライン A でスコアリング → DB保存 を一括で行うパイプライン。
+
+    .. deprecated:: 0.4
+        Use ``ugh_audit.server`` REST API or ``ugh_audit.mcp_server`` MCP tool
+        instead. Scheduled for removal in v0.5.
     """
 
     def __init__(
@@ -55,6 +63,7 @@ class AuditCollector:
         db: Optional[AuditDB] = None,
         golden: Optional[GoldenStore] = None,
     ):
+        warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
         self._db = db or AuditDB()
         self._golden = golden or GoldenStore()
 
@@ -151,9 +160,14 @@ class AuditCollector:
 
 
 class SessionCollector:
-    """session() コンテキスト内で使うセッション単位のコレクター"""
+    """session() コンテキスト内で使うセッション単位のコレクター
+
+    .. deprecated:: 0.4
+        See :class:`AuditCollector` for migration path.
+    """
 
     def __init__(self, session_id: str, collector: AuditCollector):
+        warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
         self.session_id = session_id
         self._collector = collector
         self._results: List[dict] = []
