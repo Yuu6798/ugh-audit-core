@@ -221,7 +221,7 @@ class TestAPIOutput:
         assert data["hit_rate"] is None
         assert isinstance(data["structural_gate"], dict)
         assert data["saved_id"] is None
-        assert data["schema_version"] == "2.0.0"
+        assert data["schema_version"] == "2.1.0"
 
     def test_structural_gate_fields(self, client):
         resp = client.post("/api/audit", json={

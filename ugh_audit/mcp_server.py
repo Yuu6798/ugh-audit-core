@@ -58,7 +58,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # --- 定数 ---
-SCHEMA_VERSION = "2.0.0"
+# 2.1.0: degraded_reason に detector_unavailable / detector_error:<type> を追加
+# (additive — 既存 consumer は新しい enum 値を unknown string として無視可能)
+SCHEMA_VERSION = "2.1.0"
 
 
 def _is_field_filled(value: object) -> bool:
@@ -205,7 +207,7 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         return AuditOutput(
-            schema_version="2.0.0", S=0.0, C=None, delta_e=None,
+            schema_version=SCHEMA_VERSION, S=0.0, C=None, delta_e=None,
             quality_score=None, verdict="degraded", hit_rate=None,
             structural_gate={}, saved_id=None, mode="degraded",
             is_reliable=False, matched_id=None, metadata_source="none",
@@ -215,7 +217,7 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         )
     except Exception as e:
         return AuditOutput(
-            schema_version="2.0.0", S=0.0, C=None, delta_e=None,
+            schema_version=SCHEMA_VERSION, S=0.0, C=None, delta_e=None,
             quality_score=None, verdict="degraded", hit_rate=None,
             structural_gate={}, saved_id=None, mode="degraded",
             is_reliable=False, matched_id=None, metadata_source="none",
@@ -347,6 +349,7 @@ def audit_answer(
 
     # detect → calculate パイプライン
     detected = False
+    detector_failed = False
     if question_meta and _HAS_DETECTOR:
         if metadata_source not in (META_SOURCE_LLM, META_SOURCE_FALLBACK):
             metadata_source = META_SOURCE_INLINE
@@ -354,8 +357,14 @@ def audit_answer(
         matched_id = question_id
         if "question" not in question_meta:
             question_meta = {**question_meta, "question": question}
-        evidence = _detect(question_id, response, question_meta)
-        detected = True
+        try:
+            evidence = _detect(question_id, response, question_meta)
+            detected = True
+        except Exception as exc:
+            logger.exception("detector raised for question_id=%s", question_id)
+            evidence = Evidence(question_id=question_id, f4_premise=None)
+            errors.append(f"detector_error:{type(exc).__name__}")
+            detector_failed = True
     else:
         question_id = (
             question_meta.get("id", "unknown") if question_meta else "unknown"
@@ -363,6 +372,8 @@ def audit_answer(
         evidence = Evidence(question_id=question_id, f4_premise=None)
         if not question_meta:
             errors.append("question_meta_missing")
+        elif not _HAS_DETECTOR:
+            errors.append("detector_unavailable")
 
     state = calculate(evidence)
 
@@ -379,13 +390,16 @@ def audit_answer(
             errors.append("f4_trap_type_missing")
     else:
         missing.extend(["f1", "f2", "f3", "f4"])
-        errors.append("detection_skipped")
+        # detector_failed 時は detector_error:<type> で理由が明示されている
+        if not detector_failed:
+            errors.append("detection_skipped")
 
     if state.C is not None:
         computed.append("C")
     else:
         missing.append("C")
-        if "question_meta_missing" not in errors:
+        # detector_failed 時は core_propositions は実際に提供されていた
+        if "question_meta_missing" not in errors and not detector_failed:
             errors.append("core_propositions_missing")
 
     # verdict / mode (集約関数で導出)

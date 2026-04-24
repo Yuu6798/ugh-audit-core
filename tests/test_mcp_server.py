@@ -82,7 +82,7 @@ def test_audit_answer_degraded_without_question_meta():
     assert structured["mode"] == "degraded"
     assert structured["structural_gate"]["f4"] is None
     assert structured["saved_id"] is None
-    assert structured["schema_version"] == "2.0.0"
+    assert structured["schema_version"] == "2.1.0"
 
     assert len(content) >= 1
 
