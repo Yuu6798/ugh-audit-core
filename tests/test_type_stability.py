@@ -141,13 +141,13 @@ class TestTypeStability:
         assert "quality_score" in missing
 
     def test_schema_version_present(self, client):
-        """5. 全レスポンスに schema_version=2.0.0 が含まれる"""
+        """5. 全レスポンスに schema_version=2.1.0 が含まれる"""
         resp = client.post("/api/audit", json={
             "question": "テスト",
             "response": "テスト",
         })
         data = resp.json()
-        assert data["schema_version"] == "2.0.0"
+        assert data["schema_version"] == "2.1.0"
 
     def test_degraded_never_returns_accept(self, client):
         """6. verdict=degraded のとき accept でないことを確認"""

@@ -400,3 +400,93 @@ def test_hit_sources_core_only_claim_matches_tfidf_count(client):
     tfidf_count = sum(1 for v in hs["per_proposition"].values() if v == "tfidf")
     assert hs["core_hit"] == tfidf_count
     assert hs["core_only_hit_rate"].startswith(f"{tfidf_count}/")
+
+
+# ---------------------------------------------------------------------------
+# degraded_reason enrichment (schema_version 2.1.0)
+# ---------------------------------------------------------------------------
+
+
+def test_degraded_reason_contains_question_meta_missing(client):
+    """question_meta 未提供時は degraded_reason=['question_meta_missing', ...]"""
+    resp = client.post("/api/audit", json={
+        "question": "AIは意味を持てるか？",
+        "response": "AIは意味を処理できます。",
+    })
+    data = resp.json()
+    assert data["verdict"] == "degraded"
+    assert "question_meta_missing" in data["degraded_reason"]
+
+
+def test_degraded_reason_empty_when_not_degraded(client):
+    """非 degraded 時は degraded_reason=[] (空リスト)"""
+    resp = client.post("/api/audit", json={
+        "question": "PoRとは何か？",
+        "response": "PoRは共鳴度である。意味との共振プロセスでもある。",
+        "question_meta": {
+            "question": "PoRとは何か？",
+            "core_propositions": ["PoRは共鳴度", "PoRは共振プロセス"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+        },
+    })
+    data = resp.json()
+    assert data["verdict"] != "degraded"
+    assert data["degraded_reason"] == []
+
+
+def test_degraded_reason_detector_unavailable(client, monkeypatch):
+    """detector モジュールが import 失敗時、degraded_reason に 'detector_unavailable' を含む"""
+    from ugh_audit import server as server_module
+
+    monkeypatch.setattr(server_module, "_HAS_DETECTOR", False)
+    resp = client.post("/api/audit", json={
+        "question": "PoRとは何か？",
+        "response": "PoRは共鳴度である。",
+        "question_meta": {
+            "question": "PoRとは何か？",
+            "core_propositions": ["PoRは共鳴度"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+        },
+    })
+    data = resp.json()
+    assert data["verdict"] == "degraded"
+    assert "detector_unavailable" in data["degraded_reason"]
+
+
+def test_degraded_reason_detector_error(client, monkeypatch):
+    """detector が例外を送出時、degraded_reason に 'detector_error:<type>' を含む"""
+    from ugh_audit import server as server_module
+
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError("synthetic detector failure")
+
+    monkeypatch.setattr(server_module, "_detect", _raise)
+    resp = client.post("/api/audit", json={
+        "question": "PoRとは何か？",
+        "response": "PoRは共鳴度である。",
+        "question_meta": {
+            "question": "PoRとは何か？",
+            "core_propositions": ["PoRは共鳴度"],
+            "disqualifying_shortcuts": [],
+            "acceptable_variants": [],
+            "trap_type": "",
+        },
+    })
+    data = resp.json()
+    # detector が落ちても pipeline は degraded で継続
+    assert data["verdict"] == "degraded"
+    assert any(r.startswith("detector_error:") for r in data["degraded_reason"])
+    assert "detector_error:RuntimeError" in data["degraded_reason"]
+
+
+def test_schema_version_2_1_0(client):
+    """schema_version が 2.1.0 に bump されている"""
+    resp = client.post("/api/audit", json={
+        "question": "テスト",
+        "response": "テスト回答",
+    })
+    assert resp.json()["schema_version"] == "2.1.0"
