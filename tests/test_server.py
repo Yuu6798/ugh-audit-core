@@ -481,6 +481,11 @@ def test_degraded_reason_detector_error(client, monkeypatch):
     assert data["verdict"] == "degraded"
     assert any(r.startswith("detector_error:") for r in data["degraded_reason"])
     assert "detector_error:RuntimeError" in data["degraded_reason"]
+    # detector fault と metadata 問題を区別するため、以下の誤った reason が
+    # 混入してはならない (core_propositions は実際に提供されており、
+    # detection は skip ではなく例外で失敗しただけ)
+    assert "core_propositions_missing" not in data["degraded_reason"]
+    assert "detection_skipped" not in data["degraded_reason"]
 
 
 def test_schema_version_2_1_0(client):

@@ -178,6 +178,7 @@ def _run_pipeline(
             errors.append("auto_generate_failed")
 
     detected = False
+    detector_failed = False
     if question_meta and _HAS_DETECTOR:
         if metadata_source not in (META_SOURCE_LLM, META_SOURCE_FALLBACK):
             metadata_source = META_SOURCE_INLINE
@@ -192,6 +193,7 @@ def _run_pipeline(
             logger.exception("detector raised for question_id=%s", question_id)
             evidence = Evidence(question_id=question_id, f4_premise=None)
             errors.append(f"detector_error:{type(exc).__name__}")
+            detector_failed = True
     else:
         question_id = (
             question_meta.get("id", "unknown") if question_meta else "unknown"
@@ -221,13 +223,20 @@ def _run_pipeline(
     else:
         # detect() 未実行: f1-f4 は全て未計算（デフォルト値であり検出結果ではない）
         missing.extend(["f1", "f2", "f3", "f4"])
-        errors.append("detection_skipped")
+        # detector_failed 時は detector_error:<type> がすでに degraded_reason に
+        # 載っているため、detection_skipped は付けない (detection を試みた
+        # ものの例外で落ちた状況を「未実行」と表現するのは routing を誤らせる)
+        if not detector_failed:
+            errors.append("detection_skipped")
 
     if state.C is not None:
         computed.append("C")
     else:
         missing.append("C")
-        if "question_meta_missing" not in errors:
+        # detector_failed 時は core_propositions は実際には提供されていた
+        # ため、core_propositions_missing は誤った理由になる (detector fault
+        # と metadata 問題を区別するための routing を壊さない)
+        if "question_meta_missing" not in errors and not detector_failed:
             errors.append("core_propositions_missing")
 
     # verdict / mode (集約関数で導出)
