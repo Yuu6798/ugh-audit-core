@@ -103,8 +103,9 @@ downgrade 方向で反映。primary verdict は不変、`accept → rewrite` の
 
 手動キュレーション済みメタデータがない自由質問に対し、`auto_generate_meta=true` で
 LLM (Claude API) が `question_meta` を動的生成する (opt-in)。`metadata_source="llm_generated"`
-で区別される。検証結果 (n=102, 副次評価): degraded 排除 100%、verdict 一致率 61.8%、
-ΔE 相関 ρ=0.378。詳細: [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md),
+で区別され、`state.C` が埋まれば `mode="computed_ai_draft"` (vs キュレーション済みの
+`computed`) として扱う。検証結果 (n=102, 副次評価): degraded 排除 100%、
+verdict 一致率 61.8%、ΔE 相関 ρ=0.378。詳細: [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md),
 [`docs/orchestration_design.md`](docs/orchestration_design.md)。
 
 ### 検出層の4指標 + 命題マッチング + 修復 opcode
