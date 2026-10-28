@@ -181,12 +181,12 @@
     },
     "regression/pr-head-source.json": {
       "origin": "PR source-hardening regression record",
-      "sha256": "f3337a8a3253c0007c883bab853fc13fd1961978ef85c4a394a04013e3f3e79b",
-      "bytes": 14132
+      "sha256": "a8f13cd93162676a590fc88a2f32769fd39444b95353a4f5b856234ee86f8bcb",
+      "bytes": 14169
     },
     "regression/pr-head.xml": {
       "origin": "PR source-hardening regression record",
-      "sha256": "f4e8c9a82c3efd513eda00ae36472ce62b4ff9e653b9eb6ae5a45e928b754cf0",
+      "sha256": "e5da5607214cc752c96676b23c9dd48eaba143f35eefa3c5f7c53b5b19f8f198",
       "bytes": 133592
     }
   },

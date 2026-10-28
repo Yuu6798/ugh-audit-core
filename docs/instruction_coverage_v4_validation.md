@@ -66,5 +66,6 @@ python analysis/instruction_coverage_v4/verify_artifacts.py
 固定revisionと重みSHA256を検証して実推論する。モデル取得はpytest前に行い、
 pytest中は外部DNSを遮断・HF offlineに設定し、スキップ0を要求する。
 APIへの接続は回帰に使わず、保存モデル応答と明示的なテスト用判定器を使う。
+FastMCPを使う現行実装の依存は `mcp>=1.0,<2`。MCP 2系への移行は含めない。
 GitHub ActionsのJUnitをartifactに保存する。mainへのマージは既存Railway自動デプロイに
 つながるため、このPR準備では実行しない。

@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      HF_HOME: ${{ runner.temp }}/ugh-hf-cache
+      HF_HOME: ${{ github.workspace }}/.cache/ugh-hf-cache
       HF_HUB_DISABLE_PROGRESS_BARS: "1"
       TOKENIZERS_PARALLELISM: "false"
       OMP_NUM_THREADS: "2"

@@ -1,5 +1,5 @@
 {
-  "recorded_at_utc": "2026-10-28T16:57:25.229239+00:00",
+  "recorded_at_utc": "2026-10-28T17:01:54.369069+00:00",
   "evaluation_source_commit": "3e0a2897ccd1dd2e16b90032d0cec70c299251a2",
   "model_evaluation_repeated": false,
   "kind": "post-evaluation source hardening regression",
@@ -46,7 +46,7 @@
     "opcodes/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "opcodes/metapatch_opcodes.yaml": "ea7c99d61fd6a3628ae4c7c71e090ff5a628b38c3bd04c2230dc7cb1ce8c8fa2",
     "opcodes/runtime_repair_opcodes.yaml": "d48045114551d498b8d6b8e6ca6fd5a04fbcd0fc9f35b473cda1d537bc9fed64",
-    "pyproject.toml": "ef5320576fd598d24a596f06289ddf0ce2b554495d12416a3b324495c9d4b8e2",
+    "pyproject.toml": "dd5d8cf08c7371d7941acf85d81e5c825ed9f5dfb54fb4aa8006e43fb79471be",
     "registry/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "registry/operator_catalog.yaml": "2d591af64a96611cef72342dcb8cc62961eae17e7467dc655f8018544b501e65",
     "registry/premise_frames.yaml": "40d4be98d8919adac9d03dab9051be39c0b7fddf64d196a4bc237ca94418dd8b",
@@ -140,5 +140,6 @@
     "errors": 0,
     "skipped": 0
   },
-  "warnings": 6
+  "warnings": 6,
+  "tested_dependency_mcp": "1.30.0"
 }
