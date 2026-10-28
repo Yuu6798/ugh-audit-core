@@ -111,6 +111,10 @@ def main() -> None:
                 f4=_as_float(evidence.get("f4_premise")),
                 hit_rate=hit_rate,
                 metadata_source="inline",
+                semantic_matching=result["semantic_matching"],
+                requirement_verdict=result["requirement_verdict"],
+                requires_review=result["requires_review"],
+                legacy_metrics=result["legacy_metrics"],
             )
 
         question_preview = str(question_meta.get("question", ""))[:30]

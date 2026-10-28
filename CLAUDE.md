@@ -2,8 +2,10 @@
 
 ## Project Overview
 
-UGH Audit Core — AI回答の意味論的監査基盤。
-UGHer（無意識的重力仮説）の指標 **PoR / ΔE / grv** でAI回答の意味的誠実性を定量評価する。
+UGH Audit Core — 明示された業務指示・制約の記載充足を監査する。
+現行schema 4の合否は検証済みの要件別意味照合。上位Cは意味充足率、S/ΔE/品質表示はnull。
+契約と互換性は [`docs/semantic_matching_v2.md`](docs/semantic_matching_v2.md) を参照。
+以下のUGHer（無意識的重力仮説）の指標は旧来の非拘束診断であり、現在の合否には使わない。
 
 - **PoR** (Point of Resonance): 問いの核心に対する回答の位置座標 **(S, C)**
   - **S 軸**（構造完全性）: 回答が壊れていないか (0–1)
@@ -42,11 +44,9 @@ Agent({ subagent_type: "Explore", prompt: "..." })
 
 ## 出力の自己監査原則（Self-Audit Principle）
 
-本リポジトリは AI 回答の意味的誠実性を **PoR / ΔE / L_sem** で定量評価する
-基盤である。**Claude 自身の出力もこの指標で自己監査すること**。
-このリポジトリが測ろうとしているものに、自分の発話が抵触していないかを
-常に確認する。迷ったら「今の出力を `audit.py` に通したらどう判定されるか」
-を考える。
+自己監査では、要求された内容と根拠・実施記録を照合する。旧PoR/ΔE/L_semを
+発話の正しさや作業完了の証明に使わない。現行 `audit.py` の判定範囲も、渡された
+指示要件の記載充足に限られる。以下の指標対応は旧設計の説明として保持する。
 
 ### 指標と出力挙動の対応
 
@@ -188,6 +188,7 @@ Railway にデプロイ済み。main push で自動デプロイ。永続ボリ�
 | LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 検証結果 (HA48 / HA20 / baseline) | [`docs/validation.md`](docs/validation.md) |
+| schema 4 の検証・移行・保存証拠 | [`docs/instruction_coverage_v4_validation.md`](docs/instruction_coverage_v4_validation.md) |
 | Self-Audit 実験 (Claude 出力の proxy 測定) | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
 | メタデータパイプライン (metadata_generator / soft_rescue / computed_ai_draft) | [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md) |
 | grv 因果構造損失 (drift / dispersion / collapse) | [`docs/grv_design.md`](docs/grv_design.md) |
@@ -340,9 +341,10 @@ python examples/basic_audit.py
 
 読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` / `UGH_AUDIT_CACHE_DIR=/tmp/ugh_cache`
 で書き込み可能パスを指定する。
-`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` は `experiments/` の実行時のみ必要。
+`ANTHROPIC_API_KEY` は現行の必須意味照合にも必要。未設定・照合不能はdegraded。
+`OPENAI_API_KEY` は任意の `experiments/` 用で、現行の意味照合には使わない。
 
-## Key Thresholds（コア定数）
+## 旧診断の定数（現行の公開合否には使用しない）
 
 | 定数 | 値 | 場所 |
 |------|-----|------|
@@ -422,7 +424,8 @@ git push -u origin <branch-name>
 3. `ruff check .` — lint
 4. `pytest -q --tb=short` — test (REST/MCP テスト含む、SBert 依存 7 件は自動 skip)
 
-CI 通過 = lint clean + 全テスト pass
+CI 通過 = lint clean + 全テスト pass。追加の `test-sbert` ジョブは固定モデルを
+事前取得・ハッシュ検証し、ネットワークを遮断した全体回帰でスキップ0を要求する。
 
 ### Weekly regression: `.github/workflows/ci-weekly.yml` (schedule + manual)
 

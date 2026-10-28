@@ -1,11 +1,16 @@
 # UGH 計算式 — PoR / ΔE / quality_score / verdict
 
+本書は **旧診断の式と履歴の保存**。schema 4.0.0 の最終判定は
+[`semantic_matching_v2.md`](semantic_matching_v2.md) の明示要件の記述充足に従う。
+上位 S/ΔE/quality は null、C は全件解決時の意味上の充足率。下記の数値・旧 verdict は
+`legacy_metrics` に入り、構造ゲートも `binding=false`。承認や一般的品質の根拠に使わない。
+
 電卓層 (`ugh_calculator.py`) で算出される数値指標の定義。
 本ドキュメントが扱うのは **core pipeline** (detector tier 1 + calculator + decider) であり、同じ Evidence 入力に対して決定的に同じ出力を返す。
 
 cascade layer (SBert ベースの tier 2/3) は core pipeline に対する
 optional な確率的回収補強で、C の上方修正のみを行う（降格はしない）。
-cascade の有無は本書の計算式自体を変えない。最終 C/ΔE/verdict は
+cascade の有無は本書の計算式自体を変えない。旧診断の C/ΔE/verdict は
 cascade 後の Evidence（命題 hit 数）を入力として core 計算式で算出される。2 層の関係は
 [`cascade_design.md § core pipeline と cascade layer の関係`](cascade_design.md#core-vs-cascade)
 を参照。
@@ -39,7 +44,7 @@ quality_score = 5 - 4 × ΔE    # パラメータフリー [1,5]
 | **ΔE** | S と C の加重二乗和。両軸からの距離を 1 つのスカラーに統合。C=None 時は算出不可 |
 | **quality_score** | ΔE の線形変換。ΔE=0 → 5.0, ΔE=1 → 1.0 |
 
-## verdict 判定（HA48 検証済み確定値）
+## 旧診断の verdict 判定（HA48 で採用した閾値の履歴）
 
 | verdict | 条件 | 意味 |
 |---------|------|------|

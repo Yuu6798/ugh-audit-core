@@ -1,0 +1,7 @@
+{
+  "scope": "Known regression only; replay of saved real model output, no new model evaluation",
+  "source_results_sha256": "64fefcc92f20a84127c630209c86f71063243910ace86d95caa10d1ea3e92217",
+  "fixture_sha256": "d8a19a3b101db84eafac649a7f815f1f4bc8dba1e64097ab32d4c5a963be695b",
+  "answers": 64,
+  "requirements": 192
+}

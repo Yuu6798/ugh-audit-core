@@ -1,12 +1,38 @@
-# 検証結果 (HA48 / HA20 / ベースライン)
+# 現行契約と旧検証記録
 
-本ドキュメントは `ugh-audit-core` の主要指標 (ΔE / quality_score /
-L_sem) の検証結果を一元管理する。
+## schema 4.0.0 の判定範囲
 
-## core vs cascade の分離 (API `hit_sources`)
+現行の対象は `instruction_coverage_v2`、すなわち明示された指示・制約の
+記述充足である。人が用意した各要件を `fulfilled` / `missing` / `unknown` に
+照合する。回答の真実性・一般的な品質・現実の作業実施を認定しない。
+要件自体の妥当性も別途確認する。AI が生成した要件は `requires_review=true`。
 
-`/api/audit` レスポンスの `hit_sources` フィールドで、命題ヒットを以下の 3
-ソースに分離して公開している:
+| 要件照合 | 最終判定 | 上位の数値 |
+|---|---|---|
+| 有効な要件が1件以上あり全件 fulfilled | accept | C=1 |
+| unknown がなく、missing がある | rewrite | C=fulfilled/全要件数 |
+| unknown がある、要件なし・不正、照合不能 | degraded | C=null |
+
+上位 `S`・`delta_e`・`quality_score` は常に null。
+`metrics_scope="semantic_coverage_only"`。保留を分母から除かない。
+旧数値と判定は `legacy_metrics`、構造ゲートは `binding=false` として残す。
+これらの診断値は上位の判定を上下させない。旧 ΔE 閾値を承認条件に使わない。
+
+要件準備後に25秒の意味照合予算を開始し、任意の埋め込み・旧診断より先に照合する。
+認証・API・引用・モデル・時間切れ等の検証に失敗した要件は保留となる。
+Python/CLI の修復は確認済み欠落に対する `ADD_PROPOSITION` のみを提案し、
+旧構造指標から修復順序を生成しない。契約・制限・互換性は
+[`semantic_matching_v2.md`](semantic_matching_v2.md) を参照。
+
+回帰テストは判定契約や過去応答の再生を検査するものであり、それだけで意味精度の
+改善や単純な LLM 監査に UGH を加える価値を証明しない。以下の旧数値比較も、
+その上乗せ価値の根拠として扱わない。
+
+## 旧診断の core vs cascade の分離 (`legacy_metrics.hit_sources`)
+
+旧検出器の命題ヒットは以下の3ソースに分離する。schema 4 の上位
+`hit_sources` は LLM の fulfilled / missing / unknown であり、以下は
+`legacy_metrics.hit_sources` の診断例である。
 
 ```jsonc
 "hit_sources": {
@@ -25,7 +51,7 @@ L_sem) の検証結果を一元管理する。
 
 未検出 (命題総数 0) の場合は `"hit_sources": null`。詳細: `ugh_calculator.summarize_hit_sources()`。
 
-## 主指標政策 (Primary Metric Policy)
+## 旧主指標政策の保存記録 (schema 4 の承認条件には使わない)
 
 | 指標 | 位置づけ | 根拠 |
 |---|---|---|
@@ -34,21 +60,27 @@ L_sem) の検証結果を一元管理する。
 | quality_score | 表示用 | `5 - 4×ΔE` の派生値 |
 | verdict_advisory (Phase 8) | 副次判定 | `mode_conditioned_grv` 由来の downgrade-only advisory。primary verdict は不変 |
 
-**運用原則:**
+当時は ΔE の境界を go/no-go に使い、L_sem を診断用としていた。
+schema 4 ではその方針を採用しない。旧重みと数値式は診断・再現のため保持する。
 
-- Deploy 時の go/no-go は **ΔE の verdict 境界** で行う。`is_reliable` も ΔE ベース
-- L_sem は「どの項が悪いか」を debug する診断用。runtime 重みは
-  `semantic_loss.py:DEFAULT_WEIGHTS` で L_P/L_F/L_G を優先、L_Q/L_A/L_X は
-  保守的に保持（HA48 で信号弱いが理論的保持）
-- 論文・レポートで「システムの相関」を主張する際は **ΔE ρ を主数字**として
-  報告し、L_sem は補足診断として併記する
-- 設計判断で「追加指標が必要」になる前に、まず L_sem の 7 項を見て原因分解する
-
-**文脈:** `semantic_loss.py:34-47` の LOO-CV shrinkage コメントは、full-sample
+**旧方針の文脈:** `semantic_loss.py:34-47` の LOO-CV shrinkage コメントは、full-sample
 最適重みと runtime 重みが異なる理由を記録したもの。主指標 ΔE を動かさず、
 L_sem 側で保守的縮小をかける判断の履歴として保持している。
 
-## HA48 検証結果
+## HA48 既知データの回帰版 (2026-10-28)
+
+否定極性チェックの適用経路を修正し、同じ 48 回答を再実行した現行の
+legacy 診断スナップショットは **96/146 hits**。変化は q012 の 3→2 hits と
+その派生値のみで、人手評価 `O` は変更していない。修正前の **97/146 hits** の
+CSV は `analysis/snapshots/ha48_regression_check.v2.csv` にバイト単位で保存した。
+これは機械出力の版更新であり、新しい未見データによる独立評価や意味精度の
+改善を示す人手検証ではない。版間の全差分は
+[`ha48_snapshot_versions.md`](ha48_snapshot_versions.md) を参照。
+
+以下の HA48 統計表は 2026-04 時点の保存記録であり、表内の `current` は
+その当時の版を指す。現行 CSV の回帰一致で、これらの旧統計を保証するものではない。
+
+## HA48 検証結果 (2026-04 保存記録)
 
 n=48, current pipeline snapshot (2026-04-22), scipy.stats.spearmanr (タイ補正あり):
 
@@ -75,19 +107,19 @@ n=48, current pipeline snapshot (2026-04-22), scipy.stats.spearmanr (タイ補�
 | **Apr 22, 2026 (current)** | **-0.5477** | **L_P=0.075, L_F=0.075, L_G=0.325** | **post-#95 再校正** |
 
 改善した結果として点推定が -0.5195 → -0.4817 へ移動。主数字は current revision
-(ρ=-0.4817) を用いる。`tests/test_ha48_regression.py` が current snapshot を
-lock し、将来の意図しない drift を検出する。
+(ρ=-0.4817) を用いていた。2026-10-28 以降の `tests/test_ha48_regression.py` は
+上記の版管理された legacy 診断出力の回帰を検査する。
 
-### HA48 個別指標 (current pipeline snapshot)
+### HA48 個別指標 (2026-04 保存スナップショット)
 
 | 指標 | 値 | 説明 |
 |------|-----|------|
 | Spearman ρ (ΔE vs O, system C) | -0.4817 (p=0.000527) | デプロイ可能指標 (scipy, タイ補正あり) |
 | Spearman ρ (ΔE vs O, human C) | 0.8616 (p<0.001) | 参照上限 (scipy, タイ補正あり) |
-| HA48 hit 総数 | 97/146 | tests/test_ha48_regression.py で lock |
+| HA48 hit 総数 | 97/146 | 修正前 v2 CSV として保存。現行 legacy 診断は 96/146 |
 | verdict 単調性 | accept(3.44) > rewrite(2.67) > regenerate(1.25) | current pipeline 検証済み |
 
-## HA20 参考値 (n=20, t=0.0 統一スライス)
+## HA20 参考値 (旧検証記録、n=20, t=0.0 統一スライス)
 
 | 指標 | Spearman ρ | p 値 | 備考 |
 |------|-----------|-----|------|
@@ -172,7 +204,7 @@ Mitigation（部分的対応）:
 将来課題として **2nd annotator を入れた IRR 測定** を `docs/annotation_protocol.md`
 の `Future Work` に明示する。
 
-### ベースライン比較
+### ベースライン比較 (旧 pipeline の保存記録)
 
 本リポジトリで HA20 / HA48 上の (response, reference, human O) トリプルに
 対し、以下 3 baseline との直接比較を実施済み:
@@ -246,17 +278,9 @@ UGHer は `1 - ΔE` で変換、O との Spearman ρ を比較。
     で α=0.05 非有意** (HA20 p=0.0596, HA48 p=0.0735)、全指標一括の有意性
     主張は SBert で破綻する。SBert の扱いは個別に記述する必要がある
 
-**観察:**
-
-- UGHer は両 dataset で**点推定最強**。HA20 では 2 番手 (BERTScore) から
-  Δρ=+0.21、HA48 では Δρ=+0.15 離して最上位
-- CI overlap は存在する (small sample size の影響) が、HA20 では UGHer 下端
-  0.496 が BERTScore の点推定 0.556 に届く近さまで押し上げる
-- SBert cos (UGHer の cascade 経路で使っているのと同じモデル) が最弱で、
-  **UGHer の強みは単なる semantic embedding ではなく命題カバレッジ + 構造
-  完全性の合成にある**ことを示唆
-- BLEURT は TF + 専用 checkpoint 依存で本 PR では scope 外。BERTScore が
-  contextual embedding baseline を代表する
+**解釈の範囲:** これらは旧サンプルと旧指標に対する比較であり、単純な LLM 監査を
+比較対象にしていない。点推定の順位や同じ SBert の利用だけから、合成指標の有用性・
+構成要素の因果的な寄与・v4 の性能向上を結論しない。BLEURT は当時の比較対象外。
 
 **再現:**
 
@@ -269,12 +293,13 @@ python analysis/baseline_comparison.py
 per-qid score CSV (`analysis/baseline_comparison_ha{48,20}.csv`),
 [`analysis/baseline_comparison_summary.md`](../analysis/baseline_comparison_summary.md)。
 
-## ボトルネックと今後の改善
+## 現行契約に対する評価の扱い
 
-- system 命題照合の精度改善が ΔE 改善のボトルネック
-- 参照上限 ρ=0.862 との差は検出パイプラインの精度改善で縮まる
+要件の記述充足、事実の正しさ、一般的な回答品質を区別して評価する。
+旧 HA48 の相関や回帰一致を、v4 の独立評価として数えない。UGH 診断の追加価値を
+主張するには、同条件の単純な LLM 監査と比較した別の根拠が必要となる。
 
-## 命題ヒット率ベースライン
+## 命題ヒット率ベースライン (旧検証記録)
 
 102 問 × 310 命題の全件リラン結果:
 
@@ -298,7 +323,7 @@ HA20 (20 件) + HA28 (28 件) を統一スキーマで結合した 48 件デー�
 - **統合 CSV**: `data/human_annotation_48/annotation_48_merged.csv`
 - **生成スクリプト**: `scripts/merge_annotations_48.py`
 
-## L_sem (Phase 5) HA48 校正結果
+## L_sem (Phase 5) HA48 校正結果 (旧検証記録)
 
 ### 各項の単独 Spearman ρ (vs human O)
 
@@ -370,7 +395,7 @@ HA48 grv 分布: mean=0.185, σ=0.051, range=[0.10, 0.31]
 詳細: [`semantic_loss.md`](semantic_loss.md)
 校正スクリプト: `analysis/calibrate_grv_lsem.py` (Phase 5), `analysis/optimize_semantic_loss_weights.py` (Phase 4)
 
-## LLM オーケストレーション検証
+## LLM オーケストレーション検証 (旧検証記録)
 
 自由質問に対する LLM 動的メタ生成 PoC の検証結果 (n=102):
 

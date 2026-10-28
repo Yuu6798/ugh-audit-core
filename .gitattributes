@@ -1,0 +1,7 @@
+# Preserve the historical CSV byte-for-byte, including its original CRLF.
+analysis/snapshots/ha48_regression_check.v2.csv -text -diff
+# Preserve original evaluation bytes and keep generated records out of the main diff.
+analysis/instruction_coverage_v4/evidence/*.jsonl -text linguist-generated=true
+analysis/instruction_coverage_v4/provenance/**/*.jsonl -text linguist-generated=true
+analysis/instruction_coverage_v4/regression/*.xml -text linguist-generated=true
+analysis/instruction_coverage_v4/** whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

@@ -1,14 +1,21 @@
 """
 ugh_audit/pipeline.py
-共有パイプライン — detect → calculate → grv → mcg → advisory を一元化
+共有パイプライン — schema 4.0.0 の明示要件の記述充足監査。
 
-server.py (REST) と mcp_server.py (MCP) で重複していた ~300 行の監査
-パイプライン本体を single source of truth に統合する。
+人が定義した指示・制約が回答文に伝わるかを instruction_coverage_v2 契約で
+要件ごとに照合する。現実の実行・真実性・回答全体の品質の認定ではない。
+全件 fulfilled なら accept、保留なしの欠落なら rewrite、1件でも unknown
+または有効な要件がなければ degraded。AI 草案要件は別途レビューを要する。
+
+上位 S / delta_e / quality_score は常に None。全要件が解決した場合だけ
+C=fulfilled/total、それ以外は None。旧指標は legacy_metrics に保存し、
+structural_gate は binding=False。旧数値・構造・advisory は判定を変更しない。
 
 責務分離:
 
-- このモジュール (pipeline.py): 監査ロジック本体 (pure computation)
-  - detect → calculate → verdict/mode → grv → mcg → advisory
+- このモジュール (pipeline.py): 監査計算と注入された意味照合器の実行
+  - 要件準備 → 必須意味照合 → 任意の旧診断 → 検証済み要件結果の投影
+  - 要件準備後から意味照合に25秒。埋め込み・旧検出器より先に実行する
   - 出力は dict (内部 _* フィールドで DB 保存材料を caller に返す)
   - DB 保存は行わない (caller の mode-aware policy に委譲)
 
@@ -19,20 +26,27 @@ server.py (REST) と mcp_server.py (MCP) で重複していた ~300 行の監査
   - DB 保存 + レスポンス型 (AuditResponse / AuditOutput) への変換
 
 schema_version は本モジュールが所有する (single source of truth)。
+schema 3 の旧数値を抑止する gate からの破壊的変更。履歴・remote も現行の
+契約・要件・引用を再検証し、旧 accept の無検証再公開を許可しない。
+Python/CLI の修復順序は確認済みの意味上の欠落だけを対象とする。
 
 履歴:
 - 2026-04-24 初版 (PR #110 に続く長期 PR、_run_pipeline 重複解消)
+- 2026-10-29 schema 4: 記述充足を最終契約とし、旧 UGH 数値は非拘束の診断に限定
 """
 from __future__ import annotations
 
 import logging
+import copy
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Callable, List, Optional
 
 from .metadata_generator import detect_missing_metadata
 from .soft_rescue import maybe_build_soft_rescue
+from .semantic_matching import _json_safe, apply_semantic_gate, assess_requirements
 
 # パイプライン A の import (server.py / mcp_server.py と同じ sys.path 挿入)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -55,9 +69,9 @@ from ugh_calculator import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 # --- 公開定数 ---
-# 2.1.0: degraded_reason に detector_unavailable / detector_error:<type> を追加
-# (additive — 既存 consumer は新しい enum 値を unknown string として無視可能)
-SCHEMA_VERSION = "2.1.0"
+# 4.0.0: instruction coverage alone determines admission. Unvalidated legacy
+# numerical/structural heuristics are retained as nonbinding diagnostics.
+SCHEMA_VERSION = "4.0.0"
 
 
 # ---------------------------------------------------------------------------
@@ -115,80 +129,107 @@ def _primary_fail(f1: float, f2: float, f3: float, f4: float) -> str:
     return max(labels, key=labels.get)
 
 
+def _prepare_requirements(question, question_meta, auto_generate_meta):
+    """Generate only absent requirements; legacy trap metadata is not mandatory."""
+    # Optional metadata may be arbitrarily nested JSON. Bound its copy before
+    # running the required checker so diagnostic extensions cannot exhaust the
+    # recursion limit. Preserve invalid requirement types as invalid: _json_safe
+    # turns tuples into lists for serialization, but that must not certify an
+    # unsupported canonical requirement container supplied by a Python caller.
+    meta = _json_safe(question_meta)
+    if isinstance(question_meta, dict) and isinstance(meta, dict):
+        for field in ("core_propositions", "original_core_propositions"):
+            if field in question_meta and not isinstance(question_meta[field], list):
+                meta[field] = None
+    source = META_SOURCE_INLINE if isinstance(meta, dict) and meta else META_SOURCE_NONE
+    errors = []
+    from .semantic_matching import _requirements
+    requirements = _requirements(meta)
+    if auto_generate_meta and (requirements is None or not requirements):
+        missing_fields = detect_missing_metadata(meta if isinstance(meta, dict) else None)
+        try:
+            from experiments.meta_generator import generate_meta
+            generated = generate_meta(question)
+            if not isinstance(generated, dict):
+                raise TypeError('Invalid metadata generator result')
+            merged = dict(meta) if isinstance(meta, dict) else {}
+            for field in missing_fields:
+                if field in generated and _is_field_filled(generated[field]):
+                    merged[field] = generated[field]
+            meta = merged
+            if generated.get('_is_fallback'):
+                source = META_SOURCE_FALLBACK
+                errors.append('auto_generate_fallback')
+            elif _requirements(meta):
+                source = META_SOURCE_LLM
+            else:
+                errors.append('auto_generate_empty')
+        except Exception as exc:
+            errors.append('auto_generate_failed:' + type(exc).__name__)
+    return meta, source, errors
+
+
+def run_audit(
+    *, question: str, response: str, reference: Optional[str],
+    question_meta: Optional[dict], session_id: Optional[str],
+    auto_generate_meta: bool = False,
+    detect_fn: Optional[Callable[[str, str, dict], Evidence]] = None,
+    semantic_judge: Optional[Callable] = None,
+    semantic_deadline: Optional[float] = None,
+) -> dict:
+    """Required instruction audit first, optional diagnostics afterwards.
+
+    The 25-second semantic budget begins after requirements are prepared. An
+    explicitly supplied absolute deadline is honored. Cold embeddings and slow
+    legacy detectors cannot consume the semantic checker's time allocation.
+    """
+    meta, source, metadata_errors = _prepare_requirements(question, question_meta, auto_generate_meta)
+    eligible = source != META_SOURCE_FALLBACK
+    deadline = semantic_deadline if semantic_deadline is not None else time.monotonic() + 25.0
+    assessment = assess_requirements(meta, response, semantic_judge if eligible else None, deadline=deadline)
+    try:
+        result = _run_legacy_diagnostics(question=question, response=response, reference=reference,
+                question_meta=copy.deepcopy(meta), session_id=session_id, detect_fn=detect_fn,
+                prepared_source=source)
+    except Exception as exc:
+        # An optional legacy measurement failure cannot invalidate grounded coverage.
+        result = {'schema_version': SCHEMA_VERSION, 'S': None, 'C': None, 'delta_e': None,
+                  'quality_score': None, 'verdict': 'degraded', 'verdict_advisory': 'degraded',
+                  'mode': 'degraded', 'is_reliable': False, 'structural_gate': None,
+                  'hit_rate': None, 'computed_components': [], 'missing_components': [],
+                  'errors': ['legacy_diagnostic_error:' + type(exc).__name__],
+                  'degraded_reason': ['legacy_diagnostic_error'],
+                  'grv': None, 'response_mode_signal': None, 'mode_conditioned_grv': None,
+                  'advisory_flags': [], 'mode_affordance': None,
+                  'matched_id': meta.get('id') if isinstance(meta, dict) else None}
+    result.update(schema_version=SCHEMA_VERSION, metadata_source=source,
+                  _session_id=session_id or str(uuid.uuid4()), _question=question,
+                  _response=response, _reference=reference, _question_meta=meta)
+    result['errors'] = metadata_errors + result.get('errors', [])
+    return apply_semantic_gate(result, assessment, response=response, question_meta=meta,
+                               eligible=eligible, ineligible_reason='metadata_fallback_unverified')
+
+
 # ---------------------------------------------------------------------------
 # メインパイプライン
 # ---------------------------------------------------------------------------
 
 
-def run_audit(
+def _run_legacy_diagnostics(
     *,
     question: str,
     response: str,
     reference: Optional[str],
     question_meta: Optional[dict],
     session_id: Optional[str],
-    auto_generate_meta: bool = False,
     detect_fn: Optional[Callable[[str, str, dict], Evidence]] = None,
+    prepared_source: str = META_SOURCE_INLINE,
 ) -> dict:
-    """監査パイプラインを実行し、全フィールドを含む dict を返す。
-
-    Args:
-        question, response, reference, question_meta, session_id: 入力。
-        auto_generate_meta: True + detect_fn 利用可能 + ANTHROPIC_API_KEY 設定時、
-            question_meta 未提供で LLM 生成を試みる (opt-in)。
-        detect_fn: detector.detect 関数。None の場合 detector 利用不可とみなし、
-            degraded_reason に detector_unavailable を付与する。
-
-    Returns:
-        dict: 出力スキーマ (schema_version 2.1.0)。
-        caller は mode が computed 系のとき DB 保存を行い、
-        自分の response 型 (AuditResponse / AuditOutput) に変換する。
-    """
+    """Optional legacy measurements; never decide instruction coverage."""
     errors: List[str] = []
-    metadata_source = META_SOURCE_NONE
+    metadata_source = prepared_source
     matched_id: Optional[str] = None
     has_detector = detect_fn is not None
-
-    # LLM meta 自動生成 (opt-in、detector 利用可能時のみ)
-    # 部分的な inline メタデータが提供された場合は欠損フィールドのみ補完する
-    missing_fields = detect_missing_metadata(question_meta)
-    if missing_fields and auto_generate_meta and has_detector:
-        try:
-            from experiments.meta_generator import generate_meta
-            generated = generate_meta(question)
-            actually_filled = any(
-                fld in generated and _is_field_filled(generated[fld])
-                for fld in missing_fields
-            )
-            # core_propositions が欠損のまま残っていたら detect は無意味
-            if "core_propositions" in missing_fields and not generated.get(
-                "core_propositions"
-            ):
-                actually_filled = False
-            if question_meta:
-                merged = dict(question_meta)
-                for fld in missing_fields:
-                    if fld in generated and _is_field_filled(generated[fld]):
-                        merged[fld] = generated[fld]
-                question_meta = merged
-            else:
-                if actually_filled:
-                    question_meta = generated
-            if actually_filled:
-                if generated.get("_is_fallback"):
-                    errors.append("auto_generate_fallback")
-                    if "core_propositions" in missing_fields:
-                        metadata_source = META_SOURCE_FALLBACK
-                else:
-                    metadata_source = META_SOURCE_LLM
-            else:
-                logger.warning(
-                    "auto meta generation returned empty values for %s", missing_fields
-                )
-                errors.append("auto_generate_empty")
-        except Exception:
-            logger.exception("auto meta generation failed")
-            errors.append("auto_generate_failed")
 
     # detect → calculate
     detected = False
@@ -404,11 +445,11 @@ def run_audit(
         "verdict": verdict,
         "hit_rate": hit_rate,
         "structural_gate": {
-            "f1": evidence.f1_anchor,
-            "f2": evidence.f2_unknown,
-            "f3": evidence.f3_operator,
-            "f4": evidence.f4_premise,
-            "gate_verdict": gate_v,
+            "f1": evidence.f1_anchor if detected else None,
+            "f2": evidence.f2_unknown if detected else None,
+            "f3": evidence.f3_operator if detected else None,
+            "f4": evidence.f4_premise if detected else None,
+            "gate_verdict": gate_v if detected else "unavailable",
             "primary_fail": _primary_fail_safe(
                 evidence.f1_anchor, evidence.f2_unknown,
                 evidence.f3_operator, evidence.f4_premise,

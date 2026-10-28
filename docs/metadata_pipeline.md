@@ -1,9 +1,15 @@
 # メタデータパイプライン設計
 
+**schema 4:** AI 生成要件は草案であり、全件 fulfilled でも `requires_review=true`。
+生成結果の内容そのものが正しいと認定する機能ではない。現在は不足要件の準備後に
+必須の記述充足照合を行い、旧構造メタデータを必須としない。下記の soft rescue と
+数値処理は任意の旧診断で、上位 C や最終判定を変えない。
+現行契約は [`semantic_matching_v2.md`](semantic_matching_v2.md) を参照。
+
 metadata_generator / soft_rescue / metadata_policy の設計と
 `computed_ai_draft` mode の仕様を記述する。
 
-## 概要
+## 旧診断メタデータ処理の設計履歴
 
 LLM による `question_meta` 動的生成から、AI 草案メタデータの品質管理、
 soft-hit rescue までの一連のパイプラインを構成する。
@@ -18,7 +24,7 @@ generate_meta()               LLM による question_meta 生成
 _validate_meta()              スキーマ正規化 + メタ記述フィルタ
         │
         ▼
-detect → calculate            通常パイプライン (mode=computed_ai_draft)
+detect → calculate            任意の旧診断 (mode=computed_ai_draft)
         │
         ▼
 maybe_build_soft_rescue()     C=0 時の部分ヒット回収

@@ -74,7 +74,7 @@ def test_audit_answer_degraded_without_question_meta():
     }))
 
     assert isinstance(structured, dict)
-    assert isinstance(structured["S"], float)
+    assert structured["S"] is None
     assert structured["C"] is None
     assert structured["delta_e"] is None
     assert structured["quality_score"] is None
@@ -82,7 +82,7 @@ def test_audit_answer_degraded_without_question_meta():
     assert structured["mode"] == "degraded"
     assert structured["structural_gate"]["f4"] is None
     assert structured["saved_id"] is None
-    assert structured["schema_version"] == "2.1.0"
+    assert structured["schema_version"] == "4.0.0"
 
     assert len(content) >= 1
 
@@ -176,8 +176,8 @@ def test_audit_answer_schema_includes_advisory_fields():
     assert "advisory_flags" in out["properties"]
 
 
-def test_proxy_audit_relays_advisory(monkeypatch):
-    """UGH_REMOTE_API proxy 経路でも advisory フィールドが転送される"""
+def test_proxy_audit_rejects_unchecked_legacy_accept(monkeypatch):
+    """旧remoteの意味判定なしacceptをadvisory経由でも信用しない。"""
     import json
     import os
 
@@ -205,10 +205,11 @@ def test_proxy_audit_relays_advisory(monkeypatch):
     }
 
     class _FakeResp:
+        status = 200
         def __init__(self, body): self._body = body
         def __enter__(self): return self
         def __exit__(self, *a): pass
-        def read(self): return self._body
+        def read(self, size=-1): return self._body[:size] if size >= 0 else self._body
 
     def _fake_urlopen(req, timeout=60):
         return _FakeResp(json.dumps(fake_response).encode("utf-8"))
@@ -226,9 +227,13 @@ def test_proxy_audit_relays_advisory(monkeypatch):
     finally:
         monkeypatch.delenv("UGH_REMOTE_API", raising=False)
 
-    assert result.verdict == "accept"
-    assert result.verdict_advisory == "rewrite"
-    assert result.advisory_flags == ["mcg_collapse_downgrade"]
+    assert result.verdict == "degraded"
+    assert result.verdict_advisory == "degraded"
+    assert result.requirement_verdict == "undetermined"
+    assert result.requires_review is True
+    assert result.C is None
+    assert result.legacy_metrics["verdict"] == "accept"
+    assert result.advisory_flags == []
 
 
 def test_proxy_audit_error_falls_back_to_degraded_advisory(monkeypatch):
@@ -280,9 +285,9 @@ def test_audit_answer_returns_hit_sources_field():
         "question": "テスト",
         "response": "テスト回答",
     }))
-    # 命題未検出時は null
     assert "hit_sources" in structured
-    assert structured["hit_sources"] is None
+    assert structured["hit_sources"]["source"] == "llm_semantic"
+    assert structured["hit_sources"]["total"] == 0
 
 
 def test_audit_answer_hit_sources_schema_in_outputSchema():
@@ -295,7 +300,7 @@ def test_audit_answer_hit_sources_schema_in_outputSchema():
 
 
 def test_proxy_audit_relays_hit_sources(monkeypatch):
-    """proxy 経路でも hit_sources が転送される"""
+    """旧hit_sourcesは診断として転送するが、意味確認なしではacceptしない。"""
     import json
 
     from ugh_audit import mcp_server as m
@@ -329,10 +334,11 @@ def test_proxy_audit_relays_hit_sources(monkeypatch):
     }
 
     class _FakeResp:
+        status = 200
         def __init__(self, body): self._body = body
         def __enter__(self): return self
         def __exit__(self, *a): pass
-        def read(self): return self._body
+        def read(self, size=-1): return self._body[:size] if size >= 0 else self._body
 
     def _fake_urlopen(req, timeout=60):
         return _FakeResp(json.dumps(fake_response).encode("utf-8"))
@@ -345,6 +351,8 @@ def test_proxy_audit_relays_hit_sources(monkeypatch):
         question_meta=None, auto_generate_meta=False, retry_of=None,
     )
     assert result.hit_sources is not None
-    assert result.hit_sources["core_hit"] == 1
-    assert result.hit_sources["cascade_rescued"] == 1
-    assert result.hit_sources["core_only_hit_rate"] == "1/3"
+    assert result.hit_sources["source"] == "llm_semantic"
+    assert result.hit_sources["total"] == 0
+    assert "core_hit" not in result.hit_sources
+    assert result.verdict == "degraded"
+    assert result.verdict_advisory == "degraded"

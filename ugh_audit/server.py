@@ -19,7 +19,7 @@ import sys
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,16 +27,19 @@ from pydantic import BaseModel, Field
 
 from . import dependencies as _deps
 from . import pipeline as _pipeline
+from .semantic_matching import DECISION_SCOPE, METRICS_SCOPE
 from .mcp_server import configure as _mcp_configure
 from .mcp_server import mcp as _mcp_instance
 
 # 後方互換: 旧実装で server.py に直接定義されていた constants / helpers を
 # pipeline.py から re-export する (test_pipeline_a 等が直接 import する)
-from .pipeline import SCHEMA_VERSION  # noqa: F401
-from .pipeline import _gate_verdict  # noqa: F401
-from .pipeline import _gate_verdict_safe  # noqa: F401
-from .pipeline import _primary_fail  # noqa: F401
-from .pipeline import _primary_fail_safe  # noqa: F401
+from .pipeline import (
+    SCHEMA_VERSION,  # noqa: F401
+    _gate_verdict,  # noqa: F401
+    _gate_verdict_safe,  # noqa: F401
+    _primary_fail,  # noqa: F401
+    _primary_fail_safe,  # noqa: F401
+)
 
 if TYPE_CHECKING:
     from .reference.golden_store import GoldenStore
@@ -62,6 +65,13 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _make_semantic_judge():
+    """Build the server-owned judge; request metadata cannot disable it."""
+    from .semantic_matching import make_judge_from_env
+
+    return make_judge_from_env()
+
+
 def _run_pipeline(
     question: str,
     response: str,
@@ -85,6 +95,7 @@ def _run_pipeline(
         session_id=session_id,
         auto_generate_meta=auto_generate_meta,
         detect_fn=_detect if _HAS_DETECTOR else None,
+        semantic_judge=_make_semantic_judge(),
     )
 
 
@@ -122,27 +133,35 @@ class AuditRequest(BaseModel):
 
 
 class StructuralGateResponse(BaseModel):
-    f1: float
-    f2: float
-    f3: float
+    f1: Optional[float] = None
+    f2: Optional[float] = None
+    f3: Optional[float] = None
     f4: Optional[float] = None
     gate_verdict: str
     primary_fail: str
+    binding: bool = False
 
 
 class AuditResponse(BaseModel):
     """audit_answer ツールの出力"""
 
     schema_version: str = Field(..., description="レスポンススキーマのバージョン")
-    S: float = Field(..., description="構造完全性 (0–1)")
-    C: Optional[float] = Field(None, description="命題被覆率 (0–1) / null=未計算")
-    delta_e: Optional[float] = Field(None, description="ΔE — 意味距離 (0–1) / null=未計算")
+    decision_scope: str = Field(..., description="判定対象の固定契約")
+    metrics_scope: str = Field(..., description="数値の意味と利用範囲")
+    assessment_context: Optional[dict] = Field(None, description="照合に用いた要件メタデータ")
+    S: Optional[float] = Field(None, description="未校正のため null。参考値は legacy_metrics")
+    C: Optional[float] = Field(None, description="検証済み要件の充足率 (0–1) / 保留時 null")
+    delta_e: Optional[float] = Field(None, description="未校正のため null")
     quality_score: Optional[float] = Field(
-        None, description="品質スコア (1–5) / null=未計算"
+        None, description="未校正のため null"
     )
     verdict: str = Field(
         ..., description="判定: accept / rewrite / regenerate / degraded"
     )
+    semantic_matching: dict = Field(..., description="v2の要件別照合と根拠・由来")
+    requirement_verdict: str = Field(..., description="complete / incomplete / undetermined")
+    requires_review: bool = Field(..., description="欠落・保留等による要確認")
+    legacy_metrics: dict = Field(..., description="v2ゲート適用前の従来指標（参考）")
     hit_rate: Optional[str] = Field(None, description="命題ヒット率 (例: '3/5')")
     structural_gate: Optional[StructuralGateResponse] = None
     saved_id: Optional[int] = Field(None, description="DB保存時の行ID (degraded時はnull)")
@@ -180,11 +199,7 @@ class AuditResponse(BaseModel):
     )
     verdict_advisory: str = Field(
         ...,
-        description=(
-            "Phase E: mode_conditioned_grv を反映した advisory verdict。"
-            "primary `verdict` を弱信号で downgrade するのみ (accept -> rewrite)。"
-            "consumer は任意に採用する。"
-        ),
+        description="要件照合による判定。従来 advisory は legacy_metrics に保存。",
     )
     advisory_flags: List[str] = Field(
         default_factory=list,
@@ -196,12 +211,7 @@ class AuditResponse(BaseModel):
     )
     hit_sources: Optional[dict] = Field(
         None,
-        description=(
-            "Paper defense: 命題ヒットの発生源を core (tfidf) / cascade_rescued / "
-            "miss に分離したサマリ。`core_only_hit_rate` は決定性主張の分子 "
-            "(tfidf-only) を示す。命題未検出時は null。"
-            "{core_hit, cascade_rescued, miss, total, core_only_hit_rate, per_proposition}"
-        ),
+        description="検証済み要件照合の fulfilled / missing / unknown 件数と要件別結果。",
     )
 
 
@@ -211,19 +221,31 @@ class HistoryItem(BaseModel):
     id: int
     question: str
     response: str
-    S: float
+    schema_version: str = "4.0.0"
+    source_schema_version: str = ""
+    decision_scope: str = DECISION_SCOPE
+    metrics_scope: str = METRICS_SCOPE
+    assessment_context: Optional[dict] = None
+    S: Optional[float] = None
     C: Optional[float] = None
     delta_e: Optional[float] = None
     quality_score: Optional[float] = None
     verdict: str
-    f1: float = 0.0
-    f2: float = 0.0
-    f3: float = 0.0
-    f4: float = 0.0
-    hit_rate: str = ""
+    semantic_matching: Optional[dict] = None
+    requirement_verdict: str = "undetermined"
+    requires_review: bool = True
+    legacy_metrics: Optional[dict] = None
+    mode: str = "degraded"
+    is_reliable: bool = False
+    structural_gate: Optional[dict] = None
+    f1: Optional[float] = None
+    f2: Optional[float] = None
+    f3: Optional[float] = None
+    f4: Optional[float] = None
+    hit_rate: Optional[str] = None
     metadata_source: str = "inline"
     generated_meta: str = ""
-    hit_sources: str = ""
+    hit_sources: Optional[dict] = None
     retry_of: Optional[int] = None
     created_at: str
 
@@ -232,22 +254,46 @@ class SessionSummary(BaseModel):
     """セッション集計"""
 
     session_id: str
+    schema_version: str = "4.0.0"
+    decision_scope: str = DECISION_SCOPE
+    metrics_scope: str = METRICS_SCOPE
     total: int
-    avg_delta_e: float
-    min_delta_e: float
-    max_delta_e: float
-    avg_quality_score: float
+    verified_total: int = Field(
+        0, description="有効な照合結果の保存件数。欠落確認も含み、合格件数ではない。",
+    )
+    unverified_total: int = Field(0, description="旧記録・保留等で現在の指標を使えない件数")
+    avg_delta_e: Optional[float] = None
+    avg_S: Optional[float] = None
+    min_delta_e: Optional[float] = None
+    max_delta_e: Optional[float] = None
+    avg_quality_score: Optional[float] = None
+    legacy_summary: Optional[dict] = None
 
 
 class DriftItem(BaseModel):
-    """ΔE時系列1件"""
+    """要件充足率・判定の時系列1件"""
 
     created_at: str
-    S: float
+    schema_version: str = "4.0.0"
+    source_schema_version: str = ""
+    decision_scope: str = DECISION_SCOPE
+    metrics_scope: str = METRICS_SCOPE
+    assessment_context: Optional[dict] = None
+    response: str = ""
+    mode: str = "degraded"
+    is_reliable: bool = False
+    structural_gate: Optional[dict] = None
+    metadata_source: str = "none"
+    hit_rate: Optional[str] = None
+    S: Optional[float] = None
     C: Optional[float] = None
     delta_e: Optional[float] = None
     quality_score: Optional[float] = None
     verdict: str
+    semantic_matching: Optional[dict] = None
+    requirement_verdict: str = "undetermined"
+    requires_review: bool = True
+    legacy_metrics: Optional[dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +326,8 @@ app = FastAPI(
     title="UGH Audit",
     description=(
         "AI回答の意味論的監査ツール。"
-        "パイプライン A (S / C / ΔE / quality_score) で意味的誠実性を定量評価する。"
+        "明示された要件ごとの充足・欠落・判定保留を根拠付きで照合する。"
+        "C は要件充足率、従来の構造指標と GRV は参考診断。"
         "\n\nMCP エンドポイント: POST /mcp"
     ),
     version="0.4.0",
@@ -373,26 +420,42 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
             f1=result["structural_gate"]["f1"],
             f2=result["structural_gate"]["f2"],
             f3=result["structural_gate"]["f3"],
-            f4=result["structural_gate"]["f4"] if result["structural_gate"]["f4"] is not None else 0.0,
+            f4=result["structural_gate"]["f4"],
             hit_rate=result["hit_rate"] or "",
             metadata_source=result["metadata_source"],
             generated_meta=_json.dumps(
                 result.get("_question_meta") or {}, ensure_ascii=False,
             ) if result.get("metadata_source") == META_SOURCE_LLM else "",
-            hit_sources=_json.dumps(
-                result.get("_hit_sources", {}), ensure_ascii=False,
-            ),
+            hit_sources=_json.dumps(result.get("hit_sources"), ensure_ascii=False),
             retry_of=req.retry_of,
+            semantic_matching=result["semantic_matching"],
+            requirement_verdict=result["requirement_verdict"],
+            requires_review=result["requires_review"],
+            legacy_metrics=result["legacy_metrics"],
+            schema_version=result["schema_version"],
+            decision_scope=result["decision_scope"],
+            metrics_scope=result["metrics_scope"],
+            question_meta=result.get("_question_meta"),
+            structural_gate=result.get("structural_gate"),
+            mode=result["mode"],
+            is_reliable=result["is_reliable"],
         )
         saved_id = await loop.run_in_executor(None, save_fn)
 
     return AuditResponse(
         schema_version=result["schema_version"],
+        decision_scope=result["decision_scope"],
+        metrics_scope=result["metrics_scope"],
+        assessment_context=result.get("_question_meta"),
         S=result["S"],
         C=result["C"],
         delta_e=result["delta_e"],
         quality_score=result["quality_score"],
         verdict=result["verdict"],
+        semantic_matching=result["semantic_matching"],
+        requirement_verdict=result["requirement_verdict"],
+        requires_review=result["requires_review"],
+        legacy_metrics=result["legacy_metrics"],
         hit_rate=result["hit_rate"],
         structural_gate=StructuralGateResponse(**result["structural_gate"]),
         saved_id=saved_id,
@@ -428,23 +491,39 @@ def get_history(limit: int = 20) -> List[HistoryItem]:
 
 
 def _row_to_history(r: dict) -> HistoryItem:
+    from .storage.audit_db import guard_history_row
+
+    r = guard_history_row(r)
+    gate = r.get("structural_gate") or {}
     return HistoryItem(
         id=r["id"],
         question=r["question"],
         response=r["response"],
-        S=round(r["S"], 4),
+        S=round(r["S"], 4) if r["S"] is not None else None,
+        schema_version=r["schema_version"],
+        source_schema_version=r.get("source_schema_version", ""),
+        decision_scope=r["decision_scope"],
+        metrics_scope=r["metrics_scope"],
+        assessment_context=r.get("assessment_context"),
+        mode=r["mode"],
+        is_reliable=r["is_reliable"],
+        structural_gate=r.get("structural_gate"),
         C=round(r["C"], 4) if r["C"] is not None else None,
         delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
         quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
         verdict=r["verdict"],
-        f1=round(r.get("f1", 0.0), 4),
-        f2=round(r.get("f2", 0.0), 4),
-        f3=round(r.get("f3", 0.0), 4),
-        f4=round(r.get("f4", 0.0), 4),
+        semantic_matching=r.get("semantic_matching"),
+        requirement_verdict=r.get("requirement_verdict", "undetermined"),
+        requires_review=r.get("requires_review", True),
+        legacy_metrics=r.get("legacy_metrics"),
+        f1=round(gate["f1"], 4) if gate.get("f1") is not None else None,
+        f2=round(gate["f2"], 4) if gate.get("f2") is not None else None,
+        f3=round(gate["f3"], 4) if gate.get("f3") is not None else None,
+        f4=round(gate["f4"], 4) if gate.get("f4") is not None else None,
         hit_rate=r.get("hit_rate", ""),
         metadata_source=r.get("metadata_source", "inline"),
         generated_meta=r.get("generated_meta", ""),
-        hit_sources=r.get("hit_sources", ""),
+        hit_sources=r.get("hit_sources"),
         retry_of=r.get("retry_of"),
         created_at=r["created_at"],
     )
@@ -477,7 +556,7 @@ def get_session(session_id: str) -> SessionSummary:
 @app.get(
     "/api/drift",
     response_model=List[DriftItem],
-    summary="ΔE時系列データ",
+    summary="要件充足率と判定の時系列",
 )
 def get_drift(limit: int = 100) -> List[DriftItem]:
     db = _get_db()
@@ -485,11 +564,26 @@ def get_drift(limit: int = 100) -> List[DriftItem]:
     return [
         DriftItem(
             created_at=r["created_at"],
-            S=round(r["S"], 4),
+            S=round(r["S"], 4) if r["S"] is not None else None,
+            schema_version=r["schema_version"],
+            source_schema_version=r.get("source_schema_version", ""),
+            decision_scope=r["decision_scope"],
+            metrics_scope=r["metrics_scope"],
+            assessment_context=r.get("assessment_context"),
+            response=r.get("response", ""),
+            mode=r["mode"],
+            is_reliable=r["is_reliable"],
+            structural_gate=r.get("structural_gate"),
+            metadata_source=r.get("metadata_source", "none"),
+            hit_rate=r.get("hit_rate"),
             C=round(r["C"], 4) if r["C"] is not None else None,
             delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
             quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
             verdict=r["verdict"],
+            semantic_matching=r.get("semantic_matching"),
+            requirement_verdict=r.get("requirement_verdict", "undetermined"),
+            requires_review=r.get("requires_review", True),
+            legacy_metrics=r.get("legacy_metrics"),
         )
         for r in rows
     ]

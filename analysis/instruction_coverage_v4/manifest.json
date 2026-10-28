@@ -1,0 +1,204 @@
+{
+  "schema": "instruction-coverage-evidence-bundle-v1",
+  "evaluated_source_commit": "3e0a2897ccd1dd2e16b90032d0cec70c299251a2",
+  "baseline_source_commit": "a16466b45acc82dc2af40fdaae8cba52d167f6ac",
+  "public_base_commit": "acbe0851163d321a015bcf49771141c39aa172e8",
+  "human_validation": false,
+  "fresh_comparator": "paired aggregation of the exact same 280 checked LLM rows",
+  "current_HEAD_evaluated": false,
+  "later_changes": "Additional implementation repairs after this evaluated snapshot require their own regression record; no new prospective accuracy claim is made.",
+  "preservation": "Original synthetic raw responses, gold, summaries, freeze and XML copied byte-for-byte. Two reviewer manifests only replace input/output path fields absolute local paths with relative filenames. Original files retained locally.",
+  "excluded": [
+    "credentials/env files",
+    "model weights/cache",
+    "virtual environments",
+    "private-path logs/environment lock",
+    "SQLite database",
+    "full original ZIPs"
+  ],
+  "files": {
+    "README.md": {
+      "sha256": "67bd5adb3a54f4008a2d089e53699da8825f5b244fdf27e9937547138d826a0a",
+      "bytes": 7141,
+      "origin": "PR evidence curation; not an original evaluation output"
+    },
+    "evidence/fresh/gold-final.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/gold-final.jsonl",
+      "original_sha256": "669cbc2e3bcac168801eddc51370aea774eadd9a7bcacbb7aa530358f0e77541",
+      "sha256": "669cbc2e3bcac168801eddc51370aea774eadd9a7bcacbb7aa530358f0e77541",
+      "bytes": 48986
+    },
+    "evidence/fresh/gold-original.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/gold-original.jsonl",
+      "original_sha256": "669cbc2e3bcac168801eddc51370aea774eadd9a7bcacbb7aa530358f0e77541",
+      "sha256": "669cbc2e3bcac168801eddc51370aea774eadd9a7bcacbb7aa530358f0e77541",
+      "bytes": 48986
+    },
+    "evidence/fresh/live.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/live.jsonl",
+      "original_sha256": "bbb401331ed8b0b6d509d780dbe3f52761d6b46800f021d7a10e55c0acbd9dcb",
+      "sha256": "bbb401331ed8b0b6d509d780dbe3f52761d6b46800f021d7a10e55c0acbd9dcb",
+      "bytes": 994252
+    },
+    "evidence/prior/gold_questions.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/prior/gold_questions.jsonl",
+      "original_sha256": "67dd0c5835b00b3f94fdc6c8f0687652c888d7c92c28ed51a5305c78e7b689ba",
+      "sha256": "67dd0c5835b00b3f94fdc6c8f0687652c888d7c92c28ed51a5305c78e7b689ba",
+      "bytes": 161843
+    },
+    "evidence/prior/scored.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/prior/scored.jsonl",
+      "original_sha256": "9a90c3183bf0c0f7a4d2cc9720c8f7fab70ecf93e67bcf321ee17253c485d610",
+      "sha256": "9a90c3183bf0c0f7a4d2cc9720c8f7fab70ecf93e67bcf321ee17253c485d610",
+      "bytes": 2628302
+    },
+    "evidence/replay-frozen.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/replay-frozen.jsonl",
+      "original_sha256": "f38ef680c58f5327706e7480e4170f3b5e841c263e89463787b9ad6137ea1198",
+      "sha256": "f38ef680c58f5327706e7480e4170f3b5e841c263e89463787b9ad6137ea1198",
+      "bytes": 3216834
+    },
+    "provenance/freeze.json": {
+      "original_artifact": "outputs/remediation-v3/validation/freeze.json",
+      "original_sha256": "72855800c4984864341f684a6801c0c6467c0a0c00456aba3d2ad086b477f82a",
+      "sha256": "72855800c4984864341f684a6801c0c6467c0a0c00456aba3d2ad086b477f82a",
+      "bytes": 9788
+    },
+    "provenance/fresh/author-manifest.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/author-manifest.json",
+      "original_sha256": "d777bceea99c013b2bf15b4bb23a2927bfe24608420d749942f3f0500e04d52a",
+      "sha256": "d777bceea99c013b2bf15b4bb23a2927bfe24608420d749942f3f0500e04d52a",
+      "bytes": 1811
+    },
+    "provenance/fresh/blind-1.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/blind-1.jsonl",
+      "original_sha256": "713d0ccc382fffc9f7abf11cb819be4f4b34a9bed521446637e007477872ceaf",
+      "sha256": "713d0ccc382fffc9f7abf11cb819be4f4b34a9bed521446637e007477872ceaf",
+      "bytes": 40401
+    },
+    "provenance/fresh/blind-2.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/blind-2.jsonl",
+      "original_sha256": "bc110ff0063a2a6a1b2c667ff16be13b36231f5fc6cbb75b236fa771ad770ee6",
+      "sha256": "bc110ff0063a2a6a1b2c667ff16be13b36231f5fc6cbb75b236fa771ad770ee6",
+      "bytes": 39814
+    },
+    "provenance/fresh/blind-manifest.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/blind-manifest.json",
+      "original_sha256": "54a3917d9c4fb8cc7e55bfc065d901efaa1553acd61b98d0d34db86bc3e965cf",
+      "sha256": "54a3917d9c4fb8cc7e55bfc065d901efaa1553acd61b98d0d34db86bc3e965cf",
+      "bytes": 461
+    },
+    "provenance/fresh/blind-map.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/blind-map.json",
+      "original_sha256": "5f3db2bc94cfe7e3360f0f10730183cf36dcf63acacceac59ceebb54b9cfeb0c",
+      "sha256": "5f3db2bc94cfe7e3360f0f10730183cf36dcf63acacceac59ceebb54b9cfeb0c",
+      "bytes": 2465
+    },
+    "provenance/fresh/datafreeze.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/datafreeze.json",
+      "original_sha256": "9361a4e333b2f417ac3143ae97850893f87634fdf2fed4f4af9a12fb55b32581",
+      "sha256": "9361a4e333b2f417ac3143ae97850893f87634fdf2fed4f4af9a12fb55b32581",
+      "bytes": 1493
+    },
+    "provenance/fresh/live.protocol.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/live.protocol.json",
+      "original_sha256": "8a2de15ef6e4e131336b47ccee9aa8900d8a9490946a86d30fc37fdfdbb0ca09",
+      "sha256": "8a2de15ef6e4e131336b47ccee9aa8900d8a9490946a86d30fc37fdfdbb0ca09",
+      "bytes": 4238
+    },
+    "provenance/fresh/review-1-manifest.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/review-1-manifest.json",
+      "original_sha256": "60733fada95a0b402b93004cc1ac2a0ce3397f0b9c397f6f88294c690097a48e",
+      "transform": {
+        "type": "relative_path_fields",
+        "fields": [
+          "input_file",
+          "output_file"
+        ]
+      },
+      "sha256": "12599b9e8f181ff46e7b7fdd6e1500170ebdcf91d8da308424171d050a9bd498",
+      "bytes": 805
+    },
+    "provenance/fresh/review-1.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/review-1.jsonl",
+      "original_sha256": "00047908d369fccfd893c3afc49db1a876f4cc39c58ecda1c26e45291d2f491f",
+      "sha256": "00047908d369fccfd893c3afc49db1a876f4cc39c58ecda1c26e45291d2f491f",
+      "bytes": 8726
+    },
+    "provenance/fresh/review-2-manifest.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/review-2-manifest.json",
+      "original_sha256": "505f723a29d9595373cf302263d2e7118f6216a854ac154ec5596851af360e3b",
+      "transform": {
+        "type": "relative_path_fields",
+        "fields": [
+          "input",
+          "output"
+        ]
+      },
+      "sha256": "e2b6b426d251410c9d58cdffd2a8de9e529cb0e32ebd1fbab7a7838f81352846",
+      "bytes": 791
+    },
+    "provenance/fresh/review-2.jsonl": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/review-2.jsonl",
+      "original_sha256": "2ecf42289b69858a66e6e067b8471fe8e83a520043edd3047a0078c0642eee85",
+      "sha256": "2ecf42289b69858a66e6e067b8471fe8e83a520043edd3047a0078c0642eee85",
+      "bytes": 8812
+    },
+    "provenance/fresh/review-comparison.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/review-comparison.json",
+      "original_sha256": "1b65e74a21633918dbad0942949b95a5c7b7cf3ca1f577fe7d1cd5fdbf7dfb0b",
+      "sha256": "1b65e74a21633918dbad0942949b95a5c7b7cf3ca1f577fe7d1cd5fdbf7dfb0b",
+      "bytes": 294
+    },
+    "regression/baseline886.xml": {
+      "original_artifact": "outputs/sbert-regression/pytest-results.xml",
+      "original_sha256": "c3d4336325140c62efa833765c6d0b6bb250b2fea14d0e780e59d06b82bfae07",
+      "sha256": "c3d4336325140c62efa833765c6d0b6bb250b2fea14d0e780e59d06b82bfae07",
+      "bytes": 107152
+    },
+    "regression/evaluated965.xml": {
+      "original_artifact": "outputs/remediation-v3/verification/final965.xml",
+      "original_sha256": "6ccb457534af5135d6f78b69a95ab28f36a2d2cf94e1d4f1cae7153b819982c5",
+      "sha256": "6ccb457534af5135d6f78b69a95ab28f36a2d2cf94e1d4f1cae7153b819982c5",
+      "bytes": 120458
+    },
+    "summaries/fresh-summary.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/fresh/live.summary.json",
+      "original_sha256": "2e17ece4d07d68e8ac0db3f68d620d31185335bf960988c220b5a5fe44cfe64a",
+      "sha256": "2e17ece4d07d68e8ac0db3f68d620d31185335bf960988c220b5a5fe44cfe64a",
+      "bytes": 15154
+    },
+    "summaries/replay-summary.json": {
+      "original_artifact": "outputs/remediation-v3/evidence/replay-frozen.summary.json",
+      "original_sha256": "d25b55e52d2c0ff55f94d1444d4289d36c05acd0b7d0985f119264ceb0a92284",
+      "sha256": "d25b55e52d2c0ff55f94d1444d4289d36c05acd0b7d0985f119264ceb0a92284",
+      "bytes": 52572
+    },
+    "verify_artifacts.py": {
+      "sha256": "f4670667c9028968488b2e82c7d35e032f8128650032988ba5b6fe8c6dabcecc",
+      "bytes": 21837,
+      "origin": "PR evidence curation; not an original evaluation output"
+    },
+    "regression/pr-head-source.json": {
+      "origin": "PR source-hardening regression record",
+      "sha256": "a8f13cd93162676a590fc88a2f32769fd39444b95353a4f5b856234ee86f8bcb",
+      "bytes": 14169
+    },
+    "regression/pr-head.xml": {
+      "origin": "PR source-hardening regression record",
+      "sha256": "e5da5607214cc752c96676b23c9dd48eaba143f35eefa3c5f7c53b5b19f8f198",
+      "bytes": 133592
+    }
+  },
+  "post_evaluation_regression": {
+    "junit_file": "regression/pr-head.xml",
+    "source_record": "regression/pr-head-source.json",
+    "totals": {
+      "tests": 1053,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "note": "No additional prospective API run; source hardening covered by regression."
+  }
+}

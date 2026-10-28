@@ -1,6 +1,9 @@
 # トラブルシューティング
 
-ugh-audit-core を運用する際に遭遇しやすい症状と対処。
+schema 4 は明示要件の記述充足を判定する。上位 `S`・`delta_e`・`quality_score` が
+null なのは仕様。`C` は全件解決時の fulfilled/全要件数で、保留があれば null。
+旧数値は `legacy_metrics` に分離する。契約は
+[`semantic_matching_v2.md`](semantic_matching_v2.md) を参照。
 
 ## SBert モデルダウンロードが進まない / `leak_check n=0` / `anchor_alignment` が全行 None
 
@@ -16,8 +19,8 @@ env | grep -iE "^(http|https)_proxy"
 `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` のいずれかに
 到達不能なアドレス（例: `http://127.0.0.1:9`）が設定されている場合、
 モデルダウンロード失敗で cascade layer が silent fallback し、
-`anchor_alignment=None` が大量発生しやすくなる。結果として C の上方補正が
-効かず、スコアが保守的になる。
+`anchor_alignment=None` が大量発生しやすくなる。旧診断の C の回収値に影響するが、
+上位の意味照合 C や最終 verdict の根拠には使わない。
 
 **復旧手順:**
 
@@ -51,15 +54,15 @@ python examples/basic_audit.py
 `UGH_AUDIT_EMBED_CACHE_DISABLE` は埋め込みキャッシュの無効化フラグであり、
 shared model のロード可否には影響しない。
 
-cascade が無効化された状態でも core pipeline（detect tier 1 + calculator +
-decider）は完走するため、出力自体はエラーにならず verdict は出る。
-ただし C が上方修正されないので scoring が保守的になる。
+cascade の無効化や旧診断の失敗は、確認済みの要件充足を取り消さない。
+意味照合は要件準備後から別の25秒予算で、任意の埋め込みより先に実行する。
 
 2 層分離の詳細: [`cascade_design.md#core-vs-cascade`](cascade_design.md#core-vs-cascade)。
 
 ## `verdict == "degraded"` が常に返る
 
-**典型的な原因:** `question_meta` が未提供 or `core_propositions` が空。
+**典型的な原因:** 要件が未提供・不正、意味照合器が使えない、API障害・期限超過、
+引用や応答形式の検証失敗。`semantic_matching` の要件別 reason も確認する。
 
 **診断:**
 
@@ -74,11 +77,14 @@ curl -X POST http://localhost:8000/api/audit \
   | jq '.errors, .degraded_reason'
 ```
 
-- `question_meta_missing`: question_meta を渡す、または `auto_generate_meta=true` を指定
-- `core_propositions_missing`: 生成 meta に core_propositions が含まれていない
-- `auto_generate_fallback`: LLM 呼び出しが失敗し heuristic fallback が発火
+- `requirements_invalid_or_missing`: 有効な `core_propositions` を明示する
+- `semantic_checker_unavailable`: サーバー側の `ANTHROPIC_API_KEY` と判定器設定を確認する
+- `deadline_exceeded` / `semantic_checker_error`: 通信・認証・残り時間を確認する
+- `invalid_semantic_result`: 引用・モデル・JSON等が検証を通っていない。充足として再利用しない
+- `metadata_fallback_unverified`: 代替生成メタデータは未確認のため承認しない
 
-LLM 生成を使うなら `ANTHROPIC_API_KEY` 環境変数が必要。
+意味照合にも `ANTHROPIC_API_KEY` が必要。AI 草案生成を使う場合は要件自体のレビューが
+必要で、全件 fulfilled でも `requires_review=true`。古い数値 accept へフォールバックしない。
 詳細: [`metadata_pipeline.md`](metadata_pipeline.md)
 
 ## 読み取り専用コンテナ / サーバーレスで起動に失敗する
@@ -99,11 +105,12 @@ export UGH_AUDIT_CACHE_DIR=/tmp/ugh_cache
 
 対処:
 
-1. ローカルで `python analysis/calibrate_phase_e_thresholds.py` 相当の
-   再校正を走らせ、snapshot を更新するか判断
-2. 意図した変更なら `analysis/ha48_regression_check.csv` を refresh し、
-   **同じ PR に** CSV 更新コミットを添える（[`validation.md`](validation.md)
-   §「測定精度履歴」に version 差分を記録）
+1. 同じ回答・要件で再実行し、実装変更による差分と意図を確認する。
+   回帰テストを通すためだけに再校正や人手評価 `O` の変更を行わない
+2. 意図した機械出力の変更なら旧 CSV を完全保存し、現行
+   `analysis/ha48_regression_check.csv` と版の記録・テストを更新する。
+   [`ha48_snapshot_versions.md`](ha48_snapshot_versions.md) のように差分と根拠を残す。
+   既知データの再計算を、新しい独立評価や人手検証として報告しない
 3. 意図しない drift なら原因 PR を特定して revert
 
 詳細: [`tests/test_ha48_regression.py`](../tests/test_ha48_regression.py) docstring。

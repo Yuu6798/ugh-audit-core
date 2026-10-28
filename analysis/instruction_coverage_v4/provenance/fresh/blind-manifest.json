@@ -1,0 +1,14 @@
+{
+  "created_at_utc": "2026-10-28T16:27:09.327613+00:00",
+  "seed": 2026102901,
+  "gold_sha256": "669cbc2e3bcac168801eddc51370aea774eadd9a7bcacbb7aa530358f0e77541",
+  "input_hashes": {
+    "blind-1.jsonl": "713d0ccc382fffc9f7abf11cb819be4f4b34a9bed521446637e007477872ceaf",
+    "blind-2.jsonl": "bc110ff0063a2a6a1b2c667ff16be13b36231f5fc6cbb75b236fa771ad770ee6"
+  },
+  "batches": [
+    40,
+    40
+  ],
+  "labels_variant_and_target_hidden": true
+}

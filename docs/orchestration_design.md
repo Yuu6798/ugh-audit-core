@@ -1,5 +1,9 @@
 # オーケストレーション設計ドキュメント
 
+このページは旧数値監査を使った設計の履歴。現行schema 4の必須意味照合はLLMを使い、
+決定的な意味判定とは呼ばない。現行契約は[要件照合](semantic_matching_v2.md)、
+検証範囲は[schema 4検証](instruction_coverage_v4_validation.md)を参照。
+
 ## 動機
 
 UGH Audit の監査パイプラインは `question_meta`（`core_propositions` 等）を必要とし、

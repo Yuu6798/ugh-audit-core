@@ -1,0 +1,9 @@
+{
+  "compared_at_utc": "2026-10-28T16:28:34.031113+00:00",
+  "answers": 80,
+  "requirement_slots": 280,
+  "label_or_kind_disagreements": [],
+  "gold_sha256": "669cbc2e3bcac168801eddc51370aea774eadd9a7bcacbb7aa530358f0e77541",
+  "all_reviews_before_API": true,
+  "API_started": false
+}

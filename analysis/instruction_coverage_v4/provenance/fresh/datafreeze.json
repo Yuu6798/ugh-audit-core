@@ -1,0 +1,25 @@
+{
+  "frozen_at_utc": "2026-10-28T16:28:45.036256+00:00",
+  "code_freeze_at_utc": "2026-10-28T16:20:42.268419+00:00",
+  "data_repairs": 0,
+  "exclusions": 0,
+  "question_clusters": 20,
+  "answers": 80,
+  "requirements": 280,
+  "human_verified": false,
+  "blind_review": "labels and missing kinds agree on80/80answers280/280slots",
+  "files": {
+    "author-manifest.json": "d777bceea99c013b2bf15b4bb23a2927bfe24608420d749942f3f0500e04d52a",
+    "blind-1.jsonl": "713d0ccc382fffc9f7abf11cb819be4f4b34a9bed521446637e007477872ceaf",
+    "blind-2.jsonl": "bc110ff0063a2a6a1b2c667ff16be13b36231f5fc6cbb75b236fa771ad770ee6",
+    "blind-manifest.json": "54a3917d9c4fb8cc7e55bfc065d901efaa1553acd61b98d0d34db86bc3e965cf",
+    "blind-map.json": "5f3db2bc94cfe7e3360f0f10730183cf36dcf63acacceac59ceebb54b9cfeb0c",
+    "gold-final.jsonl": "669cbc2e3bcac168801eddc51370aea774eadd9a7bcacbb7aa530358f0e77541",
+    "gold-original.jsonl": "669cbc2e3bcac168801eddc51370aea774eadd9a7bcacbb7aa530358f0e77541",
+    "review-1-manifest.json": "60733fada95a0b402b93004cc1ac2a0ce3397f0b9c397f6f88294c690097a48e",
+    "review-1.jsonl": "00047908d369fccfd893c3afc49db1a876f4cc39c58ecda1c26e45291d2f491f",
+    "review-2-manifest.json": "505f723a29d9595373cf302263d2e7118f6216a854ac154ec5596851af360e3b",
+    "review-2.jsonl": "2ecf42289b69858a66e6e067b8471fe8e83a520043edd3047a0078c0642eee85",
+    "review-comparison.json": "1b65e74a21633918dbad0942949b95a5c7b7cf3ca1f577fe7d1cd5fdbf7dfb0b"
+  }
+}

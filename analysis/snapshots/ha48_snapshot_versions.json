@@ -1,0 +1,28 @@
+{
+  "version": "v3-legacy-diagnostic-polarity-guard",
+  "date": "2026-10-28",
+  "scope": "Known-data machine regression; not new independent or human semantic validation",
+  "historical_snapshot": "analysis/snapshots/ha48_regression_check.v2.csv",
+  "historical_sha256": "556fd5a5d17706537c53eb13d892ddc7230159fc6a4c47e7489d7e0a8c63992f",
+  "current_snapshot": "analysis/ha48_regression_check.csv",
+  "current_sha256": "79976a9179bff5168e984f8b06406aedba40971f8d4b2267bcde524646ca543c",
+  "source_sha256": {
+    "detector.py": "e47190b411de3c39e31b75ae58c66989d7954073a5210a8883fc77a0ded31dde",
+    "ugh_calculator.py": "877ce91f52c1a692391057996ae0c7c60b4560445f0d52b8121fbc214315f8ce"
+  },
+  "changed_rows": [
+    "q012"
+  ],
+  "changed_machine_fields": [
+    "C",
+    "delta_e",
+    "quality_score",
+    "hits"
+  ],
+  "historical_total_hits": 97,
+  "current_total_hits": 96,
+  "total_propositions": 146,
+  "human_O_changed": false,
+  "reason": "The normal overlap branch now applies the existing full negative-polarity guard. q012 requirement 1 has no scoped negative marker recognized by that helper.",
+  "current_newline_format": "LF; historical snapshot retains original CRLF bytes"
+}

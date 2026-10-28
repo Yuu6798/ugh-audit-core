@@ -1,0 +1,21 @@
+{
+  "input": "blind-2.jsonl",
+  "output": "review-2.jsonl",
+  "input_sha256": "bc110ff0063a2a6a1b2c667ff16be13b36231f5fc6cbb75b236fa771ad770ee6",
+  "output_sha256": "2ecf42289b69858a66e6e067b8471fe8e83a520043edd3047a0078c0642eee85",
+  "completed_at_utc": "2026-10-28T16:28:23.849930+00:00",
+  "record_count": 40,
+  "requirement_count": 135,
+  "label_counts": {
+    "fulfilled": 118,
+    "missing": 17,
+    "unknown": 0
+  },
+  "missing_kind_counts": {
+    "absence": 7,
+    "contradiction": 10
+  },
+  "api_calls": 0,
+  "human_validated": false,
+  "review_method": "Independent model semantic review; all 40 answers read against their requirements. No gold labels, other batch, source, existing results, or credentials read; no API calls. This is not human validation."
+}

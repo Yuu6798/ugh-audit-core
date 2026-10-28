@@ -572,7 +572,7 @@ class TestAuditPipeline:
 
 @pytest.mark.skipif(not HAS_DATA, reason="外部データファイルが存在しない")
 class TestHA20DirectionMatch:
-    """HA20の20件で方向性一致を検証する"""
+    """Preserve the published deterministic calibration, not semantic acceptance."""
 
     @pytest.fixture(scope="class")
     def ha20_results(self):
@@ -592,7 +592,12 @@ class TestHA20DirectionMatch:
             if not response_text or not meta:
                 continue
 
-            result = audit(qid, response_text, meta)
+            # The published HA20 calibration concerns the unchanged numerical
+            # detector/calculator/decider. Public audit now additionally requires
+            # real semantic verification and cannot silently accept offline.
+            evidence = detect(qid, response_text, meta)
+            state = calculate(evidence)
+            result = {"state": asdict(state), **decide(state, evidence)}
             decision = result["policy"]["decision"]
             matched = direction_match(human_score, decision)
 
@@ -664,6 +669,8 @@ class TestHA20DirectionMatch:
 
         for r in ha20_results[:5]:  # 最初の5件で検証
             qid = r["id"]
-            result = audit(qid, responses[qid], meta_map[qid])
+            evidence = detect(qid, responses[qid], meta_map[qid])
+            state = calculate(evidence)
+            result = {"state": asdict(state), **decide(state, evidence)}
             assert result["policy"]["decision"] == r["decision"]
             assert result["state"]["delta_e"] == pytest.approx(r["delta_e"], abs=1e-6)
