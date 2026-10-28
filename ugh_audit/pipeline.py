@@ -46,7 +46,7 @@ from typing import Callable, List, Optional
 
 from .metadata_generator import detect_missing_metadata
 from .soft_rescue import maybe_build_soft_rescue
-from .semantic_matching import apply_semantic_gate, assess_requirements
+from .semantic_matching import _json_safe, apply_semantic_gate, assess_requirements
 
 # パイプライン A の import (server.py / mcp_server.py と同じ sys.path 挿入)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -131,7 +131,16 @@ def _primary_fail(f1: float, f2: float, f3: float, f4: float) -> str:
 
 def _prepare_requirements(question, question_meta, auto_generate_meta):
     """Generate only absent requirements; legacy trap metadata is not mandatory."""
-    meta = copy.deepcopy(question_meta)
+    # Optional metadata may be arbitrarily nested JSON. Bound its copy before
+    # running the required checker so diagnostic extensions cannot exhaust the
+    # recursion limit. Preserve invalid requirement types as invalid: _json_safe
+    # turns tuples into lists for serialization, but that must not certify an
+    # unsupported canonical requirement container supplied by a Python caller.
+    meta = _json_safe(question_meta)
+    if isinstance(question_meta, dict) and isinstance(meta, dict):
+        for field in ("core_propositions", "original_core_propositions"):
+            if field in question_meta and not isinstance(question_meta[field], list):
+                meta[field] = None
     source = META_SOURCE_INLINE if isinstance(meta, dict) and meta else META_SOURCE_NONE
     errors = []
     from .semantic_matching import _requirements

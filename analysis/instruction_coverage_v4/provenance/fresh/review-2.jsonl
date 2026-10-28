@@ -1,0 +1,40 @@
+{"blind_id": "BC002", "labels": ["fulfilled", "missing", "fulfilled"], "missing_kinds": [null, "contradiction", null], "notes": "要件2：21時の撮影を明示的に否定し、12時に撮影すると記載。"}
+{"blind_id": "BC004", "labels": ["fulfilled", "fulfilled"], "missing_kinds": [null, null], "notes": "全要件を同義表現で記載。12冊だけ、対象棚、窓を開ける禁止を維持。"}
+{"blind_id": "BC006", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled", "missing"], "missing_kinds": [null, null, null, null, "contradiction"], "notes": "要件5：完成札のない袋だけを置き、札のある袋を置くことを明示的に禁止。"}
+{"blind_id": "BC008", "labels": ["fulfilled", "fulfilled", "missing"], "missing_kinds": [null, null, "absence"], "notes": "要件3：在庫札が黄色の場合に、りくが台帳の残数欄へ0を書く指示が全体未記載。"}
+{"blind_id": "BC010", "labels": ["missing", "fulfilled"], "missing_kinds": ["contradiction", null], "notes": "要件1：12冊を明示的に否定し、21冊だけ並べると記載。"}
+{"blind_id": "BC012", "labels": ["fulfilled", "missing", "fulfilled", "fulfilled"], "missing_kinds": [null, "contradiction", null, null], "notes": "要件2：上映前に携帯電話の電源を切ることを禁止し、指示の極性が反転。"}
+{"blind_id": "BC014", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null], "notes": "全要件を同義表現で記載。全パネルの下、受領役の限定、直前の点灯、持ち上げ禁止を維持。"}
+{"blind_id": "BC016", "labels": ["fulfilled", "fulfilled", "missing", "fulfilled"], "missing_kinds": [null, null, "absence", null], "notes": "要件3：空き瓶の本数を記録する指示はあるが、12本として記録する指定が未記載。"}
+{"blind_id": "BC018", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null, null], "notes": "全要件を記載。"}
+{"blind_id": "BC020", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null], "notes": "全要件を同義表現で記載。午後7時は19時、各100mLは各100ミリリットルに対応。"}
+{"blind_id": "BC022", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null, null], "notes": "全要件を同義表現で記載。各1枚、対象名札、開始前に1回だけ、閲覧禁止、全駒を維持。"}
+{"blind_id": "BC024", "labels": ["fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null], "notes": "全要件を記載。"}
+{"blind_id": "BC026", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null, null], "notes": "全要件を記載。"}
+{"blind_id": "BC028", "labels": ["fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null], "notes": "全要件を記載。"}
+{"blind_id": "BC030", "labels": ["missing", "fulfilled"], "missing_kinds": ["absence", null], "notes": "要件1：返却済み絵本を青い棚に並べる指示はあるが、12冊だけという数量指定が未記載。"}
+{"blind_id": "BC032", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null], "notes": "全要件を同義表現で記載。白色条件、星1個、各購入者1枚、午後3時、柵越え禁止を維持。"}
+{"blind_id": "BC034", "labels": ["fulfilled", "fulfilled"], "missing_kinds": [null, null], "notes": "全要件を記載。"}
+{"blind_id": "BC036", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null], "notes": "全要件を記載。"}
+{"blind_id": "BC038", "labels": ["fulfilled", "missing"], "missing_kinds": [null, "contradiction"], "notes": "要件2：東側の畝を踏むことを必須とし、踏む禁止と明示的に矛盾。"}
+{"blind_id": "BC040", "labels": ["fulfilled", "fulfilled", "missing", "fulfilled"], "missing_kinds": [null, null, "contradiction", null], "notes": "要件3：12本を明示的に否定し、21本として記録すると記載。"}
+{"blind_id": "BC042", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null, null], "notes": "全要件を同義表現で記載。全帽子、午後5時、取り外し禁止、濡れ条件を維持。"}
+{"blind_id": "BC044", "labels": ["fulfilled", "fulfilled"], "missing_kinds": [null, null], "notes": "全要件を同義表現で記載。降雨条件と開場10分前、各担当者と対象を維持。"}
+{"blind_id": "BC046", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null, null], "notes": "全要件を同義表現で記載。各30cm、針配布役の限定、終了後、使用禁止、完成札付き全袋を維持。"}
+{"blind_id": "BC048", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null, null], "notes": "全要件を記載。"}
+{"blind_id": "BC050", "labels": ["fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null], "notes": "全要件を同義表現で記載。配布前の全種袋への手書き、2袋だけ、黄色条件で残数欄へゼロを維持。"}
+{"blind_id": "BC052", "labels": ["fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null], "notes": "全要件を同義表現で記載。開始までの反射板設置は開始前の準備指示、午後9時は21時に対応。"}
+{"blind_id": "BC054", "labels": ["fulfilled", "fulfilled"], "missing_kinds": [null, null], "notes": "全要件を同義表現で記載。成形済み、午後5時まで、窯係ゆいに限定を維持。"}
+{"blind_id": "BC056", "labels": ["missing", "fulfilled"], "missing_kinds": ["contradiction", null], "notes": "要件1：緑色シールを貼ることを否定し、丸い赤色シールを貼ると記載。"}
+{"blind_id": "BC058", "labels": ["missing", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": ["contradiction", null, null, null], "notes": "要件1：預かり票の右上への記入を否定し、左下に書くと記載。"}
+{"blind_id": "BC060", "labels": ["missing", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": ["contradiction", null, null, null], "notes": "要件1：写真パネルの下への札付けを否定し、上に付けると記載。"}
+{"blind_id": "BC062", "labels": ["fulfilled", "missing"], "missing_kinds": [null, "absence"], "notes": "要件2：窯の電源を入れる担当者を窯係ゆいだけに限定する指示が全体未記載。"}
+{"blind_id": "BC064", "labels": ["missing", "fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": ["absence", null, null, null, null], "notes": "要件1：パンを袋に入れる指示はあるが、1袋につき2個だけという数量指定が未記載。"}
+{"blind_id": "BC066", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null, null], "notes": "全要件を同義表現で記載。1袋2個だけ、午前10時、使用禁止、全袋各1枚、緑色条件を維持。"}
+{"blind_id": "BC068", "labels": ["fulfilled", "fulfilled"], "missing_kinds": [null, null], "notes": "全要件を同義表現で記載。水やり終了後に確実に閉める指示と東側の畝を踏む禁止を維持。"}
+{"blind_id": "BC070", "labels": ["fulfilled", "fulfilled"], "missing_kinds": [null, null], "notes": "全要件を記載。"}
+{"blind_id": "BC072", "labels": ["fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null], "notes": "全要件を同義表現で記載。各1枚、開始5分前、西扉、中央譜面台が未使用の場合の配置を維持。"}
+{"blind_id": "BC074", "labels": ["missing", "fulfilled"], "missing_kinds": ["absence", null], "notes": "要件1：全箱に丸いシールを貼る指示はあるが、緑色という指定が未記載。"}
+{"blind_id": "BC076", "labels": ["missing", "fulfilled"], "missing_kinds": ["contradiction", null], "notes": "要件1：雨が降る場合の移動を禁止し、降っていない場合だけ移動すると記載。"}
+{"blind_id": "BC078", "labels": ["fulfilled", "fulfilled", "fulfilled", "fulfilled"], "missing_kinds": [null, null, null, null], "notes": "全要件を記載。"}
+{"blind_id": "BC080", "labels": ["fulfilled", "missing", "fulfilled"], "missing_kinds": [null, "absence", null], "notes": "要件2：集合写真を1枚だけ撮る指示はあるが、21時という時刻指定が未記載。"}

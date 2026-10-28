@@ -78,6 +78,9 @@ def _valid_item(item, response: str) -> bool:
             return True
     elif item.get("unknown_source") is not None:
         return False
+    if "http_status" in item and (type(item["http_status"]) is not int
+                                  or item["http_status"] != 200):
+        return False
     if item.get("api_called") is not True or item.get("stop_reason") != "end_turn":
         return False
     if item.get("requested_model") != MODEL or item.get("returned_model") != MODEL:
@@ -217,6 +220,39 @@ def validate_assessment(assessment, *, response=None, question_meta=None) -> boo
         if assessment.get(key) != calculated[key]:
             return False
     return True
+
+
+def validate_public_summary(result: dict) -> bool:
+    """A v4 upstream failure cannot be cleared by attaching a complete proof.
+
+    The trusted local pipeline projects legacy diagnostics directly. Remote v4
+    records already carry a public decision, so that envelope must agree with
+    its checked assessment before it can be revalidated against request context.
+    """
+    if not isinstance(result, dict):
+        return False
+    try:
+        assessment = result.get("semantic_matching")
+        if not validate_assessment(assessment):
+            return False
+        unknown = bool(assessment["unknown_count"] or not assessment["requirements_total"])
+        source = result.get("metadata_source")
+        if source not in ("inline", "llm_generated", "none", "fallback"):
+            return False
+        if source in ("none", "fallback") and not unknown:
+            return False
+        verdict = "degraded" if unknown else "rewrite" if assessment["missing_count"] else "accept"
+        mode = "degraded" if unknown else "computed_ai_draft" if source == "llm_generated" else "computed"
+        coverage = None if unknown else assessment["coverage"]
+        if (result.get("verdict") != verdict or result.get("mode") != mode
+                or result.get("is_reliable") is not (not unknown)):
+            return False
+        if coverage is None:
+            return result.get("C") is None
+        return (type(result.get("C")) in (int, float)
+                and result["C"] == coverage)
+    except (TypeError, ValueError, KeyError, OverflowError, RecursionError):
+        return False
 
 
 def apply_semantic_gate(

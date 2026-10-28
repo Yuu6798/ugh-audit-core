@@ -55,11 +55,21 @@ def guard_history_row(row: dict) -> dict:
                else decoded.get("assessment_context"))
     source_schema = decoded.get("source_schema_version", decoded.get("schema_version", ""))
     source_schema = source_schema if isinstance(source_schema, str) else ""
+    assessment = decoded.get("semantic_matching")
+    # A valid pending assessment is degraded and may retain confirmed rows.
+    # The semantic gate below still rejects malformed or forged pending counts.
+    pending = (isinstance(assessment, dict)
+               and ((type(assessment.get("unknown_count")) is int and assessment["unknown_count"] > 0)
+                    or (type(assessment.get("requirements_total")) is int
+                        and assessment["requirements_total"] == 0)))
+    explicit_failure = decoded.get("mode") == "degraded" or decoded.get("verdict") == "degraded"
     eligible = (
         decoded.get("schema_version") == "4.0.0"
         and source_schema == "4.0.0"
         and decoded.get("decision_scope") == DECISION_SCOPE
         and decoded.get("metrics_scope") == METRICS_SCOPE
+        and (not explicit_failure or pending)
+        and decoded.get("metadata_source") != "fallback"
         and isinstance(context, dict) and bool(context)
         and isinstance(decoded.get("response"), str)
     )
@@ -215,7 +225,9 @@ class AuditDB:
         with self._conn() as conn:
             # sqlite3's context manager does not begin a transaction for DDL.
             # Keep schema additions, rebuilding and backfills atomic together.
-            conn.execute("BEGIN")
+            # Serialize initialization before schema reads. A deferred transaction
+            # lets concurrent workers both read, then fail to upgrade their locks.
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS audit_runs (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,

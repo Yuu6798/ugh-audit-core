@@ -7,6 +7,8 @@ import ssl
 import time
 from types import SimpleNamespace
 
+from ._semantic_v2 import _reject_constant, _unique_object
+
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 
@@ -75,7 +77,8 @@ class AnthropicHTTP:
                 if response.isclosed():
                     break
             remaining()
-            result = _objects(json.loads(b"".join(chunks)))
+            result = _objects(json.loads(b"".join(chunks), object_pairs_hook=_unique_object,
+                                         parse_constant=_reject_constant))
             result._request_id = request_id
             return result
         finally:

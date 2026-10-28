@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -41,3 +48,42 @@ jobs:
 
       - name: Test
         run: python -m pytest -q --tb=short
+
+  test-sbert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HF_HOME: ${{ runner.temp }}/ugh-hf-cache
+      HF_HUB_DISABLE_PROGRESS_BARS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.HF_HOME }}
+          key: hf-${{ runner.os }}-minilm-e8f8c211226b894fcb81acc59f3b34ba3efd5f42
+      - name: Install CPU model and full test dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev,full]"
+      - name: Prime and verify pinned SBert model
+        run: python scripts/prepare_sbert_cache.py --cache "$HF_HOME"
+      - name: Test all paths without external network
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: |
+          python -m pytest -q --tb=short -rs --junitxml="${{ runner.temp }}/sbert-tests.xml"
+          python -c "import xml.etree.ElementTree as E; r=E.parse('${{ runner.temp }}/sbert-tests.xml').getroot(); s=r.findall('testsuite'); assert s and all(int(x.get('skipped','0')) == 0 for x in s), 'Unexpected skipped tests'"
+      - name: Verify saved evaluation artifacts
+        run: python analysis/instruction_coverage_v4/verify_artifacts.py --current-source .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sbert-test-results
+          path: ${{ runner.temp }}/sbert-tests.xml

@@ -66,7 +66,7 @@ def _make_semantic_judge():
 
 def _valid_remote_metrics(result: dict) -> bool:
     """Require the current scoped, nullable public contract before using its proof."""
-    if (result.get("schema_version") != "4.0.0"
+    if (not isinstance(result, dict) or result.get("schema_version") != "4.0.0"
             or result.get("decision_scope") != DECISION_SCOPE
             or result.get("metrics_scope") != METRICS_SCOPE):
         return False
@@ -104,7 +104,9 @@ def _valid_remote_metrics(result: dict) -> bool:
         if value is not None and (type(value) not in (int, float)
                 or not low <= value <= high or not math.isfinite(value)):
             return False
-    return isinstance(result.get("semantic_matching"), dict)
+    from .semantic_matching import validate_public_summary
+
+    return validate_public_summary(result)
 
 
 def _read_remote_json(resp):
@@ -466,6 +468,15 @@ def _proxy_get(remote_api: str, path: str) -> Dict:
         return {"error": f"remote_api_error:{type(e).__name__}"}
     from .storage.audit_db import guard_history_row
 
+    def guard_remote_row(row):
+        if not isinstance(row, dict):
+            return {"error": "remote_history_invalid"}
+        if not _valid_remote_metrics(row):
+            # An inconsistent remote envelope cannot become eligible when the
+            # projected row is guarded again by another history consumer.
+            row = {**row, "schema_version": "", "source_schema_version": ""}
+        return guard_history_row(row)
+
     if path.startswith("/api/session/"):
         if not isinstance(result, dict):
             return {"error": "remote_session_invalid"}
@@ -491,10 +502,9 @@ def _proxy_get(remote_api: str, path: str) -> Dict:
             "avg_quality_score": None, "legacy_summary": result,
         }
     if isinstance(result, list):
-        return [guard_history_row(row) if isinstance(row, dict)
-                else {"error": "remote_history_invalid"} for row in result]
+        return [guard_remote_row(row) for row in result]
     if isinstance(result, dict) and "error" not in result:
-        return guard_history_row(result)
+        return guard_remote_row(result)
     return result
 
 

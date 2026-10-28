@@ -221,6 +221,7 @@ API 仕様 (tool schema / エンドポイント / 環境変数) 全詳細:
 | Cascade Matcher (SBert Tier 2/3) | [`docs/cascade_design.md`](docs/cascade_design.md) |
 | GoldenStore リファレンス検索 | [`docs/golden_store.md`](docs/golden_store.md) |
 | 現行の要件照合契約 (schema 4) | [`docs/semantic_matching_v2.md`](docs/semantic_matching_v2.md) |
+| schema 4 の検証・移行・保存証拠 | [`docs/instruction_coverage_v4_validation.md`](docs/instruction_coverage_v4_validation.md) |
 | 旧診断の計算式 (PoR / ΔE / verdict) | [`docs/formulas.md`](docs/formulas.md) |
 | 意味損失関数 L_sem | [`docs/semantic_loss.md`](docs/semantic_loss.md) |
 | grv 因果構造損失 | [`docs/grv_design.md`](docs/grv_design.md) |

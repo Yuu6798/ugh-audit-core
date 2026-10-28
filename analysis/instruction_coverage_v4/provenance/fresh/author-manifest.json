@@ -1,0 +1,58 @@
+{
+  "dataset_file": "gold-original.jsonl",
+  "schema": "one_question_per_json_line",
+  "author_type": "LLM-generated synthetic gold",
+  "human_verified": false,
+  "implementation_and_conditions_frozen_at_utc": "2026-10-28T16:20:42Z",
+  "authoring_started_at_utc": "2026-10-28T16:25:48.3004457Z",
+  "authoring_completed_at_utc": "2026-10-28T16:26:32.1083728Z",
+  "provenance": {
+    "freshly_authored_after_freeze": true,
+    "old_data_read": false,
+    "implementation_source_read": false,
+    "old_results_read": false,
+    "model_api_called": false,
+    "credentials_read": false,
+    "note": "This is LLM-authored synthetic evaluation data; no human validation is claimed."
+  },
+  "counts": {
+    "questions": 20,
+    "requirements": 70,
+    "answers": 80,
+    "requirement_slots": 280,
+    "fulfilled_slots": 240,
+    "missing_slots": 40,
+    "absence_slots": 20,
+    "contradiction_slots": 20,
+    "distinct_domains": 20,
+    "questions_by_requirement_count": {
+      "2": 5,
+      "3": 5,
+      "4": 5,
+      "5": 5
+    },
+    "answers_by_variant": {
+      "complete": 20,
+      "paraphrase": 20,
+      "omission": 20,
+      "contradiction": 20
+    },
+    "target_index_counts_across_omission_and_contradiction": {
+      "0": 14,
+      "1": 12,
+      "2": 8,
+      "3": 4,
+      "4": 2
+    }
+  },
+  "validation": {
+    "json_parse_passed": true,
+    "ids_sequential_and_unique": true,
+    "label_lengths_passed": true,
+    "one_missing_per_negative_answer": true,
+    "target_label_and_kind_consistent": true,
+    "other_requirement_clauses_preserved_verbatim_in_negative_answers": true,
+    "semantic_labels": "Authored by LLM; not independently human-verified"
+  },
+  "sha256": "669cbc2e3bcac168801eddc51370aea774eadd9a7bcacbb7aa530358f0e77541"
+}
