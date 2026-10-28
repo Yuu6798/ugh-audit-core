@@ -1,0 +1,2 @@
+# Preserve the historical CSV byte-for-byte, including its original CRLF.
+analysis/snapshots/ha48_regression_check.v2.csv -text -diff
