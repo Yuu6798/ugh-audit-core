@@ -1,12 +1,15 @@
-"""tests/test_ha48_regression.py — HA48 audit 出力の回帰テスト
+"""tests/test_ha48_regression.py — HA48 既知データの診断出力の回帰テスト
 
 `analysis/ha48_regression_check.csv` を "期待値スナップショット" として、
 HA48 48 件全件に対し `detect → calculate` を走らせ、S / C / ΔE /
 quality_score / verdict / f1-f4 / hits / total が一致することを検証する。
 
-目的: 論文で報告する HA48 ρ=-0.5195 (ΔE vs O, system C) を支える pipeline
-出力が将来の変更で壊れないことを CI で保証する。**論文の数字が CI で
-守られる** reproducibility guard。
+目的: 現行の legacy heuristic 診断出力の意図しない変化を検出する。
+2026-10-28 の通常経路の否定極性修正により q012 は 3→2 hits、合計は
+97→96 となった。修正前 CSV は analysis/snapshots/ha48_regression_check.v2.csv
+にバイト単位で保存し、人手評価 O は変更しない。この既知データの再計算を、
+新しい独立評価や意味判定精度の改善証拠として扱わない。
+旧版の論文統計を現行 CSV の回帰一致で保証するテストではない。
 
 運用:
 - SBert (sentence-transformers) が必要。cascade rescued の C が再現できる
@@ -19,6 +22,7 @@ quality_score / verdict / f1-f4 / hits / total が一致することを検証す
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -32,6 +36,8 @@ sys.path.insert(0, str(ROOT))
 pytest.importorskip("sentence_transformers")
 
 CSV_PATH = ROOT / "analysis" / "ha48_regression_check.csv"
+HISTORICAL_CSV_PATH = ROOT / "analysis" / "snapshots" / "ha48_regression_check.v2.csv"
+HISTORICAL_CSV_SHA256 = "556fd5a5d17706537c53eb13d892ddc7230159fc6a4c47e7489d7e0a8c63992f"
 RESPONSES_PATH = ROOT / "data" / "phase_c_scored_v1_t0_only.jsonl"
 Q_META_PATH = ROOT / "data" / "question_sets" / "ugh-audit-100q-v3-1.jsonl"
 
@@ -45,9 +51,9 @@ _ABS_TOL = 1e-3
 EXPECTED_HA48_N = 48
 
 
-def _load_csv() -> dict:
+def _load_csv(path: Path = CSV_PATH) -> dict:
     result: dict = {}
-    with open(CSV_PATH, encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for row in csv.DictReader(f):
             result[row["id"]] = row
     return result
@@ -86,6 +92,32 @@ def q_meta() -> dict:
 # --- sentinel: parametrize が no-op 化していないことを独立保証する ---
 
 
+def test_historical_ha48_snapshot_is_preserved_byte_for_byte() -> None:
+    assert hashlib.sha256(HISTORICAL_CSV_PATH.read_bytes()).hexdigest() == HISTORICAL_CSV_SHA256
+
+
+def test_current_ha48_version_changes_only_declared_machine_fields() -> None:
+    """既知の機械出力差分と、人手 O の不変性を明示的に記録する。"""
+    historical = _load_csv(HISTORICAL_CSV_PATH)
+    current = _load_csv()
+    assert current.keys() == historical.keys()
+    actual_changes = {
+        (qid, field): (old_value, current[qid][field])
+        for qid, row in historical.items()
+        for field, old_value in row.items()
+        if current[qid][field] != old_value
+    }
+    assert actual_changes == {
+        ("q012", "C"): ("1.0", "0.6667"),
+        ("q012", "delta_e"): ("0.0026", "0.0396"),
+        ("q012", "quality_score"): ("4.9896", "4.8414"),
+        ("q012", "hits"): ("3", "2"),
+    }
+    assert all(current[qid]["O"] == row["O"] for qid, row in historical.items())
+    assert sum(int(row["hits"]) for row in historical.values()) == 97
+    assert sum(int(row["hits"]) for row in current.values()) == 96
+
+
 def test_ha48_snapshot_csv_is_loadable_and_has_expected_size() -> None:
     """HA48 snapshot CSV が読めて **canonical 48 件と exact 一致** する。
 
@@ -100,10 +132,10 @@ def test_ha48_snapshot_csv_is_loadable_and_has_expected_size() -> None:
     定数と CSV 両方を同一コミットで更新する。
     """
     ids = _csv_ids()
-    # Exact cardinality: 論文の "HA48" claim を row-for-row に lock する
+    # Exact cardinality: 既知の HA48 診断対象を row-for-row に lock する
     assert len(ids) == EXPECTED_HA48_N, (
         f"HA48 snapshot row count mismatch: expected exactly {EXPECTED_HA48_N} "
-        f"(paper-facing HA48 claim), got {len(ids)}. Accidental truncation or "
+        f"(versioned HA48 diagnostic), got {len(ids)}. Accidental truncation or "
         f"undeclared dataset expansion breaks reproducibility guard."
     )
     # duplicate id がないこと
@@ -143,7 +175,7 @@ def test_ha48_row_matches_snapshot(
 ) -> None:
     """HA48 1 件の audit 出力が CSV スナップショットと一致"""
     from detector import detect
-    from ugh_calculator import calculate
+    from ugh_calculator import calculate, derive_verdict
 
     assert qid in expected_rows, f"CSV に {qid} がない"
     assert qid in responses, f"response JSONL に {qid} がない (data drift)"
@@ -160,6 +192,7 @@ def test_ha48_row_matches_snapshot(
     assert evidence.propositions_total == int(expected["total"]), (
         f"{qid}: total drift (expected {expected['total']}, got {evidence.propositions_total})"
     )
+    assert derive_verdict(state) == expected["verdict"], f"{qid}: legacy verdict drift"
 
     # 浮動小数フィールド: 4 桁丸め round-trip を許容
     assert state.S == pytest.approx(float(expected["S"]), abs=_ABS_TOL), (
@@ -195,7 +228,7 @@ def test_ha48_row_matches_snapshot(
     )
 
 
-# --- 集約サマリテスト (論文で報告する数字の直接検証) ---
+# --- 集約サマリテスト (現行の既知データ診断スナップショット) ---
 
 
 def test_ha48_overall_hit_rate_matches_snapshot(
@@ -203,11 +236,11 @@ def test_ha48_overall_hit_rate_matches_snapshot(
     responses: dict,
     q_meta: dict,
 ) -> None:
-    """全 48 件の hit 総数が CSV スナップショットと一致 (論文 baseline 合計)"""
+    """全 48 件の hit 総数が現行 CSV と一致 (独立評価ではない)"""
     from detector import detect
 
     # 集約前に cardinality が canonical 48 件であることを再確認する。
-    # これで sentinel 漏れた場合でも本 test が paper-facing "HA48" の前提
+    # これで sentinel 漏れた場合でも本 test が既知の "HA48" 診断対象の前提
     # 破綻を surface できる。
     assert len(expected_rows) == EXPECTED_HA48_N, (
         f"aggregate test の前提破綻: expected {EXPECTED_HA48_N} rows, "

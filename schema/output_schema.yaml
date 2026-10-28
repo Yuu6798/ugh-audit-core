@@ -1,4 +1,10 @@
-# output_schema.yaml — 出力JSON定義 + decision logic + 出力例
+# HISTORICAL: legacy diagnostic / engine schema, retained for provenance only.
+# This file is not the current REST, MCP, or Python audit output contract.
+# The schema 4.0.0 instruction-coverage contract is documented in
+# docs/semantic_matching_v2.md and docs/server_api.md.
+# Old thresholds, numeric examples, and validation statements below are historical;
+# they do not determine current admission or general response quality.
+# output_schema.yaml — 旧出力JSON定義 + 旧 decision logic + 旧出力例
 
 output:
   evidence:

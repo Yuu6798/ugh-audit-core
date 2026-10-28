@@ -106,7 +106,8 @@ class TestDescendantMetaNonDegraded:
         assert state["C"] is not None, (
             "original_core_propositions が拾えれば C は None にならない"
         )
-        assert state["delta_e"] is not None
-        # verdict は accept / rewrite / regenerate のいずれか (degraded ではない)
-        # audit() の出力に verdict は含まれないので、delta_e が算出されている
-        # ことで degraded でないことを保証する。
+        assert state["delta_e"] is None
+        assert state["quality_score"] is None
+        assert result["verdict"] == "accept"
+        assert result["mode"] == "computed"
+        assert result["legacy_metrics"]["delta_e"] is not None

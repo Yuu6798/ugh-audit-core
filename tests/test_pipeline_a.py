@@ -212,7 +212,7 @@ class TestAPIOutput:
         })
         data = resp.json()
 
-        assert isinstance(data["S"], float)
+        assert data["S"] is None
         assert data["C"] is None
         assert data["delta_e"] is None
         assert data["quality_score"] is None
@@ -221,7 +221,7 @@ class TestAPIOutput:
         assert data["hit_rate"] is None
         assert isinstance(data["structural_gate"], dict)
         assert data["saved_id"] is None
-        assert data["schema_version"] == "3.0.0"
+        assert data["schema_version"] == "4.0.0"
 
     def test_structural_gate_fields(self, client):
         resp = client.post("/api/audit", json={

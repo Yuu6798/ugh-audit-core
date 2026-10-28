@@ -90,7 +90,9 @@ class SemanticMatchingTests(unittest.TestCase):
         self.assertEqual(result["requirement_verdict"], "incomplete")
         self.assertNotIn("soft_rescue", result)
         self.assertEqual(result["C"], 2 / 3)
-        self.assertEqual(result["hit_sources"], {"core_hit": 2})
+        self.assertEqual(result["hit_sources"]["fulfilled"], 2)
+        self.assertEqual(result["hit_sources"]["missing"], 1)
+        self.assertEqual(result["legacy_metrics"]["hit_sources"], {"core_hit": 2})
 
     def test_unknown_masks_numeric_scores_and_preserves_total(self):
         assessment = assess_requirements(META, ANSWER, ScriptedJudge(
@@ -116,37 +118,38 @@ class SemanticMatchingTests(unittest.TestCase):
         self.assertEqual(assessment["unknown_ids"], ["0", "1", "2"])
         self.assertEqual(apply_semantic_gate(legacy(), assessment)["verdict"], "degraded")
 
-    def test_all_fulfilled_cannot_upgrade_existing_rejection(self):
+    def test_all_fulfilled_overrides_nonbinding_legacy_rejection(self):
         assessment = assess_requirements(META, ANSWER, ScriptedJudge(item(), item(), item()))
         for verdict in ("rewrite", "regenerate", "degraded"):
             result = apply_semantic_gate(legacy(verdict=verdict, verdict_advisory=verdict), assessment)
-            self.assertEqual(result["verdict"], verdict)
+            self.assertEqual(result["verdict"], "accept")
+            self.assertEqual(result["legacy_metrics"]["verdict"], verdict)
         self.assertEqual(apply_semantic_gate(legacy(), assessment)["verdict"], "accept")
 
-    def test_structural_failure_cannot_be_accepted_even_when_complete(self):
+    def test_structural_diagnostic_failure_is_nonbinding(self):
         assessment = assess_requirements(META, ANSWER, ScriptedJudge(item(), item(), item()))
         result = apply_semantic_gate(legacy(structural_gate={
             "f1": 1.0, "f2": 0.0, "f3": 0.0, "f4": 0.0, "gate_verdict": "fail",
         }), assessment)
-        self.assertEqual(result["verdict"], "regenerate")
-        self.assertEqual(result["verdict_advisory"], "regenerate")
-        self.assertFalse(result["is_reliable"])
+        self.assertEqual(result["verdict"], "accept")
+        self.assertEqual(result["verdict_advisory"], "accept")
+        self.assertTrue(result["is_reliable"])
 
-    def test_incomplete_or_absent_structural_gate_cannot_accept(self):
+    def test_incomplete_or_absent_diagnostics_do_not_block_valid_semantics(self):
         assessment = assess_requirements(META, ANSWER, ScriptedJudge(item(), item(), item()))
         for gate in ({"gate_verdict": "incomplete"}, None, {}):
             result = apply_semantic_gate(legacy(structural_gate=gate), assessment)
-            self.assertEqual(result["verdict"], "degraded")
-            self.assertTrue(result["requires_review"])
-            self.assertIsNone(result["C"])
+            self.assertEqual(result["verdict"], "accept")
+            self.assertFalse(result["requires_review"])
+            self.assertEqual(result["C"], 1.0)
 
-    def test_remote_pass_label_cannot_hide_invalid_or_failing_flags(self):
+    def test_invalid_diagnostic_flags_are_sanitized_and_nonbinding(self):
         assessment = assess_requirements(META, ANSWER, ScriptedJudge(item(), item(), item()))
         for value in (None, "garbage", True, 1.0, float("nan"), -0.1, 1.1):
             gate = {"f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": value, "gate_verdict": "pass"}
             result = apply_semantic_gate(legacy(structural_gate=gate), assessment)
-            self.assertEqual(result["verdict"], "degraded")
-            self.assertTrue(result["requires_review"])
+            self.assertEqual(result["verdict"], "accept")
+            self.assertFalse(result["requires_review"])
 
     def test_non_api_known_result_cannot_certify_coverage(self):
         for value in (False, None, 1):
@@ -155,13 +158,13 @@ class SemanticMatchingTests(unittest.TestCase):
             assessed = assess_requirements({"core_propositions": ["x"]}, ANSWER, ScriptedJudge(raw))
             self.assertEqual(assessed["unknown_count"], 1)
 
-    def test_explicit_unreliability_cannot_become_accept(self):
+    def test_legacy_unreliability_does_not_mask_valid_semantics(self):
         assessment = assess_requirements(META, ANSWER, ScriptedJudge(item(), item(), item()))
         for flag in (False, None, 0, 1):
             result = apply_semantic_gate(legacy(is_reliable=flag), assessment)
-            self.assertEqual(result["verdict"], "degraded")
-            self.assertTrue(result["requires_review"])
-            self.assertIsNone(result["C"])
+            self.assertEqual(result["verdict"], "accept")
+            self.assertFalse(result["requires_review"])
+            self.assertEqual(result["C"], 1.0)
 
     def test_raw_response_flip_truncation_and_duplicate_keys_are_unknown(self):
         for raw_text in ('{', '{"status":"fulfilled","status":"missing"}'):

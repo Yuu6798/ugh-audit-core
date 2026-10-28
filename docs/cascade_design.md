@@ -1,5 +1,11 @@
 # Cascade Tier 2 設計ドキュメント
 
+**schema 4:** 本書の2層は任意の旧診断であり、最終の記述充足判定を担わない。
+意味照合は要件準備後に25秒の予算で先に実行する。SBert の起動・失敗はその予算を
+消費せず、旧 C の回収も上位の意味充足率を変更しない。旧数値は `legacy_metrics`、
+構造ゲートは `binding=false`。現行契約は
+[`semantic_matching_v2.md`](semantic_matching_v2.md) を参照。
+
 <a id="core-vs-cascade"></a>
 ## core pipeline と cascade layer の関係
 

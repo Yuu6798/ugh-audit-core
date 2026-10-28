@@ -13,9 +13,9 @@ from typing import Callable, Optional
 
 from ugh_calculator import calculate
 from detector import detect
-from decider import _compute_budget, _load_opcodes, decide
+from decider import _compute_budget, _load_opcodes
 from ugh_audit.pipeline import run_audit
-from ugh_audit.semantic_matching import make_judge_from_env
+from ugh_audit.semantic_matching import make_judge_from_env, _json_safe
 
 
 _DEFAULT_JUDGE = object()
@@ -49,28 +49,46 @@ def audit(
     else:
         from ugh_calculator import Evidence
         evidence = Evidence(question_id=question_id, f4_premise=None)
-    state = calculate(evidence)
-    result = decide(state, evidence)
+    legacy_errors = []
+    try:
+        visible_state = asdict(calculate(evidence))
+    except Exception as exc:
+        visible_state = {"por_state": "inactive", "grv": None, "grv_tag": "none"}
+        legacy_errors.append("python_legacy_state_error:" + type(exc).__name__)
+    try:
+        visible_evidence = asdict(evidence)
+        if isinstance(visible_evidence.get("hit_sources"), dict):
+            visible_evidence["hit_sources"] = {
+                str(key): value for key, value in visible_evidence["hit_sources"].items()
+            }
+    except Exception as exc:
+        visible_evidence = None
+        legacy_errors.append("python_legacy_evidence_error:" + type(exc).__name__)
+    if legacy_errors:
+        output["legacy_metrics"] = dict(output["legacy_metrics"])
+        output["legacy_metrics"]["errors"] = (
+            list(output["legacy_metrics"].get("errors") or []) + legacy_errors
+        )
     decision = output["verdict"]
-    order = [op for op in result["policy"]["repair_order"]
-             if op not in ("ADD_PROPOSITION", "STOP_REWRITE")]
-    if decision in ("accept", "degraded"):
-        order = []
-    else:
-        order.extend(["ADD_PROPOSITION"] * output["semantic_matching"]["missing_count"])
+    order = (["ADD_PROPOSITION"] * output["semantic_matching"]["missing_count"]
+             if decision == "rewrite" else [])
     order.append("STOP_REWRITE")
-    visible_state = asdict(state)
-    for field in ("C", "delta_e", "quality_score"):
+    for field in ("S", "C", "delta_e", "quality_score"):
         visible_state[field] = output[field]
-    if output["C"] is None:
-        visible_state["C_bin"] = None
-        visible_state["delta_e_bin"] = None
-    return {
-        "evidence": asdict(evidence),
+    visible_state["C_bin"] = None
+    visible_state["delta_e_bin"] = None
+    return _json_safe({
+        "evidence": visible_evidence,
         "state": visible_state,
         "policy": {"decision": decision, "repair_order": order},
         "budget": _compute_budget(order, _load_opcodes()),
         "schema_version": output["schema_version"],
+        "decision_scope": output["decision_scope"],
+        "metrics_scope": output["metrics_scope"],
+        "assessment_context": output.get("_question_meta"),
+        "structural_gate": output["structural_gate"],
+        "hit_rate": output["hit_rate"],
+        "hit_sources": output.get("hit_sources"),
         "verdict": decision,
         "mode": output["mode"],
         "is_reliable": output["is_reliable"],
@@ -78,7 +96,7 @@ def audit(
         "requires_review": output["requires_review"],
         "semantic_matching": output["semantic_matching"],
         "legacy_metrics": output["legacy_metrics"],
-    }
+    })
 
 
 def _load_question_meta(data_path: str, question_id: str) -> Optional[dict]:

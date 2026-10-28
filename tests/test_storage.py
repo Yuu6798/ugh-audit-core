@@ -31,17 +31,22 @@ def test_save_and_list(tmp_db):
 
     recent = tmp_db.list_recent(10)
     assert len(recent) == 1
-    assert recent[0]["S"] == pytest.approx(0.95)
+    assert recent[0]["S"] is None
     assert recent[0]["C"] is None
     assert recent[0]["delta_e"] is None
     assert recent[0]["quality_score"] is None
     assert recent[0]["verdict"] == "degraded"
     assert recent[0]["requires_review"] is True
     legacy = recent[0]["legacy_metrics"]
+    assert legacy["S"] == pytest.approx(0.95)
     assert legacy["C"] == pytest.approx(0.80)
     assert legacy["delta_e"] == pytest.approx(0.05)
     assert legacy["quality_score"] == pytest.approx(4.80)
     assert legacy["verdict"] == "accept"
+    with tmp_db._conn() as conn:
+        assert conn.execute("SELECT S,C,delta_e,quality_score,verdict FROM audit_runs WHERE id=?", (row_id,)).fetchone() == (
+            0.95, 0.80, 0.05, 4.80, "accept",
+        )
 
 
 def test_session_summary(tmp_db):

@@ -9,7 +9,9 @@ from starlette.testclient import TestClient
 
 from ugh_audit import mcp_server, server
 from ugh_audit.reference.golden_store import GoldenStore
-from ugh_audit.semantic_matching import MODEL, assess_requirements
+from ugh_audit.semantic_matching import (
+    MODEL, DECISION_SCOPE, METRICS_SCOPE, assess_requirements, apply_semantic_gate,
+)
 from ugh_audit.storage.audit_db import AuditDB
 from ugh_calculator import Evidence
 
@@ -88,6 +90,12 @@ def test_rest_and_local_mcp_have_the_same_authoritative_gate(
     rest = rest.json()
     mcp = mcp_server.audit_answer(**payload)
     for result in (rest, vars(mcp)):
+        assert result["schema_version"] == "4.0.0"
+        assert result["decision_scope"] == DECISION_SCOPE
+        assert result["metrics_scope"] == METRICS_SCOPE
+        assert result["assessment_context"]["core_propositions"] == META["core_propositions"]
+        assert result["S"] is result["delta_e"] is result["quality_score"] is None
+        assert result["structural_gate"]["binding"] is False
         assert result["verdict"] == verdict
         assert result["verdict_advisory"] == verdict
         assert result["requirement_verdict"] == requirement_verdict
@@ -144,28 +152,32 @@ def test_explicit_empty_canonical_requirements_do_not_fall_back(infrastructure, 
 
 def remote_frame(statuses=("fulfilled",) * 3):
     assessment = assess_requirements(META, ANSWER, ControlledJudge(statuses))
-    return {"schema_version": "3.0.0", "S": 1.0, "C": 1.0, "delta_e": 0.0,
+    source = {"schema_version": "4.0.0", "S": 1.0, "C": 1.0, "delta_e": 0.0,
             "quality_score": 5.0, "verdict": "accept", "verdict_advisory": "accept",
             "mode": "computed", "is_reliable": True, "metadata_source": "inline",
             "structural_gate": {"f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": 0.0,
                                 "gate_verdict": "pass", "primary_fail": "none"},
             "semantic_matching": assessment}
+    result = apply_semantic_gate(source, assessment, response=ANSWER, question_meta=META)
+    result["assessment_context"] = copy.deepcopy(META)
+    return result
 
 
 def fake_remote(monkeypatch, result):
     class Response:
+        status = 200
         def __enter__(self):
             return self
         def __exit__(self, *args):
             pass
-        def read(self):
+        def read(self, size=-1):
             return json.dumps(result, ensure_ascii=False).encode()
     monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: Response())
 
 
 @pytest.mark.parametrize("failure", [
     "legacy", "summary", "ids", "text", "quote", "model", "raw", "stop", "metrics",
-    "unreliable", "structural_unknown", "structural_label", "not_called",
+    "unreliable", "scope", "schema", "binding", "not_called",
 ])
 def test_proxy_revalidates_remote_acceptance_against_the_actual_request(monkeypatch, failure):
     frame = remote_frame()
@@ -187,10 +199,12 @@ def test_proxy_revalidates_remote_acceptance_against_the_actual_request(monkeypa
         frame["semantic_matching"]["results"][0]["stop_reason"] = "max_tokens"
     elif failure == "unreliable":
         frame["is_reliable"] = False
-    elif failure == "structural_unknown":
-        frame["structural_gate"]["f4"] = None
-    elif failure == "structural_label":
-        frame["structural_gate"]["f4"] = 1.0
+    elif failure == "scope":
+        frame["metrics_scope"] = "claimed_quality"
+    elif failure == "schema":
+        frame["schema_version"] = "3.0.0"
+    elif failure == "binding":
+        frame["structural_gate"]["binding"] = True
     elif failure == "not_called":
         frame["semantic_matching"]["results"][0]["api_called"] = False
     else:
@@ -255,11 +269,13 @@ def test_verified_session_statistics_exclude_unchecked_legacy_scores(infrastruct
     assessment = assess_requirements(META, ANSWER, ControlledJudge(("fulfilled",) * 3))
     db.save(session_id="mixed", response=ANSWER, S=1, C=1, delta_e=0.0,
             quality_score=5.0, verdict="accept", semantic_matching=assessment,
-            requirement_verdict="complete", requires_review=False)
+            requirement_verdict="complete", requires_review=False,
+            schema_version="4.0.0", decision_scope=DECISION_SCOPE,
+            metrics_scope=METRICS_SCOPE, question_meta=META)
     summary = client.get("/api/session/mixed").json()
     assert summary["total"] == 2
     assert summary["verified_total"] == summary["unverified_total"] == 1
-    assert summary["avg_delta_e"] == 0.0
+    assert summary["avg_S"] is summary["avg_delta_e"] is summary["avg_quality_score"] is None
     assert summary["legacy_summary"]["avg_delta_e"] == 0.4
 
 

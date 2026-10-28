@@ -1,5 +1,11 @@
 # 閾値一覧と導出根拠の索引 (thresholds)
 
+**schema 4 の範囲:** ここで扱う UGH 数値・構造・回収の閾値は非拘束の旧診断用。
+最終 accept/rewrite/degraded は明示要件の記述充足だけから決める。
+上位 S/ΔE/quality は null。旧 HA48 統計や閾値採用を、現在の承認条件や
+単純な LLM 監査への上乗せ価値として扱わない。現行契約は
+[`semantic_matching_v2.md`](semantic_matching_v2.md) を参照。
+
 本リポジトリの**パイプライン挙動を調整する (= tunable な) 主要閾値**の
 一覧・出典・導出根拠を単一エントリポイントに集約する索引ドキュメント。
 
@@ -32,7 +38,7 @@
   / `detector_design.md` 等) で命名されているか、校正スクリプト
   (`analysis/`) で探索対象になっているかを確認する
 
-## 1. 電卓層 (core pipeline)
+## 1. 旧診断の電卓層 (core pipeline)
 
 | 閾値 / 重み | 値 | 出典 doc | コード |
 |---|---|---|---|
@@ -50,8 +56,8 @@
 | gate_verdict `fail` | `fail_max ≥ 1.0` | [`formulas.md`](formulas.md) §gate_verdict | `ugh_audit/server.py:_gate_verdict_safe` |
 | gate_verdict `incomplete` | `f4 == None` | [`formulas.md`](formulas.md) §gate_verdict | `ugh_audit/server.py:_gate_verdict_safe` |
 
-**導出根拠**: ΔE の `0.10 / 0.25` は HA48 (n=48, ρ=-0.5195) で校正済み
-確定値。詳細は [`validation.md`](validation.md) の HA48 verdict 単調性
+**保存された採用履歴**: ΔE の `0.10 / 0.25` は旧 HA48 (n=48, ρ=-0.5195) で
+採用していた値。schema 4 の承認条件ではない。詳細は [`validation.md`](validation.md) の旧 HA48 verdict 単調性
 (`accept(3.44) > rewrite(2.62) > regenerate(1.00)`) を参照。gate_verdict
 は f1〜f4 の max を見る構造的健全性ゲート (`fail_max = max(f1, f2, f3, f4)`)
 で、`verdict` とは独立に算出される副次出力。`C_BIN_THRESHOLDS` は

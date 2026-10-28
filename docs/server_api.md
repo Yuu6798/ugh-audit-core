@@ -3,9 +3,9 @@
 `ugh_audit/server.py` は REST API と MCP サーバーを統合した FastAPI
 アプリケーション。`ugh_audit/mcp_server.py` は MCP スタンドアロン版。
 
-## 公開URL (Railway)
+## 既存公開URLの設定記録 (Railway)
 
-本番環境は Railway にデプロイ済み。PC を切っても常時稼働。
+以下は既存環境の設定記録。このローカル schema 4 作業版は公開していない。
 
 ```
 https://ugh-audit-core-production.up.railway.app
@@ -37,124 +37,87 @@ python -m ugh_audit.mcp_server --port 8000
 | GET | `/api/audit/{id}` | ID 指定で監査結果を 1 件取得 |
 | GET | `/api/history` | 直近の監査履歴 |
 | GET | `/api/session/{session_id}` | セッション単位の集計サマリー |
-| GET | `/api/drift` | ΔE 時系列データ |
+| GET | `/api/drift` | 要件充足率・判定の履歴（旧数値は診断） |
 | POST | `/mcp` | MCP Streamable HTTP |
 | GET | `/health` | ヘルスチェック (`{"status": "ok"}`) |
 
-## API 出力フォーマット (schema_version: 2.0.0)
+## API 出力契約 (schema_version: 4.0.0)
 
-### computed モード（本計算完了時）
+対象は明示要件の **記述充足**。要件の正しさ、現実の実行、回答全体の品質・真実性は
+判定しない。`decision_scope="instruction_coverage_v2"`、
+`metrics_scope="semantic_coverage_only"`。人が用意した
+`question_meta.core_propositions`（互換入力は `original_core_propositions`）を使用する。
+AI 生成の要件は草案であり、常に `requires_review=true`。
+`assessment_context` は照合に用いた要件メタデータを示す。
+
+| 要件別状態 | 最終 verdict | C / hit_rate |
+|---|---|---|
+| 1件以上の要件がすべて fulfilled | accept | 1.0 / 全件比率 |
+| unknown なし、missing あり | rewrite | fulfilled / 全要件数 |
+| unknown あり、要件なし・不正、照合不能 | degraded | null |
+
+`missing` は absence または contradiction。欠落と保留が同時にある場合も最終判定は
+`degraded`。`requirement_verdict` は missing があれば `incomplete`、全件充足なら
+`complete`、それ以外は `undetermined`。この契約では最終 `regenerate` を生成しない。
+
+上位の `S`・`delta_e`・`quality_score` は常に null。旧値・旧 verdict・旧 hit_sources
+は `legacy_metrics` に残す。上位 `structural_gate.binding=false`、構造値・旧 advisory は
+充足判定を上下させない。`verdict_advisory` は最終 verdict と一致し、`advisory_flags=[]`。
+
+### 判定確定の例（主要フィールドの抜粋）
+
+以下は仕様説明用の抜粋であり、完全な検証済みレスポンスではない。
+実際の `semantic_matching` には全要件の本文・状態・引用・理由・モデル・原応答・
+プロンプトハッシュ等が含まれ、受信側も検証する。
 
 ```json
 {
-  "schema_version": "2.0.0",
-  "S": 0.6875,
+  "schema_version": "4.0.0",
+  "decision_scope": "instruction_coverage_v2",
+  "metrics_scope": "semantic_coverage_only",
+  "S": null,
   "C": 0.5,
-  "delta_e": 0.1484,
-  "quality_score": 4.4062,
-  "verdict": "rewrite",
-  "hit_rate": "1/2",
-  "structural_gate": {
-    "f1": 0.0, "f2": 0.5, "f3": 0.0, "f4": 0.0,
-    "gate_verdict": "warn",
-    "primary_fail": "f2"
-  },
-  "saved_id": 1,
-  "mode": "computed",
-  "matched_id": "q001",
-  "metadata_source": "inline",
-  "computed_components": ["C", "S", "delta_e", "f1", "f2", "f3", "f4", "quality_score"],
-  "missing_components": [],
-  "errors": [],
-  "degraded_reason": [],
-  "mode_affordance": {
-    "primary": "critical",
-    "secondary": ["analytical"],
-    "closure": "qualified",
-    "action_required": false
-  },
-  "response_mode_signal": {
-    "status": "available",
-    "primary_mode": "critical",
-    "primary_score": 1.0,
-    "secondary_scores": {"analytical": 0.5},
-    "closure_expected": "qualified",
-    "closure_score": 1.0,
-    "action_required": false,
-    "action_score": null,
-    "overall_score": 0.8889,
-    "matched_moves": ["inspect_premise", "reframe_if_needed"],
-    "missing_moves": ["identify_mechanism_or_condition"],
-    "evidence": ["primary(critical): matched inspect_premise, reframe_if_needed"],
-    "signal_version": "v1.0"
-  },
-  "grv": null,
-  "mode_conditioned_grv": null
-}
-```
-
-### degraded モード（メタデータ不足時）
-
-```json
-{
-  "schema_version": "2.0.0",
-  "S": 1.0,
-  "C": null,
   "delta_e": null,
   "quality_score": null,
-  "verdict": "degraded",
-  "hit_rate": null,
-  "structural_gate": {
-    "f1": 0.0, "f2": 0.0, "f3": 0.0, "f4": null,
-    "gate_verdict": "incomplete",
-    "primary_fail": "none"
-  },
-  "saved_id": null,
-  "mode": "degraded",
-  "matched_id": null,
-  "metadata_source": "none",
-  "computed_components": ["S"],
-  "missing_components": ["C", "delta_e", "f1", "f2", "f3", "f4", "quality_score"],
-  "errors": ["question_meta_missing", "detection_skipped"],
-  "degraded_reason": ["question_meta_missing", "detection_skipped"],
-  "mode_affordance": null,
-  "response_mode_signal": {"status": "not_available"},
-  "grv": null,
-  "mode_conditioned_grv": null
+  "verdict": "rewrite",
+  "requirement_verdict": "incomplete",
+  "requires_review": true,
+  "hit_rate": "1/2",
+  "hit_sources": {"source": "llm_semantic", "fulfilled": 1, "missing": 1, "unknown": 0, "total": 2},
+  "structural_gate": {"f1": 0.0, "f2": 0.5, "f3": 0.0, "f4": 0.0, "gate_verdict": "warn", "primary_fail": "f2", "binding": false},
+  "mode": "computed",
+  "metadata_source": "inline",
+  "is_reliable": true,
+  "computed_components": ["semantic_matching", "C"],
+  "missing_components": ["S", "delta_e", "quality_score"]
 }
 ```
 
-### mode_affordance / response_mode_signal / mode_conditioned_grv
+`is_reliable=true` は全要件の照合が確定したことを表す。欠落が確定した rewrite にも
+true となり、真実性や承認を意味しない。AI 草案メタデータなら mode は
+`computed_ai_draft` であり、accept でも `requires_review=true`。
 
-`mode_affordance` は質問が期待する応答形式。`response_mode_signal` は回答の適合度信号。
-`mode_conditioned_grv` は grv + mode_affordance から算出した 4 成分解釈ベクトル。
-詳細: [`mode_affordance.md`](mode_affordance.md), [`grv_design.md`](grv_design.md)
+### degraded と制限
 
-- canonical reviewed (102問) にある question_id では自動的に `status: "available"` が返る
-- metadata 不在時は `status: "not_available"` (既存監査は継続)
-- verdict / S / C / delta_e / quality_score には影響しない非破壊信号
-- `mode_conditioned_grv` は grv と mode_affordance の両方が存在する場合のみ算出 (null フォールバック)
+認証情報不足、API障害、時間切れ、不正JSON、架空引用、モデル不一致等を充足にしない。
+保留が1件でもあれば C / hit_rate は null、`is_reliable=false`、`requires_review=true`。
+要件を分母から除いて合格にしない。要件準備後に25秒の照合予算を開始し、1要件は残り時間
+以下・最大10秒。任意の埋め込み・旧診断より先に実行する。上限は16要件、回答32,000文字、
+1要件2,000文字。詳細は [`semantic_matching_v2.md`](semantic_matching_v2.md)。
 
-### gate_verdict の値
+### 任意の旧診断
 
-| gate_verdict | 条件 | 意味 |
-|---|---|---|
-| pass | fail_max == 0.0 AND f4 ≠ None | 構造完全 |
-| warn | 0.0 < fail_max < 1.0 AND f4 ≠ None | 部分的な構造欠陥 |
-| fail | fail_max ≥ 1.0 | 構造的に破綻 |
-| incomplete | f4 == None | f4 未計算 |
+`legacy_metrics`、`structural_gate`、grv、response_mode_signal、mode_conditioned_grv は
+非拘束の診断である。SBert 未導入・モデル起動失敗でこれらが取得できなくても、確定した
+要件照合結果を取り消さない。旧数値の式・閾値は [`formulas.md`](formulas.md) に保存する。
+それらを加えると単純な LLM 監査より有用になるという主張は、この API 契約に含まれない。
 
-### is_reliable フラグ
+### schema 3 以前からの破壊的変更
 
-消費者（LLM 等）が結果を信頼してよいかを示す bool。
-
-```
-is_reliable = mode == "computed"
-              AND verdict in {"accept", "rewrite", "regenerate"}
-              AND gate_verdict != "fail"
-```
-
-`false` になるケース: degraded モード、gate_verdict=fail（構造的破綻）。
+schema 3 は旧数値判定に意味ゲートを追加する方式だった。schema 4 は要件照合自体を
+最終判定とし、上位の旧品質数値を廃止する。旧 C / ΔE / gate を承認条件に使う
+クライアントは更新する。remote proxy も契約・要件・引用・モデル・原応答を再検証し、
+旧サーバーの未検証 accept を degraded として扱う。
 
 ### GET /api/audit/{id}
 
@@ -162,32 +125,25 @@ ID 指定で 1 件取得。存在しない場合は `404`。
 
 ### GET /api/session/{session_id}
 
-```json
-{
-  "session_id": "abc-123",
-  "total": 5,
-  "avg_delta_e": 0.1234,
-  "min_delta_e": 0.0,
-  "max_delta_e": 0.35,
-  "avg_quality_score": 4.5
-}
-```
+`total` は保存件数、`verified_total` は現行契約で照合を再検証できた件数、
+`unverified_total` はそれ以外。verified は欠落確定も含み、合格件数ではない。
+上位の `avg_S` / `avg_delta_e` / `min_delta_e` / `max_delta_e` /
+`avg_quality_score` は null。旧数値の集約は `legacy_summary` に分離する。
 
 ### GET /api/drift?limit=100
 
-ΔE 時系列を `created_at ASC` で返す。品質推移の可視化に使用。
+作成日時順の要件充足率・判定と `source_schema_version` を返す。現在の上位
+S / ΔE / quality は null。旧品質の時系列として解釈しない。
 
-```json
-[
-  {"created_at": "2026-04-08T21:29:37+00:00", "S": 0.9375, "C": 0.667, "delta_e": 0.0396, "quality_score": 4.8414, "verdict": "accept"},
-  ...
-]
-```
+### DB 保存・履歴ガード
 
-### DB 保存ポリシー
+新規 degraded 結果は通常の computed 履歴に保存せず `saved_id=null`。
+確定結果は要件メタデータ、回答、意味照合の全根拠、契約・版を併せて保存する。
+`get` / `history` / `session` / `drift` も同じガードを通す。
 
-degraded 結果は DB に保存しない (`saved_id=null`)。
-ベースライン汚染を防止するため。
+旧版の記録、文脈不足、本文や要件と整合しない照合結果は、現在の表示を degraded に
+する。保存済みの原値は `legacy_metrics` へ残し、原レコードを書き換えない。
+`source_schema_version` で原版を区別する。旧 accept の再取得を現行の合格にしない。
 
 ## 設計方針
 
@@ -202,7 +158,10 @@ degraded 結果は DB に保存しない (`saved_id=null`)。
 |--------|-----|------|
 | `metadata_source` | TEXT | `inline` / `llm_generated` / `none` |
 | `generated_meta` | TEXT | LLM 生成メタの JSON（llm_generated 時のみ） |
-| `hit_sources` | TEXT | 命題ごとの判定結果 JSON（`{"0": "tfidf", "1": "miss"}`） |
+| `hit_sources` | TEXT | 要件別 fulfilled / missing / unknown の JSON |
+| `semantic_matching` / `question_meta` | TEXT | 全照合根拠・要件文脈の JSON |
+| `legacy_metrics` | TEXT | 旧指標の非拘束診断 JSON |
+| `schema_version` / `decision_scope` / `metrics_scope` | TEXT | 保存時の版・固定契約・数値範囲 |
 
 ## MCP ツール一覧
 
@@ -212,7 +171,7 @@ degraded 結果は DB に保存しない (`saved_id=null`)。
 | `get_audit` | ID 指定で監査結果を 1 件取得 |
 | `get_history` | 直近 N 件の監査履歴を取得 |
 | `get_session_summary` | セッション単位の集計サマリー |
-| `get_drift_history` | ΔE 時系列データ |
+| `get_drift_history` | 要件充足率・判定の履歴 |
 
 ## CLI
 
@@ -226,13 +185,13 @@ python -m ugh_audit.cli history --limit 5
 # セッション集計
 python -m ugh_audit.cli session <session_id>
 
-# ΔE 時系列
+# 要件充足率・判定の履歴
 python -m ugh_audit.cli drift --limit 50
 ```
 
 `UGH_AUDIT_DB` 環境変数で DB パスを指定可能。未指定時は `~/.ugh_audit/audit.db`。
 
-## デプロイ構成 (Railway)
+## 既存デプロイ構成の記録 (Railway)
 
 | 項目 | 値 |
 |------|-----|
@@ -249,13 +208,13 @@ python -m ugh_audit.cli drift --limit 50
 
 | 変数 | 設定値 | 備考 |
 |------|--------|------|
-| `ANTHROPIC_API_KEY` | (設定済み) | auto_generate_meta 用 |
+| `ANTHROPIC_API_KEY` | サーバー側の秘密設定 | 必須の意味照合と opt-in メタ生成用。入力メタデータから読まない |
 | `UGH_AUDIT_DB` | `/data/audit.db` | Dockerfile で定義 |
 | `UGH_AUDIT_CACHE_DIR` | `/data` | Dockerfile で定義 |
 | `UGH_META_CACHE_DIR` | `/data/meta_cache` | Dockerfile で定義 |
 | `PORT` | (Railway が自動設定) | uvicorn が参照 |
 
-### デプロイの流れ
+### 既存構成のデプロイ手順（この作業では未実施）
 
 1. main ブランチに push → Railway が自動検出
 2. Dockerfile でビルド (~3分)
@@ -272,4 +231,5 @@ python -m ugh_audit.cli drift --limit 50
 - `Dockerfile` — Railway デプロイ用
 - `railway.toml` — Railway 設定 (ヘルスチェック等)
 - `.dockerignore` — イメージ軽量化
-- verdict 判定の詳細: [`formulas.md`](formulas.md)
+- 現行判定契約: [`semantic_matching_v2.md`](semantic_matching_v2.md)
+- 旧数値の定義: [`formulas.md`](formulas.md)

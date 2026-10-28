@@ -56,7 +56,7 @@ class TestTypeStability:
         assert data["structural_gate"]["f4"] is None
 
     def test_no_trap_returns_f4_zero(self, client):
-        """2. trap_type="" (罠なし) → f4=0.0, S は f4 込みで算出"""
+        """罠なしの f4 診断はゼロ。未校正の S は参考値だけ公開。"""
         resp = client.post("/api/audit", json={
             "question": "テスト質問",
             "response": "テスト回答",
@@ -72,8 +72,9 @@ class TestTypeStability:
         data = resp.json()
         gate = data["structural_gate"]
         assert gate["f4"] == 0.0
-        assert isinstance(data["S"], float)
-        assert data["S"] > 0
+        assert data["S"] is None
+        assert isinstance(data["legacy_metrics"]["S"], float)
+        assert data["legacy_metrics"]["S"] > 0
 
     def test_missing_trap_type_returns_f4_null(self, client):
         """2b. trap_type キー不在 → f4=None, S は f4 除外で算出 (分母35)"""
@@ -91,11 +92,12 @@ class TestTypeStability:
         data = resp.json()
         gate = data["structural_gate"]
         assert gate["f4"] is None
-        assert isinstance(data["S"], float)
-        assert data["S"] > 0
+        assert data["S"] is None
+        assert isinstance(data["legacy_metrics"]["S"], float)
+        assert data["legacy_metrics"]["S"] > 0
 
     def test_full_computation_returns_computed(self, client, monkeypatch, semantic_complete_judge):
-        """3. メタデータと明示的な意味判定が揃えば数値を公開する。"""
+        """照合済みの要件充足率のみを主指標として公開する。"""
         monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
         resp = client.post("/api/audit", json={
             "question": "PoRが高ければ誠実か？",
@@ -111,9 +113,10 @@ class TestTypeStability:
         assert resp.status_code == 200
         data = resp.json()
         assert data["mode"] == "computed"
-        assert data["verdict"] in ("accept", "rewrite", "regenerate")
-        assert isinstance(data["delta_e"], float)
-        assert isinstance(data["quality_score"], float)
+        assert data["verdict"] == "accept"
+        assert data["S"] is data["delta_e"] is data["quality_score"] is None
+        assert isinstance(data["legacy_metrics"]["delta_e"], float)
+        assert isinstance(data["legacy_metrics"]["quality_score"], float)
         assert isinstance(data["C"], float)
 
     def test_partial_missing_returns_correct_components(self, client):
@@ -126,29 +129,25 @@ class TestTypeStability:
         computed = data["computed_components"]
         missing = data["missing_components"]
 
-        # S のみ計算される (detect() 未実行なので f1-f4 は未計算)
-        assert "S" in computed
+        assert computed == ["semantic_matching"]
         assert "f1" not in computed
         assert "f2" not in computed
         assert "f3" not in computed
 
-        # question_meta なし → f1-f4, C, delta_e, quality_score が missing
-        assert "f1" in missing
-        assert "f2" in missing
-        assert "f3" in missing
-        assert "f4" in missing
+        # 未校正スコアと未解決の C は利用できない。
+        assert "S" in missing
         assert "C" in missing
         assert "delta_e" in missing
         assert "quality_score" in missing
 
     def test_schema_version_present(self, client):
-        """5. 全レスポンスに schema_version=3.0.0 が含まれる"""
+        """全レスポンスに schema_version=4.0.0 が含まれる。"""
         resp = client.post("/api/audit", json={
             "question": "テスト",
             "response": "テスト",
         })
         data = resp.json()
-        assert data["schema_version"] == "3.0.0"
+        assert data["schema_version"] == "4.0.0"
 
     def test_degraded_never_returns_accept(self, client):
         """6. verdict=degraded のとき accept でないことを確認"""
@@ -201,8 +200,8 @@ class TestTypeStability:
         # f4=None と f4=0.0 は異なる S を返す
         assert s.S != s2.S
 
-    def test_history_preserves_zero_scores(self, client, monkeypatch, semantic_complete_judge):
-        """9. C=0.0, delta_e=0.0 が history で null にならないことを確認"""
+    def test_history_preserves_zero_legacy_coverage(self, client, monkeypatch, semantic_complete_judge):
+        """ゼロの従来被覆率も参考値に残し、現在の要件充足率と区別する。"""
         monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
         # computed モードで C=0.0 になるケース (全命題 miss)
         resp = client.post("/api/audit", json={
@@ -223,10 +222,7 @@ class TestTypeStability:
         hist = client.get("/api/history").json()
         assert len(hist) >= 1
         item = hist[0]
-        # C/delta_e/quality_score が 0.0 でも null にならない
-        assert item["C"] is not None
-        assert item["delta_e"] is not None
-        assert item["quality_score"] is not None
-        assert isinstance(item["C"], float)
-        assert isinstance(item["delta_e"], float)
-        assert isinstance(item["quality_score"], float)
+        assert item["C"] == 1.0
+        assert item["S"] is item["delta_e"] is item["quality_score"] is None
+        assert item["legacy_metrics"]["C"] == 0.0
+        assert isinstance(item["legacy_metrics"]["C"], float)

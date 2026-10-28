@@ -890,6 +890,9 @@ _NEGATION_POLARITY_FORMS = [
     # 動詞・助動詞否定形 (助詞/語幹 + ない)
     "ではない", "ではなく", "でない", "しない", "できない",
     "ならない", "はない", "もない", "がない", "のない",
+    # Passive/progressive negatives must survive the normal-path polarity
+    # guard too (e.g. 保証されない / 解明されていない).
+    "されない", "ていない",
     # 丁寧否定
     "ません",
     # 連体否定
@@ -1067,7 +1070,6 @@ def check_propositions(
         full_recall = overlap_count / len(prop_bigrams)
         op = detect_operator(prop)
         has_neg_deontic = any(token in prop for token in neg_deontic)
-        needs_polarity_deontic = has_neg_deontic
         needs_polarity_full = (
             (op is not None and OPERATOR_CATALOG[op.family]["effect"] == "polarity_flip")
             or has_neg_deontic
@@ -1079,7 +1081,9 @@ def check_propositions(
 
         min_required = min(_MIN_OVERLAP, len(prop_bigrams))
         if direct_recall >= 0.15 and full_recall >= 0.30 and overlap_count >= min_required:
-            if needs_polarity_deontic and not _response_has_negation(response_text, overlap_set):
+            # The normal overlap path must preserve ordinary negation as well
+            # as negative deontic forms, like the recovery paths below.
+            if needs_polarity_full and not _response_has_negation(response_text, overlap_set):
                 miss_ids.append(i)
                 continue
             if is_positive_deontic and _response_has_negation(response_text, overlap_set):

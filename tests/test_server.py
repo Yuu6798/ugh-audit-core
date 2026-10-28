@@ -251,10 +251,10 @@ def test_verdict_advisory_is_valid_verdict_value(client):
     assert rank[data["verdict_advisory"]] <= rank[data["verdict"]]
 
 
-def test_verdict_advisory_downgrades_on_extreme_collapse(
+def test_legacy_advisory_collapse_cannot_downgrade_complete_requirements(
     monkeypatch, tmp_db, tmp_golden, semantic_complete_judge,
 ):
-    """collapse_risk が閾値を超えると accept → rewrite に downgrade される
+    """collapse_risk の従来 downgrade は参考診断に保存する。
 
     Codex P3 対応: 前提 (verdict=accept, mcg 計算済み) は必ず成立させる。
     成立しないときは fixture バグとして test を失敗させる（silent no-op 禁止）。
@@ -312,14 +312,15 @@ def test_verdict_advisory_downgrades_on_extreme_collapse(
         "(needs n_propositions>=2)"
     )
 
-    # --- 目標挙動: downgrade 発生 + 両フラグ発火 ---
-    assert data["verdict_advisory"] == "rewrite"
-    assert "mcg_collapse_downgrade" in data["advisory_flags"]
-    assert "mcg_anchor_missing" in data["advisory_flags"]
+    assert data["verdict_advisory"] == "accept"
+    assert data["advisory_flags"] == []
+    assert data["legacy_metrics"]["verdict_advisory"] == "rewrite"
+    assert "mcg_collapse_downgrade" in data["legacy_metrics"]["advisory_flags"]
+    assert "mcg_anchor_missing" in data["legacy_metrics"]["advisory_flags"]
 
 
-def test_verdict_advisory_rewrite_passthrough(client, monkeypatch, semantic_complete_judge):
-    """primary verdict が rewrite のとき advisory も rewrite のまま (pass-through)"""
+def test_complete_requirements_override_legacy_rewrite(client, monkeypatch, semantic_complete_judge):
+    """従来の低被覆率による rewrite は、検証済み意味充足を覆さない。"""
     from ugh_calculator import Evidence
 
     monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
@@ -342,8 +343,7 @@ def test_verdict_advisory_rewrite_passthrough(client, monkeypatch, semantic_comp
     })
     data = resp.json()
     assert data["legacy_metrics"]["verdict"] == "rewrite"
-    assert data["verdict"] == "rewrite"
-    # pass-through: flags は空。意味判定不足によるdegradedで空振りしない。
+    assert data["verdict"] == "accept"
     assert data["verdict_advisory"] == data["verdict"]
     assert data["advisory_flags"] == []
 
@@ -351,16 +351,19 @@ def test_verdict_advisory_rewrite_passthrough(client, monkeypatch, semantic_comp
 # --- Paper defense: hit_sources 公開 (core vs cascade 分離) ---
 
 
-def test_hit_sources_null_without_meta(client):
-    """question_meta 無しで命題未検出のとき hit_sources は null"""
+def test_hit_sources_empty_without_meta(client):
+    """要件不在なら空の意味照合カウンターを公開する。"""
     resp = client.post("/api/audit", json={
         "question": "テスト",
         "response": "テスト回答",
     })
     assert resp.status_code == 200
     data = resp.json()
-    # propositions_total=0 のとき null を返す契約
-    assert data["hit_sources"] is None
+    assert data["hit_sources"] == {
+        "source": "llm_semantic", "fulfilled": 0, "missing": 0,
+        "unknown": 0, "total": 0, "per_proposition": {},
+    }
+    assert data["legacy_metrics"]["hit_sources"] is None
 
 
 def test_hit_sources_structure_with_meta(client):
@@ -380,20 +383,17 @@ def test_hit_sources_structure_with_meta(client):
     hs = resp.json()["hit_sources"]
     assert hs is not None
     # 必須キー全て
-    for key in ("core_hit", "cascade_rescued", "miss", "total",
-                "core_only_hit_rate", "per_proposition"):
+    for key in ("source", "fulfilled", "missing", "unknown", "total", "per_proposition"):
         assert key in hs, f"{key} missing from hit_sources"
     # 内部整合
-    assert hs["core_hit"] + hs["cascade_rescued"] + hs["miss"] == hs["total"]
+    assert hs["fulfilled"] + hs["missing"] + hs["unknown"] == hs["total"]
+    assert hs["source"] == "llm_semantic"
     assert hs["total"] == 1  # 命題 1 件
-    # core_only_hit_rate は "N/M" 形式
-    assert hs["core_only_hit_rate"] == f"{hs['core_hit']}/{hs['total']}"
     # per_proposition の key は文字列（JSON 互換）
     for k in hs["per_proposition"]:
         assert isinstance(k, str)
-    # value は {tfidf, cascade_rescued, miss} のいずれか
     for v in hs["per_proposition"].values():
-        assert v in ("tfidf", "cascade_rescued", "miss")
+        assert v in ("fulfilled", "missing", "unknown")
 
 
 def test_hit_sources_core_only_claim_matches_tfidf_count(client):
@@ -409,7 +409,7 @@ def test_hit_sources_core_only_claim_matches_tfidf_count(client):
             "trap_type": "",
         },
     })
-    hs = resp.json()["hit_sources"]
+    hs = resp.json()["legacy_metrics"]["hit_sources"]
     assert hs is not None
     tfidf_count = sum(1 for v in hs["per_proposition"].values() if v == "tfidf")
     assert hs["core_hit"] == tfidf_count
@@ -429,7 +429,8 @@ def test_degraded_reason_contains_question_meta_missing(client):
     })
     data = resp.json()
     assert data["verdict"] == "degraded"
-    assert "question_meta_missing" in data["degraded_reason"]
+    assert "semantic_matching_undetermined" in data["degraded_reason"]
+    assert "question_meta_missing" in data["legacy_metrics"]["errors"]
 
 
 def test_degraded_reason_empty_when_not_degraded(client, monkeypatch, semantic_complete_judge):
@@ -469,7 +470,8 @@ def test_degraded_reason_detector_unavailable(client, monkeypatch):
     })
     data = resp.json()
     assert data["verdict"] == "degraded"
-    assert "detector_unavailable" in data["degraded_reason"]
+    assert "semantic_matching_undetermined" in data["degraded_reason"]
+    assert "detector_unavailable" in data["legacy_metrics"]["errors"]
 
 
 def test_degraded_reason_detector_error(client, monkeypatch):
@@ -494,8 +496,8 @@ def test_degraded_reason_detector_error(client, monkeypatch):
     data = resp.json()
     # detector が落ちても pipeline は degraded で継続
     assert data["verdict"] == "degraded"
-    assert any(r.startswith("detector_error:") for r in data["degraded_reason"])
-    assert "detector_error:RuntimeError" in data["degraded_reason"]
+    assert "semantic_matching_undetermined" in data["degraded_reason"]
+    assert "detector_error:RuntimeError" in data["legacy_metrics"]["errors"]
     # detector fault と metadata 問題を区別するため、以下の誤った reason が
     # 混入してはならない (core_propositions は実際に提供されており、
     # detection は skip ではなく例外で失敗しただけ)
@@ -503,13 +505,13 @@ def test_degraded_reason_detector_error(client, monkeypatch):
     assert "detection_skipped" not in data["degraded_reason"]
 
 
-def test_schema_version_3_0_0(client):
-    """意味判定が必須になったスキーマは 3.0.0。"""
+def test_schema_version_4_0_0(client):
+    """意味充足の判定と従来診断を分離したスキーマは 4.0.0。"""
     resp = client.post("/api/audit", json={
         "question": "テスト",
         "response": "テスト回答",
     })
-    assert resp.json()["schema_version"] == "3.0.0"
+    assert resp.json()["schema_version"] == "4.0.0"
 
 
 def test_metadata_without_semantic_credentials_never_accepts(client, monkeypatch):

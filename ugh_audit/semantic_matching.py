@@ -1,9 +1,4 @@
-"""Required v2 instruction coverage and a downgrade-only acceptance guard.
-
-Legacy C/Delta-E remain deterministic diagnostics. They cannot authorize accept
-without a complete semantic assessment. No caller-supplied metadata verdict is
-read; the only metadata input is the canonical requirement list.
-"""
+"""Authoritative instruction coverage; legacy heuristics are nonbinding diagnostics."""
 from __future__ import annotations
 
 import hashlib
@@ -18,6 +13,8 @@ from ._semantic_http import AnthropicHTTP
 
 MODEL = v2.MODEL
 COVERAGE_CONTRACT = v2.COVERAGE_CONTRACT
+DECISION_SCOPE = COVERAGE_CONTRACT
+METRICS_SCOPE = "semantic_coverage_only"
 PROMPT_SHA256 = hashlib.sha256(v2.SYSTEM.encode("utf-8")).hexdigest()
 MAX_REQUIREMENTS = 16
 MAX_ANSWER_CHARS = 32000
@@ -58,7 +55,8 @@ def _unknown(reason: str, **metadata) -> dict:
 
 
 def _valid_item(item, response: str) -> bool:
-    if not isinstance(item, dict) or item.get("status") not in _STATUSES:
+    if (not isinstance(item, dict) or not isinstance(item.get("status"), str)
+            or item.get("status") not in _STATUSES):
         return False
     status, kind = item["status"], item.get("missing_kind")
     evidence, reason = item.get("evidence"), item.get("reason")
@@ -191,6 +189,10 @@ def validate_assessment(assessment, *, response=None, question_meta=None) -> boo
         "fulfilled_count", "missing_count", "unknown_count",
     )) or type(assessment.get("requires_review")) is not bool:
         return False
+    coverage = assessment.get("coverage")
+    if coverage is not None and (type(coverage) not in (int, float)
+                                 or not 0 <= coverage <= 1 or not math.isfinite(coverage)):
+        return False
     expected = _requirements(question_meta) if question_meta is not None else None
     if question_meta is not None and len(expected or []) != total:
         return False
@@ -217,14 +219,30 @@ def validate_assessment(assessment, *, response=None, question_meta=None) -> boo
     return True
 
 
-def apply_semantic_gate(result: dict, assessment, *, response=None, question_meta=None) -> dict:
-    """Return a guarded copy; no completeness failure can authorize acceptance."""
+def apply_semantic_gate(
+    result: dict, assessment, *, response=None, question_meta=None,
+    eligible: bool = True, ineligible_reason: str = "input_or_transport_unverified",
+) -> dict:
+    """Project verified instruction coverage, independently of old quality heuristics.
+
+    ``eligible`` is a trusted internal envelope/input check, never request metadata.
+    A complete semantic result can override a legacy rejection; transport/input
+    failures cannot be promoted by a copied assessment. This operation is
+    idempotent for already projected records and preserves their legacy values.
+    """
     guarded = dict(result)
     response = response if response is not None else result.get("_response")
     question_meta = question_meta if question_meta is not None else result.get("_question_meta")
-    if response is None or not validate_assessment(
-        assessment, response=response, question_meta=question_meta,
-    ):
+    contextual = (isinstance(response, str) and bool(response.strip())
+                  and len(response) <= MAX_ANSWER_CHARS
+                  and isinstance(_requirements(question_meta), list))
+    try:
+        valid = contextual and validate_assessment(
+            assessment, response=response, question_meta=question_meta)
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        valid = False
+    if eligible is not True or not valid:
+        reason = ineligible_reason if eligible is not True else "invalid_semantic_assessment"
         requirements = _requirements(question_meta)
         if requirements is None and isinstance(assessment, dict):
             rows = assessment.get("results")
@@ -232,63 +250,63 @@ def apply_semantic_gate(result: dict, assessment, *, response=None, question_met
                 requirements = [row.get("requirement") if isinstance(row, dict) else None
                                 for row in rows]
         assessment = _summarize([
-            {**_unknown("invalid_semantic_assessment"), "requirement_id": str(index),
+            {**_unknown(reason), "requirement_id": str(index),
              "requirement": req} for index, req in enumerate(requirements or [])
-        ], reason="invalid_semantic_assessment")
+        ], reason=reason)
     if not isinstance(guarded.get("legacy_metrics"), dict):
         guarded["legacy_metrics"] = {key: result.get(key) for key in (
             "S", "C", "delta_e", "quality_score", "verdict", "mode", "hit_rate",
+            "is_reliable", "structural_gate", "hit_sources", "grv", "mode_conditioned_grv",
+            "verdict_advisory", "advisory_flags", "errors", "degraded_reason",
         )}
-    guarded.update(semantic_matching=assessment,
-                   requirement_verdict=assessment["requirement_verdict"],
-                   requires_review=assessment["requires_review"])
     unknown = bool(assessment["unknown_count"] or not assessment["requirements_total"])
-    structural = result.get("structural_gate")
-    structural_state = _validated_structural_gate(structural)
-    structural_unknown = structural_state is None
-    legacy_degraded = result.get("verdict") == "degraded" or result.get("mode") == "degraded"
-    unreliable_accept = result.get("verdict") == "accept" and result.get("is_reliable") is not True
-    blocked_reason = ("semantic_matching_undetermined" if unknown
-                      else "structural_gate_undetermined" if structural_unknown
-                      else "legacy_audit_undetermined" if legacy_degraded
-                      else "audit_result_unreliable" if unreliable_accept
-                      else "audit_result_invalid")
-    def strings(value):
-        return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+    verdict = "degraded" if unknown else "rewrite" if assessment["missing_count"] else "accept"
+    ai_draft = result.get("metadata_source") == "llm_generated"
+    structural = guarded["legacy_metrics"].get("structural_gate")
+    structural = dict(structural) if isinstance(structural, dict) else {
+        "f1": None, "f2": None, "f3": None, "f4": None,
+        "gate_verdict": "unavailable", "primary_fail": "none",
+    }
+    # Diagnostic values must remain serializable even if an optional detector failed.
+    for name in ("f1", "f2", "f3", "f4"):
+        value = structural.get(name)
+        if type(value) not in (int, float) or not 0 <= value <= 1 or not math.isfinite(value):
+            structural[name] = None
+    structural["binding"] = False
+    errors = ["semantic_matching_undetermined"] if unknown else ["requirements_missing"] if assessment["missing_count"] else []
+    if eligible is not True:
+        errors.insert(0, ineligible_reason)
+    guarded.update(
+        decision_scope=DECISION_SCOPE, metrics_scope=METRICS_SCOPE,
+        semantic_matching=assessment, requirement_verdict=assessment["requirement_verdict"],
+        S=None, C=None if unknown else assessment["coverage"], delta_e=None, quality_score=None,
+        verdict=verdict, verdict_advisory=verdict, advisory_flags=[],
+        mode="degraded" if unknown else "computed_ai_draft" if ai_draft else "computed",
+        is_reliable=not unknown, requires_review=unknown or verdict != "accept" or ai_draft,
+        hit_rate=None if unknown else f'{assessment["fulfilled_count"]}/{assessment["requirements_total"]}',
+        hit_sources={"source": "llm_semantic", "fulfilled": assessment["fulfilled_count"],
+                     "missing": assessment["missing_count"], "unknown": assessment["unknown_count"],
+                     "total": assessment["requirements_total"],
+                     "per_proposition": {r["requirement_id"]: r["status"] for r in assessment["results"]}},
+        structural_gate=structural, computed_components=["semantic_matching"] + ([] if unknown else ["C"]),
+        missing_components=["S", "delta_e", "quality_score"] + (["C"] if unknown else []),
+        errors=list(dict.fromkeys(errors)), degraded_reason=list(dict.fromkeys(errors)) if unknown else [],
+    )
+    guarded.pop("soft_rescue", None)
+    return _json_safe(guarded)
 
-    errors = strings(result.get("errors"))
-    if (unknown or structural_unknown or legacy_degraded or unreliable_accept
-            or result.get("verdict") not in _VERDICTS
-            or result.get("mode") not in ("computed", "computed_ai_draft", "degraded")):
-        guarded.update(verdict="degraded", mode="degraded", is_reliable=False,
-                       C=None, delta_e=None, quality_score=None, hit_rate=None)
-        fields = ("C", "delta_e", "quality_score")
-        guarded["computed_components"] = [value for value in strings(result.get("computed_components"))
-                                           if value not in fields]
-        guarded["missing_components"] = sorted(set(strings(result.get("missing_components"))) | set(fields))
-        if blocked_reason not in errors:
-            errors.append(blocked_reason)
-        guarded["degraded_reason"] = list(dict.fromkeys(
-            strings(result.get("degraded_reason")) + [blocked_reason],
-        ))
-    elif assessment["missing_count"] and result["verdict"] == "accept":
-        guarded["verdict"] = "rewrite"
-        errors.append("requirements_missing")
-    if (isinstance(structural, dict) and structural.get("gate_verdict") == "fail"
-            and guarded["verdict"] == "accept"):
-        guarded.update(verdict="regenerate", is_reliable=False)
-        errors.append("structural_gate_failed")
-    if guarded.get("mode") == "degraded":
-        guarded.update(verdict="degraded", is_reliable=False)
-    if guarded.get("verdict_advisory") not in _VERDICTS:
-        guarded["verdict_advisory"] = guarded["verdict"]
-    if guarded["verdict"] == "degraded":
-        guarded["verdict_advisory"] = "degraded"
-    elif (guarded["verdict"] != "accept"
-          and guarded.get("verdict_advisory", "accept") == "accept"):
-        guarded["verdict_advisory"] = guarded["verdict"]
-    if assessment["requirement_verdict"] != "complete":
-        guarded.pop("soft_rescue", None)
-    guarded["requires_review"] = assessment["requires_review"] or guarded["verdict"] != "accept"
-    guarded["errors"] = list(dict.fromkeys(errors))
-    return guarded
+
+def _json_safe(value, depth=0):
+    """Optional diagnostic failure must not break strict JSON serialization."""
+    if depth > 24:
+        return None
+    if value is None or type(value) in (str, bool, int):
+        return value
+    if type(value) is float:
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _json_safe(item, depth + 1) for key, item in value.items()
+                if isinstance(key, str)}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item, depth + 1) for item in value]
+    return None

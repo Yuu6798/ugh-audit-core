@@ -35,6 +35,7 @@ from ugh_calculator import (  # noqa: E402
 )
 
 from . import pipeline as _pipeline  # noqa: E402
+from .semantic_matching import DECISION_SCOPE, METRICS_SCOPE  # noqa: E402
 
 # 後方互換: test_pipeline_a が直接 import する
 from .pipeline import (
@@ -64,21 +65,75 @@ def _make_semantic_judge():
 
 
 def _valid_remote_metrics(result: dict) -> bool:
-    """Malformed legacy structural data cannot authorize acceptance."""
+    """Require the current scoped, nullable public contract before using its proof."""
+    if (result.get("schema_version") != "4.0.0"
+            or result.get("decision_scope") != DECISION_SCOPE
+            or result.get("metrics_scope") != METRICS_SCOPE):
+        return False
     if result.get("mode") not in ("computed", "computed_ai_draft", "degraded"):
         return False
-    if result.get("verdict") not in ("accept", "rewrite", "regenerate", "degraded"):
+    if result.get("metadata_source") not in ("inline", "llm_generated", "none", "fallback"):
+        return False
+    if result.get("verdict") not in ("accept", "rewrite", "degraded"):
         return False
     if not isinstance(result.get("is_reliable"), bool):
         return False
-    for key, low, high in (("S", 0, 1), ("C", 0, 1), ("delta_e", 0, 1),
-                           ("quality_score", 1, 5)):
-        value = result.get(key)
-        if value is None and key != "S" and result["mode"] == "degraded":
-            continue
-        if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
+    if result["is_reliable"] is (result["mode"] == "degraded"):
+        return False
+    if any(key not in result or result[key] is not None for key in ("S", "delta_e", "quality_score")):
+        return False
+    if "C" not in result:
+        return False
+    coverage = result["C"]
+    if coverage is not None and (type(coverage) not in (int, float)
+            or not 0 <= coverage <= 1 or not math.isfinite(coverage)):
+        return False
+    gate = result.get("structural_gate")
+    if not isinstance(gate, dict) or gate.get("binding") is not False:
+        return False
+    for key in ("f1", "f2", "f3", "f4"):
+        value = gate.get(key)
+        if value is not None and (type(value) not in (int, float)
+                or not 0 <= value <= 1 or not math.isfinite(value)):
             return False
-    return isinstance(result.get("structural_gate"), dict)
+    legacy = result.get("legacy_metrics")
+    if not isinstance(legacy, dict):
+        return False
+    for name, low, high in (("S", 0, 1), ("C", 0, 1), ("delta_e", 0, 1), ("quality_score", 1, 5)):
+        value = legacy.get(name)
+        if value is not None and (type(value) not in (int, float)
+                or not low <= value <= high or not math.isfinite(value)):
+            return False
+    return isinstance(result.get("semantic_matching"), dict)
+
+
+def _read_remote_json(resp):
+    """Reject HTTP failures, oversized bodies, nonstandard JSON and duplicate keys."""
+    if getattr(resp, "status", None) != 200:
+        raise ValueError("remote_http_status")
+    raw = resp.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024:
+        raise ValueError("remote_body_limit")
+
+    def unique_object(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("duplicate_json_key")
+            value[key] = item
+        return value
+
+    def reject_constant(value):
+        raise ValueError("nonstandard_json_constant")
+
+    def finite_float(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("nonfinite_json_number")
+        return number
+
+    return _json.loads(raw.decode("utf-8"), object_pairs_hook=unique_object,
+                       parse_constant=reject_constant, parse_float=finite_float)
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +144,8 @@ mcp = FastMCP(
     "UGH Audit",
     instructions=(
         "AI回答の意味論的監査ツール。"
-        "パイプライン A (S / C / ΔE / quality_score) で意味的誠実性を定量評価する。"
+        "明示された要件ごとの充足・欠落・判定保留を根拠付きで照合する。"
+        "C は要件充足率、従来指標と GRV は参考診断。"
     ),
     streamable_http_path="/",
     stateless_http=True,
@@ -128,7 +184,7 @@ class AuditOutput:
     """audit_answer ツールの構造化出力"""
 
     schema_version: str
-    S: float
+    S: Optional[float]
     C: Optional[float]
     delta_e: Optional[float]
     quality_score: Optional[float]
@@ -140,6 +196,9 @@ class AuditOutput:
     is_reliable: bool
     matched_id: Optional[str]
     metadata_source: str
+    decision_scope: str = DECISION_SCOPE
+    metrics_scope: str = METRICS_SCOPE
+    assessment_context: Optional[Dict] = None
     semantic_matching: Optional[Dict] = None
     requirement_verdict: str = "undetermined"
     requires_review: bool = True
@@ -179,11 +238,11 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
     )
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
-            result = _json.loads(resp.read().decode("utf-8"))
+            result = _read_remote_json(resp)
     except Exception as exc:
         # Error bodies and exception messages can echo request contents.
         result = {
-            "schema_version": SCHEMA_VERSION, "S": 0.0, "C": None,
+            "schema_version": SCHEMA_VERSION, "S": None, "C": None,
             "delta_e": None, "quality_score": None, "verdict": "degraded",
             "mode": "degraded", "is_reliable": False, "structural_gate": {},
             "verdict_advisory": "degraded",
@@ -192,19 +251,20 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         }
     if not isinstance(result, dict):
         result = {
-            "schema_version": SCHEMA_VERSION, "S": 0.0, "verdict": "degraded",
+            "schema_version": SCHEMA_VERSION, "S": None, "verdict": "degraded",
             "mode": "degraded", "is_reliable": False,
             "errors": ["remote_api_invalid_response"],
         }
-    if not _valid_remote_metrics(result):
+    eligible = _valid_remote_metrics(result)
+    if not eligible:
         legacy = {
-            key: value if type(value) in (int, float) and math.isfinite(value) else None
+            key: value if type(value) in (int, float) and 0 <= value <= 5 and math.isfinite(value) else None
             for key in ("S", "C", "delta_e", "quality_score")
             for value in (result.get(key),)
         }
         legacy["verdict"] = result.get("verdict") if isinstance(result.get("verdict"), str) else None
         result = {
-            "schema_version": SCHEMA_VERSION, "S": 0.0, "C": None,
+            "schema_version": SCHEMA_VERSION, "S": None, "C": None,
             "delta_e": None, "quality_score": None, "verdict": "degraded",
             "mode": "degraded", "is_reliable": False, "structural_gate": {},
             "legacy_metrics": legacy, "errors": ["remote_api_invalid_metrics"],
@@ -212,17 +272,27 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
 
     from .semantic_matching import apply_semantic_gate
 
+    context = kwargs.get("question_meta")
+    if context is None:
+        context = result.get("assessment_context")
+        eligible = (eligible and kwargs.get("auto_generate_meta") is True
+                    and result.get("metadata_source") == "llm_generated")
+    eligible = eligible and isinstance(context, dict) and bool(context)
     result = apply_semantic_gate(
         result,
         result.get("semantic_matching"),
         response=kwargs.get("response"),
-        question_meta=kwargs.get("question_meta"),
+        question_meta=context,
+        eligible=eligible, ineligible_reason="remote_contract_or_transport_unverified",
     )
     gate = result.get("structural_gate") or {}
     primary_verdict = result.get("verdict", "degraded")
     return AuditOutput(
         schema_version=SCHEMA_VERSION,
-        S=result.get("S", 0.0),
+        S=result.get("S"),
+        decision_scope=result["decision_scope"],
+        metrics_scope=result["metrics_scope"],
+        assessment_context=context if isinstance(context, dict) else None,
         C=result.get("C"),
         delta_e=result.get("delta_e"),
         quality_score=result.get("quality_score"),
@@ -266,7 +336,8 @@ def audit_answer(
     """AI回答を意味監査する。
 
     question（質問）、response（AI回答）、reference（期待回答、省略可）を受け取り、
-    PoR（S, C）、ΔE（意味ズレ量）、quality_score（品質スコア）、verdict（判定）を返す。
+    要件ごとの照合結果、要件充足率 C、verdict（判定）を返す。
+    未校正の S・ΔE・quality_score は null、従来値は legacy_metrics に格納する。
     結果はDBに自動保存される。
 
     question_meta が未提供の場合、auto_generate_meta=True なら LLM で動的生成を試みる。
@@ -323,24 +394,32 @@ def audit_answer(
             f1=gate["f1"],
             f2=gate["f2"],
             f3=gate["f3"],
-            f4=gate["f4"] if gate["f4"] is not None else 0.0,
+            f4=gate["f4"],
             hit_rate=result["hit_rate"] or "",
             metadata_source=result["metadata_source"],
             generated_meta=_json.dumps(
                 result.get("_question_meta") or {}, ensure_ascii=False,
             ) if result["metadata_source"] == META_SOURCE_LLM else "",
-            hit_sources=_json.dumps(
-                result.get("_hit_sources", {}), ensure_ascii=False,
-            ),
+            hit_sources=_json.dumps(result.get("hit_sources"), ensure_ascii=False),
             retry_of=retry_of,
             semantic_matching=result["semantic_matching"],
             requirement_verdict=result["requirement_verdict"],
             requires_review=result["requires_review"],
             legacy_metrics=result["legacy_metrics"],
+            schema_version=result["schema_version"],
+            decision_scope=result["decision_scope"],
+            metrics_scope=result["metrics_scope"],
+            question_meta=result.get("_question_meta"),
+            structural_gate=result.get("structural_gate"),
+            mode=result["mode"],
+            is_reliable=result["is_reliable"],
         )
 
     return AuditOutput(
         schema_version=result["schema_version"],
+        decision_scope=result["decision_scope"],
+        metrics_scope=result["metrics_scope"],
+        assessment_context=result.get("_question_meta"),
         S=result["S"],
         C=result["C"],
         delta_e=result["delta_e"],
@@ -380,7 +459,7 @@ def _proxy_get(remote_api: str, path: str) -> Dict:
     req = urllib.request.Request(url, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            result = _json.loads(resp.read().decode("utf-8"))
+            result = _read_remote_json(resp)
     except urllib.error.HTTPError as e:
         return {"error": f"remote_api_error:{e.code}"}
     except Exception as e:
@@ -390,12 +469,24 @@ def _proxy_get(remote_api: str, path: str) -> Dict:
     if path.startswith("/api/session/"):
         if not isinstance(result, dict):
             return {"error": "remote_session_invalid"}
-        if "verified_total" in result and "unverified_total" in result:
+        counts = [result.get(name) for name in ("total", "verified_total", "unverified_total")]
+        if (result.get("schema_version") == "4.0.0"
+                and result.get("decision_scope") == DECISION_SCOPE
+                and result.get("metrics_scope") == METRICS_SCOPE
+                and all(type(value) is int and value >= 0 for value in counts)
+                and counts[0] == counts[1] + counts[2]
+                and all(name in result and result[name] is None for name in (
+                    "avg_S", "avg_delta_e", "min_delta_e", "max_delta_e", "avg_quality_score",
+                ))):
             return result
+        total = result.get("total")
+        total = total if type(total) is int and total >= 0 else 0
         return {
             "session_id": result.get("session_id", ""),
-            "total": result.get("total", 0), "verified_total": 0,
-            "unverified_total": result.get("total", 0),
+            "schema_version": "4.0.0", "decision_scope": DECISION_SCOPE,
+            "metrics_scope": METRICS_SCOPE,
+            "total": total, "verified_total": 0, "unverified_total": total,
+            "avg_S": None,
             "avg_delta_e": None, "min_delta_e": None, "max_delta_e": None,
             "avg_quality_score": None, "legacy_summary": result,
         }
@@ -456,7 +547,7 @@ def get_session_summary(session_id: str) -> Dict:
 
 @mcp.tool()
 def get_drift_history(limit: int = 100) -> List[Dict]:
-    """ΔE時系列データを取得する。品質推移の分析に使用。
+    """要件充足率と判定の時系列を取得する。従来指標は参考診断。
 
     Args:
         limit: 取得件数 (デフォルト: 100)

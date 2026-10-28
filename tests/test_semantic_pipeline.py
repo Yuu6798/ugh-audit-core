@@ -39,8 +39,9 @@ def test_all_64_known_answers_preserve_real_v2_statuses_and_veto_bad_accept(case
         assert result['requires_review'] is True
     else:
         assert result['requirement_verdict']=='complete'
-        if result['legacy_metrics']['verdict']!='accept':
-            assert result['verdict']!='accept'
+        assert result['verdict']=='accept'
+        assert result['C']==1.0
+        assert result['structural_gate']['binding'] is False
 
 
 def test_public_python_audit_without_provider_cannot_return_accept():
@@ -71,10 +72,10 @@ def test_public_python_audit_partial_requirement_never_accepts(semantic_complete
     assert result['budget']['total_cost']>0
 
 
-def test_semantic_complete_cannot_upgrade_unknown_structural_gate(semantic_complete_judge):
+def test_semantic_complete_accepts_despite_unknown_optional_diagnostic(semantic_complete_judge):
     result=audit('unknown-structure','受付へ書類を提出してください。',
                  {'question':'提出方法','core_propositions':['受付へ書類を提出する']},
                  semantic_judge=semantic_complete_judge)
     assert result['requirement_verdict']=='complete'
-    assert result['policy']['decision']=='degraded'
-    assert result['requires_review'] is True
+    assert result['policy']['decision']=='accept'
+    assert result['requires_review'] is False

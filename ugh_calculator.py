@@ -170,7 +170,7 @@ class State:
     C: Optional[float]                # 命題被覆率 [0,1] / None=未計算
     delta_e: Optional[float]          # 意味距離 [0,1] / None=未計算
     quality_score: Optional[float]    # 品質スコア [1,5] / None=未計算
-    delta_e_bin: Optional[int]        # ΔEビン (1-4) / None=未計算
+    delta_e_bin: Optional[int]        # ΔEビン (1-3) / None=未計算
     C_bin: Optional[int]              # Cビン (1-3) / None=未計算
     por_state: str                    # PoR状態 ("inactive" — 本エンジンではPoR非使用)
     grv: Optional[float] = None        # 因果構造損失 [0,1] / None=SBert未導入
@@ -312,9 +312,19 @@ def derive_verdict(state: State) -> str:
     0.10 < ΔE ≤ 0.25  → rewrite
     ΔE > 0.25  → regenerate
     C=None (ΔE算出不可) → degraded
+
+    calculate() determines delta_e_bin before rounding the displayed delta_e.
+    If that rounding lands exactly on a threshold, preserve its valid upper
+    bin instead of promoting a just-above-threshold value. Away from those
+    ties, the numeric delta_e remains authoritative for direct State callers.
     """
     if state.delta_e is None:
         return "degraded"
+    if type(state.delta_e_bin) is int:
+        if state.delta_e == VERDICT_ACCEPT and state.delta_e_bin == 2:
+            return "rewrite"
+        if state.delta_e == VERDICT_REWRITE and state.delta_e_bin == 3:
+            return "regenerate"
     if state.delta_e <= VERDICT_ACCEPT:
         return "accept"
     if state.delta_e <= VERDICT_REWRITE:
