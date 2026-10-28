@@ -19,7 +19,7 @@ import sys
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,11 +32,13 @@ from .mcp_server import mcp as _mcp_instance
 
 # 後方互換: 旧実装で server.py に直接定義されていた constants / helpers を
 # pipeline.py から re-export する (test_pipeline_a 等が直接 import する)
-from .pipeline import SCHEMA_VERSION  # noqa: F401
-from .pipeline import _gate_verdict  # noqa: F401
-from .pipeline import _gate_verdict_safe  # noqa: F401
-from .pipeline import _primary_fail  # noqa: F401
-from .pipeline import _primary_fail_safe  # noqa: F401
+from .pipeline import (
+    SCHEMA_VERSION,  # noqa: F401
+    _gate_verdict,  # noqa: F401
+    _gate_verdict_safe,  # noqa: F401
+    _primary_fail,  # noqa: F401
+    _primary_fail_safe,  # noqa: F401
+)
 
 if TYPE_CHECKING:
     from .reference.golden_store import GoldenStore
@@ -62,6 +64,13 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _make_semantic_judge():
+    """Build the server-owned judge; request metadata cannot disable it."""
+    from .semantic_matching import make_judge_from_env
+
+    return make_judge_from_env()
+
+
 def _run_pipeline(
     question: str,
     response: str,
@@ -85,6 +94,7 @@ def _run_pipeline(
         session_id=session_id,
         auto_generate_meta=auto_generate_meta,
         detect_fn=_detect if _HAS_DETECTOR else None,
+        semantic_judge=_make_semantic_judge(),
     )
 
 
@@ -143,6 +153,10 @@ class AuditResponse(BaseModel):
     verdict: str = Field(
         ..., description="判定: accept / rewrite / regenerate / degraded"
     )
+    semantic_matching: dict = Field(..., description="v2の要件別照合と根拠・由来")
+    requirement_verdict: str = Field(..., description="complete / incomplete / undetermined")
+    requires_review: bool = Field(..., description="欠落・保留等による要確認")
+    legacy_metrics: dict = Field(..., description="v2ゲート適用前の従来指標（参考）")
     hit_rate: Optional[str] = Field(None, description="命題ヒット率 (例: '3/5')")
     structural_gate: Optional[StructuralGateResponse] = None
     saved_id: Optional[int] = Field(None, description="DB保存時の行ID (degraded時はnull)")
@@ -216,11 +230,15 @@ class HistoryItem(BaseModel):
     delta_e: Optional[float] = None
     quality_score: Optional[float] = None
     verdict: str
+    semantic_matching: Optional[dict] = None
+    requirement_verdict: str = "undetermined"
+    requires_review: bool = True
+    legacy_metrics: Optional[dict] = None
     f1: float = 0.0
     f2: float = 0.0
     f3: float = 0.0
     f4: float = 0.0
-    hit_rate: str = ""
+    hit_rate: Optional[str] = None
     metadata_source: str = "inline"
     generated_meta: str = ""
     hit_sources: str = ""
@@ -233,10 +251,15 @@ class SessionSummary(BaseModel):
 
     session_id: str
     total: int
-    avg_delta_e: float
-    min_delta_e: float
-    max_delta_e: float
-    avg_quality_score: float
+    verified_total: int = Field(
+        0, description="有効な照合結果の保存件数。欠落確認も含み、合格件数ではない。",
+    )
+    unverified_total: int = Field(0, description="旧記録・保留等で現在の指標を使えない件数")
+    avg_delta_e: Optional[float] = None
+    min_delta_e: Optional[float] = None
+    max_delta_e: Optional[float] = None
+    avg_quality_score: Optional[float] = None
+    legacy_summary: Optional[dict] = None
 
 
 class DriftItem(BaseModel):
@@ -248,6 +271,10 @@ class DriftItem(BaseModel):
     delta_e: Optional[float] = None
     quality_score: Optional[float] = None
     verdict: str
+    semantic_matching: Optional[dict] = None
+    requirement_verdict: str = "undetermined"
+    requires_review: bool = True
+    legacy_metrics: Optional[dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +410,10 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
                 result.get("_hit_sources", {}), ensure_ascii=False,
             ),
             retry_of=req.retry_of,
+            semantic_matching=result["semantic_matching"],
+            requirement_verdict=result["requirement_verdict"],
+            requires_review=result["requires_review"],
+            legacy_metrics=result["legacy_metrics"],
         )
         saved_id = await loop.run_in_executor(None, save_fn)
 
@@ -393,6 +424,10 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
         delta_e=result["delta_e"],
         quality_score=result["quality_score"],
         verdict=result["verdict"],
+        semantic_matching=result["semantic_matching"],
+        requirement_verdict=result["requirement_verdict"],
+        requires_review=result["requires_review"],
+        legacy_metrics=result["legacy_metrics"],
         hit_rate=result["hit_rate"],
         structural_gate=StructuralGateResponse(**result["structural_gate"]),
         saved_id=saved_id,
@@ -428,6 +463,9 @@ def get_history(limit: int = 20) -> List[HistoryItem]:
 
 
 def _row_to_history(r: dict) -> HistoryItem:
+    from .storage.audit_db import guard_history_row
+
+    r = guard_history_row(r)
     return HistoryItem(
         id=r["id"],
         question=r["question"],
@@ -437,6 +475,10 @@ def _row_to_history(r: dict) -> HistoryItem:
         delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
         quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
         verdict=r["verdict"],
+        semantic_matching=r.get("semantic_matching"),
+        requirement_verdict=r.get("requirement_verdict", "undetermined"),
+        requires_review=r.get("requires_review", True),
+        legacy_metrics=r.get("legacy_metrics"),
         f1=round(r.get("f1", 0.0), 4),
         f2=round(r.get("f2", 0.0), 4),
         f3=round(r.get("f3", 0.0), 4),
@@ -490,6 +532,10 @@ def get_drift(limit: int = 100) -> List[DriftItem]:
             delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
             quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
             verdict=r["verdict"],
+            semantic_matching=r.get("semantic_matching"),
+            requirement_verdict=r.get("requirement_verdict", "undetermined"),
+            requires_review=r.get("requires_review", True),
+            legacy_metrics=r.get("legacy_metrics"),
         )
         for r in rows
     ]

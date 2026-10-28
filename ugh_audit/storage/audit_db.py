@@ -4,12 +4,51 @@ ugh_audit/storage/audit_db.py
 """
 from __future__ import annotations
 
+import json
+import math
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
 DEFAULT_DB_PATH = Path.home() / ".ugh_audit" / "audit.db"
+
+
+def guard_history_row(row: dict) -> dict:
+    """Recheck saved assessments without altering historical database records."""
+    from ..semantic_matching import apply_semantic_gate
+
+    decoded = dict(row)
+    for name in ("semantic_matching", "legacy_metrics"):
+        value = decoded.get(name)
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (ValueError, TypeError):
+                value = None
+        decoded[name] = value if isinstance(value, dict) else None
+    if decoded["legacy_metrics"] is None:
+        decoded["legacy_metrics"] = {name: row.get(name) for name in (
+            "S", "C", "delta_e", "quality_score", "verdict", "mode", "hit_rate",
+        )}
+    decoded.setdefault(
+        "mode", "computed" if decoded.get("delta_e") is not None else "degraded",
+    )
+    decoded.setdefault("is_reliable", decoded["mode"] == "computed")
+    if not isinstance(decoded.get("structural_gate"), dict):
+        values = {name: decoded.get(name) for name in ("f1", "f2", "f3", "f4")}
+        known = all(type(value) in (int, float) and math.isfinite(value)
+                    and 0 <= value <= 1 for value in values.values())
+        if known:
+            worst = max(values.values())
+            gate = "fail" if worst >= 1 else "pass" if worst == 0 else "warn"
+            primary = "none" if worst == 0 else max(values, key=values.get)
+            decoded["structural_gate"] = {**values, "gate_verdict": gate, "primary_fail": primary}
+        else:
+            decoded["structural_gate"] = {**values, "gate_verdict": "incomplete"}
+    return apply_semantic_gate(
+        decoded, decoded.get("semantic_matching"), response=decoded.get("response"),
+    )
 
 
 class AuditDB:
@@ -63,6 +102,10 @@ class AuditDB:
                 ("generated_meta", "TEXT DEFAULT ''"),
                 ("hit_sources", "TEXT DEFAULT ''"),
                 ("retry_of", "INTEGER DEFAULT NULL"),
+                ("semantic_matching", "TEXT DEFAULT ''"),
+                ("requirement_verdict", "TEXT DEFAULT 'undetermined'"),
+                ("requires_review", "INTEGER DEFAULT 1"),
+                ("legacy_metrics", "TEXT DEFAULT ''"),
             ]
             for col_name, col_type in _new_columns:
                 try:
@@ -125,6 +168,10 @@ class AuditDB:
         generated_meta: str = "",
         hit_sources: str = "",
         retry_of: Optional[int] = None,
+        semantic_matching: Optional[dict] = None,
+        requirement_verdict: str = "undetermined",
+        requires_review: bool = True,
+        legacy_metrics: Optional[dict] = None,
     ) -> int:
         """監査結果を保存してrow idを返す"""
         now = datetime.now(timezone.utc).isoformat()
@@ -147,6 +194,10 @@ class AuditDB:
             "generated_meta": generated_meta,
             "hit_sources": hit_sources,
             "retry_of": retry_of,
+            "semantic_matching": json.dumps(semantic_matching, ensure_ascii=False),
+            "requirement_verdict": requirement_verdict,
+            "requires_review": int(requires_review),
+            "legacy_metrics": json.dumps(legacy_metrics, ensure_ascii=False),
             "created_at": now,
         }
         # レガシー DB にも NOT NULL カラムのデフォルト値を提供
@@ -180,7 +231,7 @@ class AuditDB:
             row = conn.execute(
                 "SELECT * FROM audit_runs WHERE id = ?", (audit_id,)
             ).fetchone()
-            return dict(row) if row else None
+            return guard_history_row(dict(row)) if row else None
 
     def list_recent(self, limit: int = 20) -> List[dict]:
         """最近のスコアリング結果を返す"""
@@ -191,7 +242,7 @@ class AuditDB:
                 ORDER BY created_at DESC
                 LIMIT ?
             """, (limit,)).fetchall()
-            return [dict(r) for r in rows]
+            return [guard_history_row(dict(r)) for r in rows]
 
     def session_summary(self, session_id: str) -> dict:
         """セッション単位の集計サマリー"""
@@ -206,7 +257,7 @@ class AuditDB:
                 FROM audit_runs
                 WHERE session_id = ?
             """, (session_id,)).fetchone()
-            return {
+            legacy = {
                 "session_id": session_id,
                 "total": row[0],
                 "avg_delta_e": round(row[1] or 0, 4),
@@ -214,15 +265,45 @@ class AuditDB:
                 "max_delta_e": round(row[3] or 0, 4),
                 "avg_quality_score": round(row[4] or 0, 4),
             }
+            stored = conn.execute(
+                "SELECT * FROM audit_runs WHERE session_id = ?", (session_id,),
+            )
+            columns = [item[0] for item in stored.description]
+            guarded = [guard_history_row(dict(zip(columns, values))) for values in stored]
+            distances = [r["delta_e"] for r in guarded if r.get("delta_e") is not None]
+            qualities = [r["quality_score"] for r in guarded if r.get("quality_score") is not None]
+            verified = sum(
+                r.get("mode") in ("computed", "computed_ai_draft")
+                and r.get("requirement_verdict") in ("complete", "incomplete")
+                for r in guarded
+            )
+            return {
+                "session_id": session_id,
+                "total": len(guarded),
+                "verified_total": verified,
+                "unverified_total": len(guarded) - verified,
+                "avg_delta_e": round(sum(distances) / len(distances), 4) if distances else None,
+                "min_delta_e": round(min(distances), 4) if distances else None,
+                "max_delta_e": round(max(distances), 4) if distances else None,
+                "avg_quality_score": round(sum(qualities) / len(qualities), 4) if qualities else None,
+                "legacy_summary": legacy,
+            }
 
     def drift_history(self, limit: int = 100) -> List[dict]:
         """ΔE時系列データ"""
         with self._conn() as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
-                SELECT created_at, S, C, delta_e, quality_score, verdict
+                SELECT *
                 FROM audit_runs
                 ORDER BY created_at ASC
                 LIMIT ?
             """, (limit,)).fetchall()
-            return [dict(r) for r in rows]
+            fields = (
+                "created_at", "S", "C", "delta_e", "quality_score", "verdict",
+                "semantic_matching", "requirement_verdict", "requires_review", "legacy_metrics",
+            )
+            return [
+                {name: value for name, value in guard_history_row(dict(r)).items() if name in fields}
+                for r in rows
+            ]

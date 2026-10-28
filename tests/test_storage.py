@@ -3,6 +3,7 @@ tests/test_storage.py
 AuditDB の基本テスト（パイプライン A 対応）
 """
 import pytest
+
 from ugh_audit.storage.audit_db import AuditDB
 
 
@@ -31,10 +32,16 @@ def test_save_and_list(tmp_db):
     recent = tmp_db.list_recent(10)
     assert len(recent) == 1
     assert recent[0]["S"] == pytest.approx(0.95)
-    assert recent[0]["C"] == pytest.approx(0.80)
-    assert recent[0]["delta_e"] == pytest.approx(0.05)
-    assert recent[0]["quality_score"] == pytest.approx(4.80)
-    assert recent[0]["verdict"] == "accept"
+    assert recent[0]["C"] is None
+    assert recent[0]["delta_e"] is None
+    assert recent[0]["quality_score"] is None
+    assert recent[0]["verdict"] == "degraded"
+    assert recent[0]["requires_review"] is True
+    legacy = recent[0]["legacy_metrics"]
+    assert legacy["C"] == pytest.approx(0.80)
+    assert legacy["delta_e"] == pytest.approx(0.05)
+    assert legacy["quality_score"] == pytest.approx(4.80)
+    assert legacy["verdict"] == "accept"
 
 
 def test_session_summary(tmp_db):
@@ -48,7 +55,10 @@ def test_session_summary(tmp_db):
 
     summary = tmp_db.session_summary("session-A")
     assert summary["total"] == 3
-    assert summary["avg_delta_e"] == pytest.approx(0.10)
+    assert summary["verified_total"] == 0
+    assert summary["unverified_total"] == 3
+    assert summary["avg_delta_e"] is None
+    assert summary["legacy_summary"]["avg_delta_e"] == pytest.approx(0.10)
 
 
 def test_drift_history(tmp_db):
@@ -136,11 +146,13 @@ def test_migration_from_v02_schema(tmp_path):
         key=lambda r: r["created_at"],
     )
     # delta_e=0.03 → quality_score=4.88, verdict=accept
-    assert legacy_rows[0]["quality_score"] == pytest.approx(4.88, abs=0.01)
-    assert legacy_rows[0]["verdict"] == "accept"
+    assert legacy_rows[0]["legacy_metrics"]["quality_score"] == pytest.approx(4.88, abs=0.01)
+    assert legacy_rows[0]["legacy_metrics"]["verdict"] == "accept"
     # delta_e=0.30 → quality_score=3.80, verdict=regenerate
-    assert legacy_rows[1]["quality_score"] == pytest.approx(3.80, abs=0.01)
-    assert legacy_rows[1]["verdict"] == "regenerate"
+    assert legacy_rows[1]["legacy_metrics"]["quality_score"] == pytest.approx(3.80, abs=0.01)
+    assert legacy_rows[1]["legacy_metrics"]["verdict"] == "regenerate"
     # delta_e=0.0 → quality_score=5.0 (default), verdict=accept
-    assert legacy_rows[2]["quality_score"] == pytest.approx(5.0)
-    assert legacy_rows[2]["verdict"] == "accept"
+    assert legacy_rows[2]["legacy_metrics"]["quality_score"] == pytest.approx(5.0)
+    assert legacy_rows[2]["legacy_metrics"]["verdict"] == "accept"
+    assert all(row["verdict"] == "degraded" and row["requires_review"] for row in legacy_rows)
+    assert all(row["quality_score"] is None for row in legacy_rows)

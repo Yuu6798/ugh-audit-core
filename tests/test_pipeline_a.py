@@ -221,7 +221,7 @@ class TestAPIOutput:
         assert data["hit_rate"] is None
         assert isinstance(data["structural_gate"], dict)
         assert data["saved_id"] is None
-        assert data["schema_version"] == "2.1.0"
+        assert data["schema_version"] == "3.0.0"
 
     def test_structural_gate_fields(self, client):
         resp = client.post("/api/audit", json={
@@ -237,7 +237,8 @@ class TestAPIOutput:
         assert "gate_verdict" in gate
         assert "primary_fail" in gate
 
-    def test_history_output_has_new_fields(self, client):
+    def test_history_output_has_new_fields(self, client, monkeypatch, semantic_complete_judge):
+        monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
         client.post("/api/audit", json={
             "question": "Q", "response": "R",
             "question_meta": {

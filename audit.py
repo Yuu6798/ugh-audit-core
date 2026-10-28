@@ -1,6 +1,6 @@
 """audit.py — エンドツーエンド統合 + CLI
 
-detect → calculate → decide のパイプライン。
+detect → calculate → decide と必須v2意味照合のパイプライン。
 CLIとしても動作する。
 """
 from __future__ import annotations
@@ -9,28 +9,75 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
-from typing import Optional
+from typing import Callable, Optional
 
 from ugh_calculator import calculate
 from detector import detect
-from decider import decide
+from decider import _compute_budget, _load_opcodes, decide
+from ugh_audit.pipeline import run_audit
+from ugh_audit.semantic_matching import make_judge_from_env
 
 
-def audit(question_id: str, response_text: str, question_meta: dict) -> dict:
-    """detect → calculate → decide のパイプライン
+_DEFAULT_JUDGE = object()
 
-    全計算が決定的。同じ入力なら同じ出力。
-    embedding/LLM呼び出しゼロ。
+
+def audit(
+    question_id: str, response_text: str, question_meta: dict,
+    *, semantic_judge: Optional[Callable] = _DEFAULT_JUDGE,
+) -> dict:
+    """Run the same required semantic gate used by REST and MCP.
+
+    Credentials come from server environment only. An unavailable checker is
+    undetermined, never a fallback to an unverified legacy accept. Explicit
+    checker injection is an internal Python testing/embedding interface.
     """
-    evidence = detect(question_id, response_text, question_meta)
+    detected = []
+
+    def detect_once(qid, answer, meta):
+        value = detect(qid, answer, meta)
+        detected.append(value)
+        return value
+
+    judge = make_judge_from_env() if semantic_judge is _DEFAULT_JUDGE else semantic_judge
+    meta = {**question_meta, "id": question_id} if isinstance(question_meta, dict) else {"id": question_id}
+    output = run_audit(
+        question=meta.get("question", ""), response=response_text, reference=None,
+        question_meta=meta, session_id=None, detect_fn=detect_once, semantic_judge=judge,
+    )
+    if detected:
+        evidence = detected[0]
+    else:
+        from ugh_calculator import Evidence
+        evidence = Evidence(question_id=question_id, f4_premise=None)
     state = calculate(evidence)
     result = decide(state, evidence)
-
+    decision = output["verdict"]
+    order = [op for op in result["policy"]["repair_order"]
+             if op not in ("ADD_PROPOSITION", "STOP_REWRITE")]
+    if decision in ("accept", "degraded"):
+        order = []
+    else:
+        order.extend(["ADD_PROPOSITION"] * output["semantic_matching"]["missing_count"])
+    order.append("STOP_REWRITE")
+    visible_state = asdict(state)
+    for field in ("C", "delta_e", "quality_score"):
+        visible_state[field] = output[field]
+    if output["C"] is None:
+        visible_state["C_bin"] = None
+        visible_state["delta_e_bin"] = None
     return {
         "evidence": asdict(evidence),
-        "state": asdict(state),
-        "policy": result["policy"],
-        "budget": result["budget"],
+        "state": visible_state,
+        "policy": {"decision": decision, "repair_order": order},
+        "budget": _compute_budget(order, _load_opcodes()),
+        "schema_version": output["schema_version"],
+        "verdict": decision,
+        "mode": output["mode"],
+        "is_reliable": output["is_reliable"],
+        "requirement_verdict": output["requirement_verdict"],
+        "requires_review": output["requires_review"],
+        "semantic_matching": output["semantic_matching"],
+        "legacy_metrics": output["legacy_metrics"],
     }
 
 

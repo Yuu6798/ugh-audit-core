@@ -94,14 +94,14 @@ class TestDetectorOriginalKeyFallback:
 class TestDescendantMetaNonDegraded:
     """子孫 JSONL 経由の audit が degraded を返さないことを E2E で検証"""
 
-    def test_audit_returns_non_degraded_state(self):
+    def test_audit_returns_non_degraded_state(self, semantic_complete_judge):
         meta = _descendant_meta()
         response = (
             "PoRは共鳴度であり誠実性の十分条件ではない。"
             "表層的語彙一致でも高PoRが出ることがある。"
             "ΔEやgrvといった複合評価が必要である。"
         )
-        result = audit("q001", response, meta)
+        result = audit("q001", response, meta, semantic_judge=semantic_complete_judge)
         state = result["state"]
         assert state["C"] is not None, (
             "original_core_propositions が拾えれば C は None にならない"

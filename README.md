@@ -29,7 +29,11 @@ quality_score = 5 - 4 × ΔE     品質スコア [1,5]
 
 詳細: [`docs/formulas.md`](docs/formulas.md)
 
-### verdict 判定（HA48 検証済み確定値）
+### 従来の数値判定（HA48 検証済み確定値）
+
+schema 3.0の最終判定には、[v2の必須要件照合](docs/semantic_matching_v2.md)も適用する。
+欠落が1件でもあればacceptにせず、保留・照合不能ならdegradedにする。
+`ANTHROPIC_API_KEY`がない場合もdegraded。下表だけではacceptを許可しない。
 
 | verdict | 条件 | 意味 |
 |---------|------|------|
@@ -67,14 +71,15 @@ downgrade 方向で反映。primary verdict は不変、`accept → rewrite` の
 
 ## アーキテクチャ
 
-本システムは 2 層構造で動作する。
+本システムは数値診断の2層と、最終判定の必須意味照合で動作する。
 
 ### 決定性の適用範囲
 
 | 層 | 依存 | 決定性 | 役割 |
 |---|---|---|---|
-| **core pipeline** (detect → calculate → decide) | tfidf + YAML 辞書のみ | 決定的 | S, C, ΔE, verdict を算出 |
+| **core pipeline** (detect → calculate → decide) | tfidf + YAML 辞書のみ | 決定的 | S, C, ΔE, 旧数値判定を算出 |
 | **cascade layer** (cascade_matcher) | SBert embedding | 確率的 | tier 1 miss の optional 回収補強 (hit 追加のみ、降格なし) |
+| **required semantic gate** (v2) | Anthropic API | LLM応答に依存 | 要件の欠落・保留があれば最終acceptを抑止 |
 
 - **計算式と判定規則は core pipeline にある**。cascade は C を上方補正するのみ
 - **cascade layer は optional**。SBert 未導入 / モデルロード失敗時は silent fallback

@@ -94,8 +94,9 @@ class TestTypeStability:
         assert isinstance(data["S"], float)
         assert data["S"] > 0
 
-    def test_full_computation_returns_computed(self, client):
-        """3. 全メタデータあり → mode=computed, verdict ∈ {accept, rewrite, regenerate}"""
+    def test_full_computation_returns_computed(self, client, monkeypatch, semantic_complete_judge):
+        """3. メタデータと明示的な意味判定が揃えば数値を公開する。"""
+        monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
         resp = client.post("/api/audit", json={
             "question": "PoRが高ければ誠実か？",
             "response": "PoRは誠実性の十分条件ではありません。",
@@ -141,13 +142,13 @@ class TestTypeStability:
         assert "quality_score" in missing
 
     def test_schema_version_present(self, client):
-        """5. 全レスポンスに schema_version=2.1.0 が含まれる"""
+        """5. 全レスポンスに schema_version=3.0.0 が含まれる"""
         resp = client.post("/api/audit", json={
             "question": "テスト",
             "response": "テスト",
         })
         data = resp.json()
-        assert data["schema_version"] == "2.1.0"
+        assert data["schema_version"] == "3.0.0"
 
     def test_degraded_never_returns_accept(self, client):
         """6. verdict=degraded のとき accept でないことを確認"""
@@ -200,8 +201,9 @@ class TestTypeStability:
         # f4=None と f4=0.0 は異なる S を返す
         assert s.S != s2.S
 
-    def test_history_preserves_zero_scores(self, client):
+    def test_history_preserves_zero_scores(self, client, monkeypatch, semantic_complete_judge):
         """9. C=0.0, delta_e=0.0 が history で null にならないことを確認"""
+        monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
         # computed モードで C=0.0 になるケース (全命題 miss)
         resp = client.post("/api/audit", json={
             "question": "テスト質問",

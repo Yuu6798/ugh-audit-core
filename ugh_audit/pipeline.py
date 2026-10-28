@@ -7,7 +7,7 @@ server.py (REST) と mcp_server.py (MCP) で重複していた ~300 行の監査
 
 責務分離:
 
-- このモジュール (pipeline.py): 監査ロジック本体 (pure computation)
+- このモジュール (pipeline.py): 監査計算と注入された意味照合器の実行
   - detect → calculate → verdict/mode → grv → mcg → advisory
   - 出力は dict (内部 _* フィールドで DB 保存材料を caller に返す)
   - DB 保存は行わない (caller の mode-aware policy に委譲)
@@ -27,12 +27,14 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Callable, List, Optional
 
 from .metadata_generator import detect_missing_metadata
 from .soft_rescue import maybe_build_soft_rescue
+from .semantic_matching import apply_semantic_gate, assess_requirements
 
 # パイプライン A の import (server.py / mcp_server.py と同じ sys.path 挿入)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -55,9 +57,9 @@ from ugh_calculator import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 # --- 公開定数 ---
-# 2.1.0: degraded_reason に detector_unavailable / detector_error:<type> を追加
-# (additive — 既存 consumer は新しい enum 値を unknown string として無視可能)
-SCHEMA_VERSION = "2.1.0"
+# 3.0.0: semantic coverage is required before an authoritative accept.
+# Unavailable or unknown assessment degrades instead of using legacy accept.
+SCHEMA_VERSION = "3.0.0"
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +131,8 @@ def run_audit(
     session_id: Optional[str],
     auto_generate_meta: bool = False,
     detect_fn: Optional[Callable[[str, str, dict], Evidence]] = None,
+    semantic_judge: Optional[Callable] = None,
+    semantic_deadline: Optional[float] = None,
 ) -> dict:
     """監査パイプラインを実行し、全フィールドを含む dict を返す。
 
@@ -138,12 +142,15 @@ def run_audit(
             question_meta 未提供で LLM 生成を試みる (opt-in)。
         detect_fn: detector.detect 関数。None の場合 detector 利用不可とみなし、
             degraded_reason に detector_unavailable を付与する。
+        semantic_judge: Server-owned per-requirement checker. None is unverified.
+        semantic_deadline: Absolute monotonic deadline; defaults to entry + 25s.
 
     Returns:
-        dict: 出力スキーマ (schema_version 2.1.0)。
+        dict: 出力スキーマ (schema_version 3.0.0)。
         caller は mode が computed 系のとき DB 保存を行い、
         自分の response 型 (AuditResponse / AuditOutput) に変換する。
     """
+    deadline = semantic_deadline if semantic_deadline is not None else time.monotonic() + 25.0
     errors: List[str] = []
     metadata_source = META_SOURCE_NONE
     matched_id: Optional[str] = None
@@ -442,4 +449,13 @@ def run_audit(
     }
     if rescue is not None:
         result["soft_rescue"] = rescue
-    return result
+    # This is authoritative and runs after every legacy/advisory computation.
+    # No provider or incomplete coverage may fall back to a legacy accept.
+    assessment = assess_requirements(
+        question_meta, response,
+        semantic_judge if detected and metadata_source != META_SOURCE_FALLBACK else None,
+        deadline=deadline,
+    )
+    return apply_semantic_gate(
+        result, assessment, response=response, question_meta=question_meta,
+    )

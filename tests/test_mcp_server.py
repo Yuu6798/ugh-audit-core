@@ -82,7 +82,7 @@ def test_audit_answer_degraded_without_question_meta():
     assert structured["mode"] == "degraded"
     assert structured["structural_gate"]["f4"] is None
     assert structured["saved_id"] is None
-    assert structured["schema_version"] == "2.1.0"
+    assert structured["schema_version"] == "3.0.0"
 
     assert len(content) >= 1
 
@@ -176,8 +176,8 @@ def test_audit_answer_schema_includes_advisory_fields():
     assert "advisory_flags" in out["properties"]
 
 
-def test_proxy_audit_relays_advisory(monkeypatch):
-    """UGH_REMOTE_API proxy 経路でも advisory フィールドが転送される"""
+def test_proxy_audit_rejects_unchecked_legacy_accept(monkeypatch):
+    """旧remoteの意味判定なしacceptをadvisory経由でも信用しない。"""
     import json
     import os
 
@@ -226,8 +226,12 @@ def test_proxy_audit_relays_advisory(monkeypatch):
     finally:
         monkeypatch.delenv("UGH_REMOTE_API", raising=False)
 
-    assert result.verdict == "accept"
-    assert result.verdict_advisory == "rewrite"
+    assert result.verdict == "degraded"
+    assert result.verdict_advisory == "degraded"
+    assert result.requirement_verdict == "undetermined"
+    assert result.requires_review is True
+    assert result.C is None
+    assert result.legacy_metrics["verdict"] == "accept"
     assert result.advisory_flags == ["mcg_collapse_downgrade"]
 
 
@@ -295,7 +299,7 @@ def test_audit_answer_hit_sources_schema_in_outputSchema():
 
 
 def test_proxy_audit_relays_hit_sources(monkeypatch):
-    """proxy 経路でも hit_sources が転送される"""
+    """旧hit_sourcesは診断として転送するが、意味確認なしではacceptしない。"""
     import json
 
     from ugh_audit import mcp_server as m
@@ -348,3 +352,5 @@ def test_proxy_audit_relays_hit_sources(monkeypatch):
     assert result.hit_sources["core_hit"] == 1
     assert result.hit_sources["cascade_rescued"] == 1
     assert result.hit_sources["core_only_hit_rate"] == "1/3"
+    assert result.verdict == "degraded"
+    assert result.verdict_advisory == "degraded"

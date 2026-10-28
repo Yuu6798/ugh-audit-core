@@ -82,8 +82,9 @@ def test_audit_without_reference(client):
     assert "verdict" in resp.json()
 
 
-def test_audit_computed_with_meta(client, tmp_db):
-    """question_meta あり → computed, saved_id あり, DB 保存"""
+def test_audit_computed_with_meta(client, tmp_db, monkeypatch, semantic_complete_judge):
+    """確認済みの意味判定がある監査は computed のまま保存する。"""
+    monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
     resp = client.post("/api/audit", json={
         "question": "PoRが高ければ誠実か？",
         "response": "PoRは共鳴度であり、誠実性の十分条件ではない。",
@@ -113,8 +114,9 @@ def test_history_empty(client):
     assert resp.json() == []
 
 
-def test_history_returns_computed_items(client):
+def test_history_returns_computed_items(client, monkeypatch, semantic_complete_judge):
     """computed 結果のみ history に含まれる"""
+    monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
     # degraded (DB 未保存)
     client.post("/api/audit", json={
         "question": "質問1",
@@ -250,7 +252,7 @@ def test_verdict_advisory_is_valid_verdict_value(client):
 
 
 def test_verdict_advisory_downgrades_on_extreme_collapse(
-    monkeypatch, tmp_db, tmp_golden,
+    monkeypatch, tmp_db, tmp_golden, semantic_complete_judge,
 ):
     """collapse_risk が閾値を超えると accept → rewrite に downgrade される
 
@@ -266,6 +268,8 @@ def test_verdict_advisory_downgrades_on_extreme_collapse(
         pytest.skip("sentence-transformers not installed (mcg computation unavailable)")
 
     import mode_grv
+
+    monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
 
     # 閾値を下げ、accept + 非 None mcg なら必ず両ルール発火するようにする。
     # _TAU_ANCHOR_LOW=1.0 で anchor ルールは常に発火、_TAU_COLLAPSE_HIGH=0.0
@@ -314,24 +318,34 @@ def test_verdict_advisory_downgrades_on_extreme_collapse(
     assert "mcg_anchor_missing" in data["advisory_flags"]
 
 
-def test_verdict_advisory_rewrite_passthrough(client):
+def test_verdict_advisory_rewrite_passthrough(client, monkeypatch, semantic_complete_judge):
     """primary verdict が rewrite のとき advisory も rewrite のまま (pass-through)"""
+    from ugh_calculator import Evidence
+
+    monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
+    # Isolate advisory behavior with a known, reliable legacy rewrite (C=1/3).
+    # Topic failure can instead be explicitly unreliable under the new guard.
+    monkeypatch.setattr("ugh_audit.server._detect", lambda qid, response, meta: Evidence(
+        question_id=qid, propositions_total=3, propositions_hit=1,
+        hit_ids=[0], miss_ids=[1, 2], f4_premise=0.0,
+    ))
     resp = client.post("/api/audit", json={
         "question": "質問A",
         "response": "命題とは無関係な回答です。",
         "question_meta": {
             "question": "質問A",
-            "core_propositions": ["全く別の命題", "さらに別の命題"],
+            "core_propositions": ["全く別の命題", "さらに別の命題", "もう一つの命題"],
             "disqualifying_shortcuts": [],
             "acceptable_variants": [],
             "trap_type": "",
         },
     })
     data = resp.json()
-    if data["verdict"] in ("rewrite", "regenerate"):
-        # pass-through: flags は空
-        assert data["verdict_advisory"] == data["verdict"]
-        assert data["advisory_flags"] == []
+    assert data["legacy_metrics"]["verdict"] == "rewrite"
+    assert data["verdict"] == "rewrite"
+    # pass-through: flags は空。意味判定不足によるdegradedで空振りしない。
+    assert data["verdict_advisory"] == data["verdict"]
+    assert data["advisory_flags"] == []
 
 
 # --- Paper defense: hit_sources 公開 (core vs cascade 分離) ---
@@ -418,8 +432,9 @@ def test_degraded_reason_contains_question_meta_missing(client):
     assert "question_meta_missing" in data["degraded_reason"]
 
 
-def test_degraded_reason_empty_when_not_degraded(client):
+def test_degraded_reason_empty_when_not_degraded(client, monkeypatch, semantic_complete_judge):
     """非 degraded 時は degraded_reason=[] (空リスト)"""
+    monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
     resp = client.post("/api/audit", json={
         "question": "PoRとは何か？",
         "response": "PoRは共鳴度である。意味との共振プロセスでもある。",
@@ -488,10 +503,29 @@ def test_degraded_reason_detector_error(client, monkeypatch):
     assert "detection_skipped" not in data["degraded_reason"]
 
 
-def test_schema_version_2_1_0(client):
-    """schema_version が 2.1.0 に bump されている"""
+def test_schema_version_3_0_0(client):
+    """意味判定が必須になったスキーマは 3.0.0。"""
     resp = client.post("/api/audit", json={
         "question": "テスト",
         "response": "テスト回答",
     })
-    assert resp.json()["schema_version"] == "2.1.0"
+    assert resp.json()["schema_version"] == "3.0.0"
+
+
+def test_metadata_without_semantic_credentials_never_accepts(client, monkeypatch):
+    """メタデータだけで従来acceptへ戻らない。"""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    response = client.post("/api/audit", json={
+        "question": "資料を用意する手順は？",
+        "response": "資料を3部用意します。",
+        "question_meta": {"core_propositions": ["資料を3部用意する"], "trap_type": ""},
+    })
+    data = response.json()
+    assert data["verdict"] == data["verdict_advisory"] == "degraded"
+    assert data["requirement_verdict"] == "undetermined"
+    assert data["requires_review"] is True
+    assert data["semantic_matching"]["requirements_total"] == 1
+    assert data["semantic_matching"]["unknown_count"] == 1
+    assert data["C"] is None
+    assert data["legacy_metrics"]["C"] == 1.0
+    assert data["saved_id"] is None

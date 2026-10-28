@@ -62,8 +62,9 @@ def client(tmp_path):
 class TestComputedAiDraftPipeline:
     """REST API 経由の computed_ai_draft モード検証"""
 
-    def test_inline_meta_stays_computed(self, client):
+    def test_inline_meta_stays_computed(self, client, monkeypatch, semantic_complete_judge):
         """inline メタデータでは mode=computed のまま"""
+        monkeypatch.setattr("ugh_audit.server._make_semantic_judge", lambda: semantic_complete_judge)
         resp = client.post("/api/audit", json={
             "question": "PoRとは何ですか？",
             "response": "PoRは問いの核心に対する回答の位置座標です。",

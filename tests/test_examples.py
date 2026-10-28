@@ -4,6 +4,7 @@ examples/ 配下のサンプルが import + 実行で壊れていないことを
 from __future__ import annotations
 
 import re
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -20,11 +21,16 @@ def test_basic_audit_runs_to_completion():
     最低限の smoke test。具体値（ΔE 等）は非アサート — 数値変更は
     校正で起きうるため、verdict 分類の差分のみを固定する。
     """
+    env = dict(os.environ)
+    env.pop("ANTHROPIC_API_KEY", None)
+    env["PYTHONUTF8"] = "1"
     result = subprocess.run(
         [sys.executable, str(EXAMPLE)],
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        env=env,
         timeout=120,
     )
 
@@ -44,21 +50,6 @@ def test_basic_audit_runs_to_completion():
         f"ケース行の verdict 抽出に失敗: {case_verdicts}\n{result.stdout}"
     )
 
-    # q001 良質回答ケース（case 1） → accept
-    assert case_verdicts[1] == "accept", (
-        f"q001 良質ケースの verdict が想定外: {case_verdicts[1]}\n{result.stdout}"
-    )
-
-    # q001 ショートカットケース（case 2） → rewrite または regenerate
-    assert case_verdicts[2] in {"rewrite", "regenerate"}, (
-        f"q001 ショートカットケースの verdict が想定外: {case_verdicts[2]}\n"
-        f"{result.stdout}"
-    )
-
-    # 3 ケース全体で verdict が 2 種類以上出ていること
-    # （全件 accept や全件 degraded で誤って pass しないようにする）
-    distinct = set(case_verdicts.values())
-    assert len(distinct) >= 2, (
-        f"verdict に多様性がない（パイプラインが定値を返している疑い）: {distinct}\n"
-        f"{result.stdout}"
-    )
+    # No model credentials: no example may claim semantic acceptance.
+    # Verified/missing/mixed paths are covered by recorded replay and API tests.
+    assert set(case_verdicts.values()) == {"degraded"}

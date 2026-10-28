@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import json as _json
 import logging
+import math
 import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
@@ -34,12 +35,14 @@ from ugh_calculator import (  # noqa: E402
 )
 
 from . import pipeline as _pipeline  # noqa: E402
-from .pipeline import SCHEMA_VERSION  # noqa: E402
 
 # 後方互換: test_pipeline_a が直接 import する
-from .pipeline import _gate_verdict_safe  # noqa: E402, F401
-from .pipeline import _primary_fail  # noqa: E402, F401
-from .pipeline import _primary_fail_safe  # noqa: E402, F401
+from .pipeline import (
+    SCHEMA_VERSION,  # noqa: E402
+    _gate_verdict_safe,  # noqa: E402, F401
+    _primary_fail,  # noqa: E402, F401
+    _primary_fail_safe,  # noqa: E402, F401
+)
 
 # detector (検出層) — 利用可能な場合のみ使用。
 # _HAS_DETECTOR / _detect は test の monkeypatch 互換のため module level に残す。
@@ -51,6 +54,31 @@ except ImportError:
     _detect = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
+
+
+def _make_semantic_judge():
+    """Use server configuration only, never an assessment supplied by a caller."""
+    from .semantic_matching import make_judge_from_env
+
+    return make_judge_from_env()
+
+
+def _valid_remote_metrics(result: dict) -> bool:
+    """Malformed legacy structural data cannot authorize acceptance."""
+    if result.get("mode") not in ("computed", "computed_ai_draft", "degraded"):
+        return False
+    if result.get("verdict") not in ("accept", "rewrite", "regenerate", "degraded"):
+        return False
+    if not isinstance(result.get("is_reliable"), bool):
+        return False
+    for key, low, high in (("S", 0, 1), ("C", 0, 1), ("delta_e", 0, 1),
+                           ("quality_score", 1, 5)):
+        value = result.get(key)
+        if value is None and key != "S" and result["mode"] == "degraded":
+            continue
+        if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
+            return False
+    return isinstance(result.get("structural_gate"), dict)
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +140,10 @@ class AuditOutput:
     is_reliable: bool
     matched_id: Optional[str]
     metadata_source: str
+    semantic_matching: Optional[Dict] = None
+    requirement_verdict: str = "undetermined"
+    requires_review: bool = True
+    legacy_metrics: Optional[Dict] = None
     # Phase E: advisory verdict は常時必須 (primary verdict にフォールバック)。
     # dataclass の順序要件上 default を持つフィールドの直前に配置する。
     verdict_advisory: str = "degraded"
@@ -136,7 +168,6 @@ class AuditOutput:
 def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
     """リモート API に監査リクエストを転送し、結果を AuditOutput に変換する"""
     import urllib.request
-    import urllib.error
 
     url = remote_api.rstrip("/") + "/api/audit"
     payload = {k: v for k, v in kwargs.items() if v is not None}
@@ -149,32 +180,48 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             result = _json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        return AuditOutput(
-            schema_version=SCHEMA_VERSION, S=0.0, C=None, delta_e=None,
-            quality_score=None, verdict="degraded", hit_rate=None,
-            structural_gate={}, saved_id=None, mode="degraded",
-            is_reliable=False, matched_id=None, metadata_source="none",
-            verdict_advisory="degraded",
-            errors=[f"remote_api_error: {e.code} {body[:200]}"],
-            degraded_reason=["remote_api_error"],
-        )
-    except Exception as e:
-        return AuditOutput(
-            schema_version=SCHEMA_VERSION, S=0.0, C=None, delta_e=None,
-            quality_score=None, verdict="degraded", hit_rate=None,
-            structural_gate={}, saved_id=None, mode="degraded",
-            is_reliable=False, matched_id=None, metadata_source="none",
-            verdict_advisory="degraded",
-            errors=[f"remote_api_error: {e}"],
-            degraded_reason=["remote_api_error"],
-        )
+    except Exception as exc:
+        # Error bodies and exception messages can echo request contents.
+        result = {
+            "schema_version": SCHEMA_VERSION, "S": 0.0, "C": None,
+            "delta_e": None, "quality_score": None, "verdict": "degraded",
+            "mode": "degraded", "is_reliable": False, "structural_gate": {},
+            "verdict_advisory": "degraded",
+            "errors": [f"remote_api_error:{type(exc).__name__}"],
+            "degraded_reason": ["remote_api_error"],
+        }
+    if not isinstance(result, dict):
+        result = {
+            "schema_version": SCHEMA_VERSION, "S": 0.0, "verdict": "degraded",
+            "mode": "degraded", "is_reliable": False,
+            "errors": ["remote_api_invalid_response"],
+        }
+    if not _valid_remote_metrics(result):
+        legacy = {
+            key: value if type(value) in (int, float) and math.isfinite(value) else None
+            for key in ("S", "C", "delta_e", "quality_score")
+            for value in (result.get(key),)
+        }
+        legacy["verdict"] = result.get("verdict") if isinstance(result.get("verdict"), str) else None
+        result = {
+            "schema_version": SCHEMA_VERSION, "S": 0.0, "C": None,
+            "delta_e": None, "quality_score": None, "verdict": "degraded",
+            "mode": "degraded", "is_reliable": False, "structural_gate": {},
+            "legacy_metrics": legacy, "errors": ["remote_api_invalid_metrics"],
+        }
 
+    from .semantic_matching import apply_semantic_gate
+
+    result = apply_semantic_gate(
+        result,
+        result.get("semantic_matching"),
+        response=kwargs.get("response"),
+        question_meta=kwargs.get("question_meta"),
+    )
     gate = result.get("structural_gate") or {}
     primary_verdict = result.get("verdict", "degraded")
     return AuditOutput(
-        schema_version=result.get("schema_version", "2.0.0"),
+        schema_version=SCHEMA_VERSION,
         S=result.get("S", 0.0),
         C=result.get("C"),
         delta_e=result.get("delta_e"),
@@ -182,11 +229,15 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         verdict=primary_verdict,
         hit_rate=result.get("hit_rate"),
         structural_gate=gate,
-        saved_id=result.get("saved_id"),
+        saved_id=result.get("saved_id") if result.get("mode") != "degraded" else None,
         mode=result.get("mode", "degraded"),
         is_reliable=result.get("is_reliable", False),
         matched_id=result.get("matched_id"),
         metadata_source=result.get("metadata_source", "none"),
+        semantic_matching=result.get("semantic_matching"),
+        requirement_verdict=result.get("requirement_verdict", "undetermined"),
+        requires_review=result.get("requires_review", True),
+        legacy_metrics=result.get("legacy_metrics"),
         verdict_advisory=result.get("verdict_advisory", primary_verdict),
         computed_components=result.get("computed_components", []),
         missing_components=result.get("missing_components", []),
@@ -252,6 +303,7 @@ def audit_answer(
         session_id=session_id,
         auto_generate_meta=auto_generate_meta,
         detect_fn=_detect if _HAS_DETECTOR else None,
+        semantic_judge=_make_semantic_judge(),
     )
 
     # degraded 時は DB に保存しない (未計算ログでベースラインを汚染させない)
@@ -281,6 +333,10 @@ def audit_answer(
                 result.get("_hit_sources", {}), ensure_ascii=False,
             ),
             retry_of=retry_of,
+            semantic_matching=result["semantic_matching"],
+            requirement_verdict=result["requirement_verdict"],
+            requires_review=result["requires_review"],
+            legacy_metrics=result["legacy_metrics"],
         )
 
     return AuditOutput(
@@ -297,6 +353,10 @@ def audit_answer(
         is_reliable=result["is_reliable"],
         matched_id=result["matched_id"],
         metadata_source=result["metadata_source"],
+        semantic_matching=result["semantic_matching"],
+        requirement_verdict=result["requirement_verdict"],
+        requires_review=result["requires_review"],
+        legacy_metrics=result["legacy_metrics"],
         verdict_advisory=result["verdict_advisory"],
         computed_components=result["computed_components"],
         missing_components=result["missing_components"],
@@ -320,12 +380,31 @@ def _proxy_get(remote_api: str, path: str) -> Dict:
     req = urllib.request.Request(url, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            return _json.loads(resp.read().decode("utf-8"))
+            result = _json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        return {"error": f"remote_api_error: {e.code}", "detail": body[:200]}
+        return {"error": f"remote_api_error:{e.code}"}
     except Exception as e:
-        return {"error": f"remote_api_error: {e}"}
+        return {"error": f"remote_api_error:{type(e).__name__}"}
+    from .storage.audit_db import guard_history_row
+
+    if path.startswith("/api/session/"):
+        if not isinstance(result, dict):
+            return {"error": "remote_session_invalid"}
+        if "verified_total" in result and "unverified_total" in result:
+            return result
+        return {
+            "session_id": result.get("session_id", ""),
+            "total": result.get("total", 0), "verified_total": 0,
+            "unverified_total": result.get("total", 0),
+            "avg_delta_e": None, "min_delta_e": None, "max_delta_e": None,
+            "avg_quality_score": None, "legacy_summary": result,
+        }
+    if isinstance(result, list):
+        return [guard_history_row(row) if isinstance(row, dict)
+                else {"error": "remote_history_invalid"} for row in result]
+    if isinstance(result, dict) and "error" not in result:
+        return guard_history_row(result)
+    return result
 
 
 @mcp.tool()
