@@ -15,6 +15,12 @@ from typing import List, Optional
 DEFAULT_DB_PATH = Path.home() / ".ugh_audit" / "audit.db"
 
 
+def _validate_owner_id(owner_id: Optional[str]) -> None:
+    """None is trusted unscoped access; an invalid identity must never imply it."""
+    if owner_id is not None and (not isinstance(owner_id, str) or not owner_id.strip()):
+        raise ValueError("owner_id must be a non-empty string or None")
+
+
 def guard_history_row(row: dict) -> dict:
     """Recheck saved assessments without altering historical database records."""
     from ..semantic_matching import apply_semantic_gate, DECISION_SCOPE, METRICS_SCOPE
@@ -213,7 +219,9 @@ class AuditDB:
 
     スキーマ設計:
         - audit_runs: 全スコアリング結果を蓄積
-        - 同一 session_id でグループ化して会話単位の分析が可能
+        - owner_id を指定した読み取りはその所有者の行だけを対象とする
+        - owner_id=None は既存の信頼されたローカル・管理者向け全件アクセス
+        - 同一所有者内の session_id で会話単位の分析が可能
     """
 
     def __init__(self, db_path: Optional[Path] = None):
@@ -274,6 +282,7 @@ class AuditDB:
                 ("structural_gate", "TEXT DEFAULT ''"),
                 ("mode", "TEXT DEFAULT 'computed'"),
                 ("is_reliable", "INTEGER DEFAULT 0"),
+                ("owner_id", "TEXT DEFAULT NULL"),
             ]
             existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(audit_runs)")}
             for col_name, col_type in _new_columns:
@@ -304,6 +313,14 @@ class AuditDB:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_created_at
                 ON audit_runs(created_at)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_owner_created_at
+                ON audit_runs(owner_id, created_at)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_owner_session
+                ON audit_runs(owner_id, session_id)
             """)
 
     def _conn(self) -> sqlite3.Connection:
@@ -347,10 +364,17 @@ class AuditDB:
         structural_gate: Optional[dict] = None,
         mode: str = "computed",
         is_reliable: bool = False,
+        owner_id: Optional[str] = None,
     ) -> int:
         """監査結果を保存してrow idを返す"""
+        _validate_owner_id(owner_id)
+        if owner_id is not None and retry_of is not None and (
+            type(retry_of) is not int or retry_of <= 0
+        ):
+            raise ValueError("Invalid retry reference")
         now = datetime.now(timezone.utc).isoformat()
         row = {
+            "owner_id": owner_id,
             "session_id": session_id,
             "question": question,
             "response": response,
@@ -400,39 +424,57 @@ class AuditDB:
         col_names = ", ".join(cols)
         values = [row[c] for c in cols]
         with self._conn() as conn:
+            if owner_id is not None and retry_of is not None:
+                # Check and insert under one writer lock. A concurrent owner
+                # change/deletion cannot occur between authorization and save.
+                conn.execute("BEGIN IMMEDIATE")
+                previous = conn.execute(
+                    "SELECT 1 FROM audit_runs WHERE id = ? AND owner_id = ?",
+                    (retry_of, owner_id),
+                ).fetchone()
+                if previous is None:
+                    raise ValueError("Invalid retry reference")
             cursor = conn.execute(
                 f"INSERT INTO audit_runs ({col_names}) VALUES ({placeholders})",
                 values,
             )
             return cursor.lastrowid
 
-    def get_by_id(self, audit_id: int) -> Optional[dict]:
+    def get_by_id(self, audit_id: int, *, owner_id: Optional[str] = None) -> Optional[dict]:
         """ID指定で1件取得"""
+        _validate_owner_id(owner_id)
+        owner_filter = " AND owner_id = ?" if owner_id is not None else ""
+        values = (audit_id, owner_id) if owner_id is not None else (audit_id,)
         with self._conn() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
-                "SELECT * FROM audit_runs WHERE id = ?", (audit_id,)
+                "SELECT * FROM audit_runs WHERE id = ?" + owner_filter, values,
             ).fetchone()
             return guard_history_row(dict(row)) if row else None
 
-    def list_recent(self, limit: int = 20) -> List[dict]:
+    def list_recent(self, limit: int = 20, *, owner_id: Optional[str] = None) -> List[dict]:
         """最近のスコアリング結果を返す"""
+        _validate_owner_id(owner_id)
+        owner_filter = " WHERE owner_id = ?" if owner_id is not None else ""
+        values = (owner_id, limit) if owner_id is not None else (limit,)
         with self._conn() as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute("""
-                SELECT * FROM audit_runs
-                ORDER BY created_at DESC
-                LIMIT ?
-            """, (limit,)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM audit_runs" + owner_filter + " ORDER BY created_at DESC LIMIT ?",
+                values,
+            ).fetchall()
             return [guard_history_row(dict(r)) for r in rows]
 
-    def session_summary(self, session_id: str) -> dict:
+    def session_summary(self, session_id: str, *, owner_id: Optional[str] = None) -> dict:
         """セッション単位の集計サマリー"""
         from ..semantic_matching import DECISION_SCOPE, METRICS_SCOPE
 
+        _validate_owner_id(owner_id)
+        owner_filter = " AND owner_id = ?" if owner_id is not None else ""
+        values = (session_id, owner_id) if owner_id is not None else (session_id,)
         with self._conn() as conn:
             stored = conn.execute(
-                "SELECT * FROM audit_runs WHERE session_id = ?", (session_id,),
+                "SELECT * FROM audit_runs WHERE session_id = ?" + owner_filter, values,
             )
             columns = [item[0] for item in stored.description]
             guarded = [guard_history_row(dict(zip(columns, values))) for values in stored]
@@ -467,16 +509,17 @@ class AuditDB:
                 "legacy_summary": legacy,
             }
 
-    def drift_history(self, limit: int = 100) -> List[dict]:
+    def drift_history(self, limit: int = 100, *, owner_id: Optional[str] = None) -> List[dict]:
         """要件充足率と判定の時系列（従来指標は legacy_metrics）。"""
+        _validate_owner_id(owner_id)
+        owner_filter = " WHERE owner_id = ?" if owner_id is not None else ""
+        values = (owner_id, limit) if owner_id is not None else (limit,)
         with self._conn() as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute("""
-                SELECT *
-                FROM audit_runs
-                ORDER BY created_at ASC
-                LIMIT ?
-            """, (limit,)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM audit_runs" + owner_filter + " ORDER BY created_at ASC LIMIT ?",
+                values,
+            ).fetchall()
             fields = (
                 "created_at", "S", "C", "delta_e", "quality_score", "verdict",
                 "semantic_matching", "requirement_verdict", "requires_review", "legacy_metrics",

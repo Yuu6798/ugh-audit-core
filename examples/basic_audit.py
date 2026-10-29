@@ -1,47 +1,47 @@
-"""examples/basic_audit.py
-detect → calculate → decide パイプラインの最小デモ。
+"""Explicit instruction coverage, schema 4 persistence, and report demonstration.
+
+With no configured semantic checker, all examples remain degraded and unsaved.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from audit import _load_question_meta, audit
+from audit import audit
 from ugh_audit import AuditDB
 from ugh_audit.report.phase_map import generate_text_report
 
-DATA_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "data"
-    / "question_sets"
-    / "ugh-audit-100q-v3-1.jsonl"
-)
 DB_PATH = Path(__file__).resolve().parent.parent / ".tmp" / "example_audit.db"
 SESSION_ID = "example-session-01"
 
 CASES = [
     {
-        "question_id": "q001",
-        "response_text": (
-            "PoRは共鳴度を示す指標ですが、PoRが高いだけで誠実性は保証されません。"
-            "表層的な語彙一致でもPoRが高く出るため、結論は誤る可能性があります。"
-            "だからこそΔEやgrvを含む複合評価で判断する必要があります。"
-        ),
+        "question_id": "example-send",
+        "question_meta": {
+            "question": "申請書の送付方法を案内してください。",
+            "core_propositions": ["申請書を金曜日までに担当者へ送付する"],
+        },
+        "response_text": "申請書を金曜日までに担当者へ送付してください。",
     },
     {
-        "question_id": "q001",
-        "response_text": "PoRが高ければ誠実です。以上。",
+        "question_id": "example-deadline",
+        "question_meta": {
+            "question": "申請書の送付方法を案内してください。",
+            "core_propositions": ["申請書を金曜日までに担当者へ送付する"],
+        },
+        "response_text": "申請書を担当者へ送付してください。",
     },
     {
-        "question_id": "q002",
-        "response_text": (
-            "grvは回答内の語彙の偏在を検出する指標です。"
-            "例えば安全性フレーズばかり繰り返す回答では語彙が一部に集中します。"
-            "その結果、問いの核心が空洞化するパターンを捉えられます。"
-        ),
+        "question_id": "example-prohibition",
+        "question_meta": {
+            "question": "提出時の注意事項を案内してください。",
+            "core_propositions": ["原本を提出する", "写しは提出しない"],
+        },
+        "response_text": "原本を提出してください。写しは提出しないでください。",
     },
 ]
 
@@ -52,17 +52,25 @@ def _fmt(value: Any) -> str:
     return "None"
 
 
-def _as_float(value: Any) -> float:
-    if isinstance(value, (int, float)):
-        return float(value)
-    return 0.0
-
-
-def _load_meta(question_id: str) -> dict:
-    meta = _load_question_meta(str(DATA_PATH), question_id)
-    if meta is None:
-        raise RuntimeError(f"question_id '{question_id}' not found: {DATA_PATH}")
-    return meta
+def _save_result(db: AuditDB, result: dict, question_meta: dict, response: str) -> int | None:
+    """Persist current values and proof together; never fill null metrics with zero."""
+    if result["verdict"] == "degraded":
+        return None
+    state, gate = result["state"], result["structural_gate"]
+    return db.save(
+        session_id=SESSION_ID,
+        question=question_meta["question"], response=response,
+        S=state["S"], C=state["C"], delta_e=state["delta_e"],
+        quality_score=state["quality_score"], verdict=result["verdict"],
+        f1=gate.get("f1"), f2=gate.get("f2"), f3=gate.get("f3"), f4=gate.get("f4"),
+        hit_rate=result["hit_rate"], hit_sources=json.dumps(result["hit_sources"]),
+        metadata_source="inline", semantic_matching=result["semantic_matching"],
+        requirement_verdict=result["requirement_verdict"],
+        requires_review=result["requires_review"], legacy_metrics=result["legacy_metrics"],
+        schema_version=result["schema_version"], decision_scope=result["decision_scope"],
+        metrics_scope=result["metrics_scope"], question_meta=result["assessment_context"],
+        structural_gate=gate, mode=result["mode"], is_reliable=result["is_reliable"],
+    )
 
 
 def main() -> None:
@@ -70,15 +78,14 @@ def main() -> None:
         DB_PATH.unlink()
     db = AuditDB(db_path=DB_PATH)
 
-    print("UGH Audit Core - basic pipeline demo\n")
+    print("UGH Audit Core - explicit instruction coverage demo\n")
 
     for i, case in enumerate(CASES, start=1):
         qid = case["question_id"]
         response_text = case["response_text"]
-        question_meta = _load_meta(qid)
+        question_meta = case["question_meta"]
 
         result = audit(qid, response_text, question_meta)
-        evidence = result["evidence"]
         state = result["state"]
         verdict = result["policy"]["decision"]
 
@@ -86,36 +93,7 @@ def main() -> None:
         c = state.get("C")
         delta_e = state.get("delta_e")
         quality_score = state.get("quality_score")
-        propositions_hit = int(evidence.get("propositions_hit", 0) or 0)
-        propositions_total = int(evidence.get("propositions_total", 0) or 0)
-        hit_rate = (
-            f"{propositions_hit}/{propositions_total}"
-            if propositions_total > 0 else ""
-        )
-
-        saved_id = None
-        if verdict != "degraded":
-            saved_id = db.save(
-                session_id=SESSION_ID,
-                question=str(question_meta.get("question", "")),
-                response=response_text,
-                reference=None,
-                S=_as_float(s),
-                C=_as_float(c),
-                delta_e=_as_float(delta_e),
-                quality_score=_as_float(quality_score),
-                verdict=str(verdict),
-                f1=_as_float(evidence.get("f1_anchor")),
-                f2=_as_float(evidence.get("f2_unknown")),
-                f3=_as_float(evidence.get("f3_operator")),
-                f4=_as_float(evidence.get("f4_premise")),
-                hit_rate=hit_rate,
-                metadata_source="inline",
-                semantic_matching=result["semantic_matching"],
-                requirement_verdict=result["requirement_verdict"],
-                requires_review=result["requires_review"],
-                legacy_metrics=result["legacy_metrics"],
-            )
+        saved_id = _save_result(db, result, question_meta, response_text)
 
         question_preview = str(question_meta.get("question", ""))[:30]
         print(

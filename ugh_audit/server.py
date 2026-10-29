@@ -3,7 +3,7 @@ ugh_audit/server.py
 REST API + MCP サーバー（パイプライン A 対応）
 
 FastAPI ベースの HTTP API と MCP (Model Context Protocol) サーバーを提供する。
-ChatGPT Connectors から MCP URL (http://<host>:<port>/mcp) を登録して利用可能。
+招待制Bearer認証を設定できるMCPクライアントから /mcp/ を利用する。
 
 主要エンドポイント:
     POST /api/audit   — REST: 監査 (question/response/question_meta → スコア)
@@ -12,12 +12,11 @@ ChatGPT Connectors から MCP URL (http://<host>:<port>/mcp) を登録して利�
 """
 from __future__ import annotations
 
-import asyncio
 import json as _json
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
@@ -26,6 +25,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from . import dependencies as _deps
+from .beta_access import (
+    AccessError, InviteMiddleware, audit_access, error_response, require_principal, validate_payload,
+)
 from . import pipeline as _pipeline
 from .semantic_matching import DECISION_SCOPE, METRICS_SCOPE
 from .mcp_server import configure as _mcp_configure
@@ -305,11 +307,20 @@ _mcp_http_app = _mcp_instance.streamable_http_app()
 @asynccontextmanager
 async def _lifespan(a: FastAPI):
     from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    security = TransportSecuritySettings(
+        allowed_hosts=["localhost", "localhost:*", "127.0.0.1", "127.0.0.1:*", "[::1]", "[::1]:*"]
+        + [v.strip() for v in os.environ.get("UGH_ALLOWED_HOSTS", "").split(",") if v.strip()],
+        allowed_origins=["http://localhost:*", "http://127.0.0.1:*"]
+        + [v.strip() for v in os.environ.get("UGH_ALLOWED_ORIGINS", "").split(",") if v.strip()],
+    )
 
     sm = StreamableHTTPSessionManager(
         app=_mcp_instance._mcp_server,
         json_response=_mcp_instance.settings.json_response,
         stateless=_mcp_instance.settings.stateless_http,
+        security_settings=security,
     )
     _mcp_instance._session_manager = sm
     _mcp_http_app.routes[0].app.session_manager = sm
@@ -333,14 +344,22 @@ app = FastAPI(
     lifespan=_lifespan,
 )
 
-# CORS
+# Preflight contains no audit data. Keep CORS outside auth so browsers can send
+# the real authenticated request; all non-preflight requests still pass auth.
+app.add_middleware(InviteMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://chat.openai.com", "https://chatgpt.com"],
+    allow_origins=["https://chat.openai.com", "https://chatgpt.com"]
+    + [v.strip() for v in os.environ.get("UGH_ALLOWED_ORIGINS", "").split(",") if v.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Mcp-Session-Id"],
 )
+
+@app.exception_handler(AccessError)
+async def access_error_handler(request, exc):
+    return error_response(exc)
+
 
 app.mount("/mcp", _mcp_http_app)
 
@@ -383,99 +402,96 @@ def configure(
     response_model=AuditResponse,
     summary="audit_answer — AI回答を意味監査する",
 )
-async def audit_answer(req: AuditRequest) -> AuditResponse:
+def audit_answer(req: AuditRequest) -> AuditResponse:
     db = _get_db()
-    golden = _get_golden()
-    ref = req.reference or golden.find_reference(req.question)
+    validate_payload(req.question, req.response, req.reference, req.session_id, req.question_meta)
+    with audit_access(db, req.retry_of) as principal:
+        golden = _get_golden()
+        ref = req.reference or golden.find_reference(req.question)
 
-    # auto_generate_meta=True 時は LLM 呼び出しが発生するため
-    # スレッドプールで実行して他のリクエストをブロックしない
-    pipeline_fn = partial(
-        _run_pipeline,
-        question=req.question,
-        response=req.response,
-        reference=ref,
-        question_meta=req.question_meta,
-        session_id=req.session_id,
-        auto_generate_meta=req.auto_generate_meta,
-    )
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, pipeline_fn)
+        # The whole synchronous endpoint runs in a cancellation-shielded worker.
+        result = _run_pipeline(
+            question=req.question,
+            response=req.response,
+            reference=ref,
+            question_meta=req.question_meta,
+            session_id=req.session_id,
+            auto_generate_meta=req.auto_generate_meta,
+        )
 
-    # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
-    saved_id: Optional[int] = None
-    if result["mode"] in ("computed", "computed_ai_draft"):
-        save_fn = partial(
-            db.save,
-            session_id=result["_session_id"],
-            question=result["_question"],
-            response=result["_response"],
-            reference=result["_reference"],
+        # degraded 時は DB に保存しない（未計算ログでベースラインを汚染させない）
+        saved_id: Optional[int] = None
+        if result["mode"] in ("computed", "computed_ai_draft"):
+            saved_id = db.save(
+                owner_id=principal.owner_id,
+                session_id=result["_session_id"],
+                question=result["_question"],
+                response=result["_response"],
+                reference=result["_reference"],
+                S=result["S"],
+                C=result["C"],
+                delta_e=result["delta_e"],
+                quality_score=result["quality_score"],
+                verdict=result["verdict"],
+                f1=result["structural_gate"]["f1"],
+                f2=result["structural_gate"]["f2"],
+                f3=result["structural_gate"]["f3"],
+                f4=result["structural_gate"]["f4"],
+                hit_rate=result["hit_rate"] or "",
+                metadata_source=result["metadata_source"],
+                generated_meta=_json.dumps(
+                    result.get("_question_meta") or {}, ensure_ascii=False,
+                ) if result.get("metadata_source") == META_SOURCE_LLM else "",
+                hit_sources=_json.dumps(result.get("hit_sources"), ensure_ascii=False),
+                retry_of=req.retry_of,
+                semantic_matching=result["semantic_matching"],
+                requirement_verdict=result["requirement_verdict"],
+                requires_review=result["requires_review"],
+                legacy_metrics=result["legacy_metrics"],
+                schema_version=result["schema_version"],
+                decision_scope=result["decision_scope"],
+                metrics_scope=result["metrics_scope"],
+                question_meta=result.get("_question_meta"),
+                structural_gate=result.get("structural_gate"),
+                mode=result["mode"],
+                is_reliable=result["is_reliable"],
+            )
+
+        return AuditResponse(
+            schema_version=result["schema_version"],
+            decision_scope=result["decision_scope"],
+            metrics_scope=result["metrics_scope"],
+            assessment_context=result.get("_question_meta"),
             S=result["S"],
             C=result["C"],
             delta_e=result["delta_e"],
             quality_score=result["quality_score"],
             verdict=result["verdict"],
-            f1=result["structural_gate"]["f1"],
-            f2=result["structural_gate"]["f2"],
-            f3=result["structural_gate"]["f3"],
-            f4=result["structural_gate"]["f4"],
-            hit_rate=result["hit_rate"] or "",
-            metadata_source=result["metadata_source"],
-            generated_meta=_json.dumps(
-                result.get("_question_meta") or {}, ensure_ascii=False,
-            ) if result.get("metadata_source") == META_SOURCE_LLM else "",
-            hit_sources=_json.dumps(result.get("hit_sources"), ensure_ascii=False),
-            retry_of=req.retry_of,
             semantic_matching=result["semantic_matching"],
             requirement_verdict=result["requirement_verdict"],
             requires_review=result["requires_review"],
             legacy_metrics=result["legacy_metrics"],
-            schema_version=result["schema_version"],
-            decision_scope=result["decision_scope"],
-            metrics_scope=result["metrics_scope"],
-            question_meta=result.get("_question_meta"),
-            structural_gate=result.get("structural_gate"),
+            hit_rate=result["hit_rate"],
+            structural_gate=StructuralGateResponse(**result["structural_gate"]),
+            saved_id=saved_id,
+            retry_of=req.retry_of,
             mode=result["mode"],
             is_reliable=result["is_reliable"],
+            matched_id=result["matched_id"],
+            metadata_source=result["metadata_source"],
+            computed_components=result["computed_components"],
+            missing_components=result["missing_components"],
+            errors=result["errors"],
+            degraded_reason=result["degraded_reason"],
+            mode_affordance=result.get("mode_affordance"),
+            soft_rescue=result.get("soft_rescue"),
+            grv=result.get("grv"),
+            response_mode_signal=result.get("response_mode_signal"),
+            mode_conditioned_grv=result.get("mode_conditioned_grv"),
+            verdict_advisory=result.get("verdict_advisory", result["verdict"]),
+            advisory_flags=result.get("advisory_flags", []),
+            hit_sources=result.get("hit_sources"),
         )
-        saved_id = await loop.run_in_executor(None, save_fn)
-
-    return AuditResponse(
-        schema_version=result["schema_version"],
-        decision_scope=result["decision_scope"],
-        metrics_scope=result["metrics_scope"],
-        assessment_context=result.get("_question_meta"),
-        S=result["S"],
-        C=result["C"],
-        delta_e=result["delta_e"],
-        quality_score=result["quality_score"],
-        verdict=result["verdict"],
-        semantic_matching=result["semantic_matching"],
-        requirement_verdict=result["requirement_verdict"],
-        requires_review=result["requires_review"],
-        legacy_metrics=result["legacy_metrics"],
-        hit_rate=result["hit_rate"],
-        structural_gate=StructuralGateResponse(**result["structural_gate"]),
-        saved_id=saved_id,
-        retry_of=req.retry_of,
-        mode=result["mode"],
-        is_reliable=result["is_reliable"],
-        matched_id=result["matched_id"],
-        metadata_source=result["metadata_source"],
-        computed_components=result["computed_components"],
-        missing_components=result["missing_components"],
-        errors=result["errors"],
-        degraded_reason=result["degraded_reason"],
-        mode_affordance=result.get("mode_affordance"),
-        soft_rescue=result.get("soft_rescue"),
-        grv=result.get("grv"),
-        response_mode_signal=result.get("response_mode_signal"),
-        mode_conditioned_grv=result.get("mode_conditioned_grv"),
-        verdict_advisory=result.get("verdict_advisory", result["verdict"]),
-        advisory_flags=result.get("advisory_flags", []),
-        hit_sources=result.get("hit_sources"),
-    )
 
 
 @app.get(
@@ -485,7 +501,7 @@ async def audit_answer(req: AuditRequest) -> AuditResponse:
 )
 def get_history(limit: int = 20) -> List[HistoryItem]:
     db = _get_db()
-    rows = db.list_recent(limit=max(1, min(limit, 500)))
+    rows = db.list_recent(limit=max(1, min(limit, 500)), owner_id=require_principal().owner_id)
     return [_row_to_history(r) for r in rows]
 
 
@@ -507,7 +523,7 @@ def _row_to_history(r: dict) -> HistoryItem:
         mode=r["mode"],
         is_reliable=r["is_reliable"],
         structural_gate=r.get("structural_gate"),
-        C=round(r["C"], 4) if r["C"] is not None else None,
+        C=r["C"],
         delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
         quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
         verdict=r["verdict"],
@@ -535,7 +551,7 @@ def _row_to_history(r: dict) -> HistoryItem:
 )
 def get_audit_by_id(audit_id: int) -> HistoryItem:
     db = _get_db()
-    r = db.get_by_id(audit_id)
+    r = db.get_by_id(audit_id, owner_id=require_principal().owner_id)
     if r is None:
         raise HTTPException(status_code=404, detail=f"audit_id {audit_id} not found")
     return _row_to_history(r)
@@ -548,7 +564,7 @@ def get_audit_by_id(audit_id: int) -> HistoryItem:
 )
 def get_session(session_id: str) -> SessionSummary:
     db = _get_db()
-    summary = db.session_summary(session_id)
+    summary = db.session_summary(session_id, owner_id=require_principal().owner_id)
     return SessionSummary(**summary)
 
 
@@ -559,7 +575,7 @@ def get_session(session_id: str) -> SessionSummary:
 )
 def get_drift(limit: int = 100) -> List[DriftItem]:
     db = _get_db()
-    rows = db.drift_history(limit=max(1, min(limit, 1000)))
+    rows = db.drift_history(limit=max(1, min(limit, 1000)), owner_id=require_principal().owner_id)
     return [
         DriftItem(
             created_at=r["created_at"],
@@ -575,7 +591,7 @@ def get_drift(limit: int = 100) -> List[DriftItem]:
             structural_gate=r.get("structural_gate"),
             metadata_source=r.get("metadata_source", "none"),
             hit_rate=r.get("hit_rate"),
-            C=round(r["C"], 4) if r["C"] is not None else None,
+            C=r["C"],
             delta_e=round(r["delta_e"], 4) if r["delta_e"] is not None else None,
             quality_score=round(r["quality_score"], 4) if r["quality_score"] is not None else None,
             verdict=r["verdict"],

@@ -20,3 +20,9 @@ analysis/round3/
 scripts/round3_*.py
 experiments/logs/*.jsonl
 experiments/logs/*.json
+
+# Private beta credentials and SQLite sidecars
+invites.json
+*.token
+*.db-wal
+*.db-shm

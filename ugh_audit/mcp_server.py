@@ -1,9 +1,9 @@
 """
 ugh_audit/mcp_server.py
-MCP サーバー — ChatGPT Connectors 用（パイプライン A 対応）
+MCP サーバー — 招待制ベータ（パイプライン A 対応）
 
 Model Context Protocol (MCP) で audit_answer ツールを公開する。
-ChatGPT Settings > Connectors から MCP URL を登録して利用する。
+Bearerヘッダーを設定できるクライアントで /mcp/ に接続する。OAuthは未実装。
 
 起動方法:
     python -m ugh_audit.mcp_server                 # Streamable HTTP (port 8000)
@@ -17,12 +17,16 @@ import math
 import os
 import sys
 from dataclasses import dataclass, field
+from functools import partial, wraps
+
+import anyio
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from . import dependencies as _deps
+from .beta_access import audit_access, require_principal, validate_payload
 
 if TYPE_CHECKING:
     from .reference.golden_store import GoldenStore
@@ -226,6 +230,27 @@ class AuditOutput:
 # ---------------------------------------------------------------------------
 
 
+def _remote_open(req, timeout):
+    """Forward this caller's identity only over TLS, without following redirects."""
+    import urllib.request
+    from urllib.parse import urlsplit
+
+    principal = require_principal()
+    token = principal.token or os.environ.get("UGH_REMOTE_TOKEN")
+    if not token:
+        return urllib.request.urlopen(req, timeout=timeout)
+    parsed = urlsplit(req.full_url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("Authenticated upstream requires HTTPS")
+    req.add_header("Authorization", "Bearer " + token)
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    return urllib.request.build_opener(NoRedirect()).open(req, timeout=timeout)
+
+
 def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
     """リモート API に監査リクエストを転送し、結果を AuditOutput に変換する"""
     import urllib.request
@@ -239,7 +264,7 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with _remote_open(req, timeout=60) as resp:
             result = _read_remote_json(resp)
     except Exception as exc:
         # Error bodies and exception messages can echo request contents.
@@ -325,7 +350,17 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
     )
 
 
-@mcp.tool()
+def _worker_tool(fn):
+    # FastMCP otherwise executes synchronous tools on its event-loop thread.
+    # AnyIO shields the actual worker on cancellation, retaining its audit slot.
+    @wraps(fn)
+    async def worker(**kwargs):
+        return await anyio.to_thread.run_sync(partial(fn, **kwargs))
+    mcp.tool()(worker)
+    return fn
+
+
+@_worker_tool
 def audit_answer(
     question: str,
     response: str,
@@ -353,104 +388,109 @@ def audit_answer(
         question_meta: 問題メタデータ（core_propositions 等を含む dict）
         auto_generate_meta: question_meta 未提供時に LLM で動的生成する (opt-in)
     """
+    require_principal()
+    validate_payload(question, response, reference, session_id, question_meta)
     # プロキシモード: UGH_REMOTE_API が設定されている場合、リモート API に転送
     remote_api = os.environ.get("UGH_REMOTE_API")
     if remote_api:
-        return _proxy_audit(
-            remote_api, question=question, response=response,
-            reference=reference, session_id=session_id,
-            question_meta=question_meta,
-            auto_generate_meta=auto_generate_meta,
-            retry_of=retry_of,
-        )
+        with audit_access(_get_db()):
+            return _proxy_audit(
+                remote_api, question=question, response=response,
+                reference=reference, session_id=session_id,
+                question_meta=question_meta,
+                auto_generate_meta=auto_generate_meta,
+                retry_of=retry_of,
+            )
 
     db = _get_db()
-    golden = _get_golden()
-    ref = reference or golden.find_reference(question)
+    with audit_access(db, retry_of) as principal:
+        golden = _get_golden()
+        ref = reference or golden.find_reference(question)
 
-    result = _pipeline.run_audit(
-        question=question,
-        response=response,
-        reference=ref,
-        question_meta=question_meta,
-        session_id=session_id,
-        auto_generate_meta=auto_generate_meta,
-        detect_fn=_detect if _HAS_DETECTOR else None,
-        semantic_judge=_make_semantic_judge(),
-    )
+        result = _pipeline.run_audit(
+            question=question,
+            response=response,
+            reference=ref,
+            question_meta=question_meta,
+            session_id=session_id,
+            auto_generate_meta=auto_generate_meta,
+            detect_fn=_detect if _HAS_DETECTOR else None,
+            semantic_judge=_make_semantic_judge(),
+        )
 
-    # degraded 時は DB に保存しない (未計算ログでベースラインを汚染させない)
-    saved_id: Optional[int] = None
-    if result["mode"] in ("computed", "computed_ai_draft"):
-        gate = result["structural_gate"]
-        saved_id = db.save(
-            session_id=result["_session_id"],
-            question=result["_question"],
-            response=result["_response"],
-            reference=result["_reference"],
+        # degraded 時は DB に保存しない (未計算ログでベースラインを汚染させない)
+        saved_id: Optional[int] = None
+        if result["mode"] in ("computed", "computed_ai_draft"):
+            gate = result["structural_gate"]
+            saved_id = db.save(
+                owner_id=principal.owner_id,
+                session_id=result["_session_id"],
+                question=result["_question"],
+                response=result["_response"],
+                reference=result["_reference"],
+                S=result["S"],
+                C=result["C"],
+                delta_e=result["delta_e"],
+                quality_score=result["quality_score"],
+                verdict=result["verdict"],
+                f1=gate["f1"],
+                f2=gate["f2"],
+                f3=gate["f3"],
+                f4=gate["f4"],
+                hit_rate=result["hit_rate"] or "",
+                metadata_source=result["metadata_source"],
+                generated_meta=_json.dumps(
+                    result.get("_question_meta") or {}, ensure_ascii=False,
+                ) if result["metadata_source"] == META_SOURCE_LLM else "",
+                hit_sources=_json.dumps(result.get("hit_sources"), ensure_ascii=False),
+                retry_of=retry_of,
+                semantic_matching=result["semantic_matching"],
+                requirement_verdict=result["requirement_verdict"],
+                requires_review=result["requires_review"],
+                legacy_metrics=result["legacy_metrics"],
+                schema_version=result["schema_version"],
+                decision_scope=result["decision_scope"],
+                metrics_scope=result["metrics_scope"],
+                question_meta=result.get("_question_meta"),
+                structural_gate=result.get("structural_gate"),
+                mode=result["mode"],
+                is_reliable=result["is_reliable"],
+            )
+
+        return AuditOutput(
+            schema_version=result["schema_version"],
+            decision_scope=result["decision_scope"],
+            metrics_scope=result["metrics_scope"],
+            assessment_context=result.get("_question_meta"),
             S=result["S"],
             C=result["C"],
             delta_e=result["delta_e"],
             quality_score=result["quality_score"],
             verdict=result["verdict"],
-            f1=gate["f1"],
-            f2=gate["f2"],
-            f3=gate["f3"],
-            f4=gate["f4"],
-            hit_rate=result["hit_rate"] or "",
+            hit_rate=result["hit_rate"],
+            structural_gate=result["structural_gate"],
+            saved_id=saved_id,
+            mode=result["mode"],
+            is_reliable=result["is_reliable"],
+            matched_id=result["matched_id"],
             metadata_source=result["metadata_source"],
-            generated_meta=_json.dumps(
-                result.get("_question_meta") or {}, ensure_ascii=False,
-            ) if result["metadata_source"] == META_SOURCE_LLM else "",
-            hit_sources=_json.dumps(result.get("hit_sources"), ensure_ascii=False),
-            retry_of=retry_of,
             semantic_matching=result["semantic_matching"],
             requirement_verdict=result["requirement_verdict"],
             requires_review=result["requires_review"],
             legacy_metrics=result["legacy_metrics"],
-            schema_version=result["schema_version"],
-            decision_scope=result["decision_scope"],
-            metrics_scope=result["metrics_scope"],
-            question_meta=result.get("_question_meta"),
-            structural_gate=result.get("structural_gate"),
-            mode=result["mode"],
-            is_reliable=result["is_reliable"],
+            verdict_advisory=result["verdict_advisory"],
+            computed_components=result["computed_components"],
+            missing_components=result["missing_components"],
+            errors=result["errors"],
+            degraded_reason=result["degraded_reason"],
+            mode_affordance=result["mode_affordance"],
+            soft_rescue=result.get("soft_rescue"),
+            grv=result.get("grv"),
+            response_mode_signal=result.get("response_mode_signal"),
+            mode_conditioned_grv=result.get("mode_conditioned_grv"),
+            advisory_flags=list(result.get("advisory_flags", [])),
+            hit_sources=result.get("hit_sources"),
         )
-
-    return AuditOutput(
-        schema_version=result["schema_version"],
-        decision_scope=result["decision_scope"],
-        metrics_scope=result["metrics_scope"],
-        assessment_context=result.get("_question_meta"),
-        S=result["S"],
-        C=result["C"],
-        delta_e=result["delta_e"],
-        quality_score=result["quality_score"],
-        verdict=result["verdict"],
-        hit_rate=result["hit_rate"],
-        structural_gate=result["structural_gate"],
-        saved_id=saved_id,
-        mode=result["mode"],
-        is_reliable=result["is_reliable"],
-        matched_id=result["matched_id"],
-        metadata_source=result["metadata_source"],
-        semantic_matching=result["semantic_matching"],
-        requirement_verdict=result["requirement_verdict"],
-        requires_review=result["requires_review"],
-        legacy_metrics=result["legacy_metrics"],
-        verdict_advisory=result["verdict_advisory"],
-        computed_components=result["computed_components"],
-        missing_components=result["missing_components"],
-        errors=result["errors"],
-        degraded_reason=result["degraded_reason"],
-        mode_affordance=result["mode_affordance"],
-        soft_rescue=result.get("soft_rescue"),
-        grv=result.get("grv"),
-        response_mode_signal=result.get("response_mode_signal"),
-        mode_conditioned_grv=result.get("mode_conditioned_grv"),
-        advisory_flags=list(result.get("advisory_flags", [])),
-        hit_sources=result.get("hit_sources"),
-    )
 
 
 def _proxy_get(remote_api: str, path: str) -> Dict:
@@ -460,7 +500,7 @@ def _proxy_get(remote_api: str, path: str) -> Dict:
     url = remote_api.rstrip("/") + path
     req = urllib.request.Request(url, method="GET")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with _remote_open(req, timeout=30) as resp:
             result = _read_remote_json(resp)
     except urllib.error.HTTPError as e:
         return {"error": f"remote_api_error:{e.code}"}
@@ -508,24 +548,25 @@ def _proxy_get(remote_api: str, path: str) -> Dict:
     return result
 
 
-@mcp.tool()
+@_worker_tool
 def get_audit(audit_id: int) -> Dict:
     """ID指定で監査結果を1件取得する。
 
     Args:
         audit_id: 監査結果のID
     """
+    principal = require_principal()
     remote_api = os.environ.get("UGH_REMOTE_API")
     if remote_api:
         return _proxy_get(remote_api, f"/api/audit/{audit_id}")
     db = _get_db()
-    row = db.get_by_id(audit_id)
+    row = db.get_by_id(audit_id, owner_id=principal.owner_id)
     if row is None:
         return {"error": f"audit_id {audit_id} not found"}
     return row
 
 
-@mcp.tool()
+@_worker_tool
 def get_history(limit: int = 20) -> List[Dict]:
     """直近の監査履歴を取得する。
 
@@ -533,29 +574,31 @@ def get_history(limit: int = 20) -> List[Dict]:
         limit: 取得件数 (デフォルト: 20)
     """
     limit = max(1, min(limit, 500))
+    principal = require_principal()
     remote_api = os.environ.get("UGH_REMOTE_API")
     if remote_api:
         return _proxy_get(remote_api, f"/api/history?limit={limit}")
     db = _get_db()
-    return db.list_recent(limit=limit)
+    return db.list_recent(limit=limit, owner_id=principal.owner_id)
 
 
-@mcp.tool()
+@_worker_tool
 def get_session_summary(session_id: str) -> Dict:
     """セッション単位の集計サマリーを取得する。
 
     Args:
         session_id: セッションID
     """
+    principal = require_principal()
     remote_api = os.environ.get("UGH_REMOTE_API")
     if remote_api:
         from urllib.parse import quote
         return _proxy_get(remote_api, f"/api/session/{quote(session_id, safe='')}")
     db = _get_db()
-    return db.session_summary(session_id)
+    return db.session_summary(session_id, owner_id=principal.owner_id)
 
 
-@mcp.tool()
+@_worker_tool
 def get_drift_history(limit: int = 100) -> List[Dict]:
     """要件充足率と判定の時系列を取得する。従来指標は参考診断。
 
@@ -563,11 +606,12 @@ def get_drift_history(limit: int = 100) -> List[Dict]:
         limit: 取得件数 (デフォルト: 100)
     """
     limit = max(1, min(limit, 1000))
+    principal = require_principal()
     remote_api = os.environ.get("UGH_REMOTE_API")
     if remote_api:
         return _proxy_get(remote_api, f"/api/drift?limit={limit}")
     db = _get_db()
-    return db.drift_history(limit=limit)
+    return db.drift_history(limit=limit, owner_id=principal.owner_id)
 
 
 # ---------------------------------------------------------------------------
@@ -579,11 +623,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="UGH Audit MCP Server")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--host", type=str, default="0.0.0.0")
+    parser.add_argument("--host", type=str, default="127.0.0.1")
     args = parser.parse_args()
 
-    mcp.settings.host = args.host
-    mcp.settings.port = args.port
-    mcp.settings.streamable_http_path = "/mcp"
+    import uvicorn
 
-    mcp.run(transport="streamable-http")
+    # Use the same authenticated ASGI boundary as the REST entry point.
+    uvicorn.run("ugh_audit.server:app", host=args.host, port=args.port)

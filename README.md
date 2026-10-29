@@ -116,15 +116,22 @@ python audit.py --question-id q001 --response "AIは..." \
 
 ### REST API
 
+招待制が既定。先に [招待・上限・配備の手順](docs/invite_beta.md) でキーと台帳を設定する。
+以下は発行済みキーを環境変数 `UGH_TOKEN_FILE` で指定した例。
+
 ```bash
-uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
+uvicorn ugh_audit.server:app --host 127.0.0.1 --port 8000
 ```
 
 ```python
 import httpx
+import os
+from pathlib import Path
+
+headers = {"Authorization": "Bearer " + Path(os.environ["UGH_TOKEN_FILE"]).read_text().strip()}
 
 # 人が定義した指示要件
-resp = httpx.post("http://localhost:8000/api/audit", json={
+resp = httpx.post("http://localhost:8000/api/audit", headers=headers, json={
     "question": "書類送付の案内を作成してください。",
     "response": "申請書は金曜日までに担当者へ送付してください。",
     "question_meta": {
@@ -133,7 +140,7 @@ resp = httpx.post("http://localhost:8000/api/audit", json={
 })
 
 # AI 草案要件を使う場合は、要件自体のレビューが必要
-resp = httpx.post("http://localhost:8000/api/audit", json={
+resp = httpx.post("http://localhost:8000/api/audit", headers=headers, json={
     "question": "書類送付の案内を作成してください。",
     "response": "申請書を担当者へ送付してください。",
     "auto_generate_meta": True,
@@ -194,16 +201,16 @@ from ugh_audit import (
 
 ---
 
-## MCP サーバー（ChatGPT Connectors 対応）
+## MCP サーバー
 
-ChatGPT から `audit_answer` ツールを呼び出せる MCP (Model Context Protocol)
-サーバーを内蔵。`stateless_http` モードで動作。
+Bearerヘッダーを設定できるMCPクライアントから利用する。`stateless_http` モードで動作。
+OAuthは未実装。対象クライアントの接続確認は [招待制ベータ手順](docs/invite_beta.md) に従う。
 
 ```bash
 pip install -e ".[server]"
-python -m ugh_audit.mcp_server                 # スタンドアロン (port 8000)
+python -m ugh_audit.mcp_server                 # 認証付き統合アプリ (port 8000)
 uvicorn ugh_audit.server:app --port 8000       # REST + MCP 統合
-# → MCP:  http://localhost:8000/mcp
+# → MCP:  http://localhost:8000/mcp/
 # → REST: http://localhost:8000/api/audit, /api/history
 ```
 
@@ -228,6 +235,8 @@ API 仕様 (tool schema / エンドポイント / 環境変数) 全詳細:
 | LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
 | mode_affordance / response_mode_signal | [`docs/mode_affordance.md`](docs/mode_affordance.md), [`addendum`](docs/mode_affordance_v1_addendum.md) |
 | メタデータパイプライン | [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md) |
+| 招待制ベータ（認証・履歴分離・上限） | [`docs/invite_beta.md`](docs/invite_beta.md) |
+| Agensi無料掲載パッケージ | [`marketplace/agensi`](marketplace/agensi) |
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 検証結果 (HA48 / HA20 + CI + Limitations) | [`docs/validation.md`](docs/validation.md) |
 | Self-Audit 実験 | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
