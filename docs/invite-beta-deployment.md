@@ -1,0 +1,72 @@
+# 招待ベータの配備前処理
+
+`python -m ugh_audit.deployment start` は、永続ボリューム、招待台帳、DBを検査してから
+同じプロセスでuvicornを起動する。失敗した場合はHTTPサーバーを起動しない。
+通常の `uvicorn ugh_audit.server:app` やPython APIの既存動作は変更しない。
+
+## 環境変数を正とする招待台帳
+
+`UGH_INVITES_JSON` を指定した場合、**毎回の起動でその内容を招待台帳へ適用する**。
+内容は `ugh_audit.invites` とHTTP認証が使う台帳形式と同じで、SHA-256だけを格納する。
+平文のBearerキーをこの変数に入れない。重複キー、未知フィールド、不正な型、
+空のusers、重複ハッシュ、262,144bytes超過は拒否する。
+
+**この運用では、失効・更新は環境変数側で行う。台帳だけを書き換えても再起動時に元へ戻る。**
+利用者を失効させる場合は、そのuserの全credentialを環境JSONで `enabled:false` にし、
+配備を反映する。ローテーションも環境JSONで古いcredentialを無効にし、新しいハッシュを追加する。
+配備が完了するまでは変更が適用されない。変更後に古いキーが401になることを確認する。
+`UGH_INVITES_JSON` が存在するプロセスではCLIのissue/revokeを拒否し、環境JSON更新と
+再配備を案内する。オフラインでCLIを使って台帳を作る場合はこの変数を明示的に外し、
+完成したハッシュ台帳を環境変数へ反映する。ファイルだけの編集を失効完了と扱わない。
+
+環境JSONは一時ファイルで検証後、0600のファイルで `UGH_INVITE_FILE` をatomic replaceする。
+不正な環境JSONは既存台帳・DBを変更しない。JSONやハッシュ、キー、監査本文はログに出さない。
+`UGH_INVITES_JSON` を設定しない場合は既存の台帳を検証して維持し、CLIによる失効を継続できる。
+
+## Railwayの設定
+
+| 設定 | 用途 |
+|---|---|
+| `RAILWAY_VOLUME_MOUNT_PATH` | Railwayが付与する実際の永続マウント先 |
+| `UGH_ACCESS_MODE=invite` | 招待認証。Railwayでlocalは拒否 |
+| `UGH_AUDIT_DB=/data/audit.db` | 既存監査DB |
+| `UGH_USAGE_DB=/data/usage.db` | 利用回数・同時実行予約の永続台帳 |
+| `UGH_INVITE_FILE=/data/invites.json` | 検証したハッシュ台帳の保存先 |
+| `UGH_INVITES_JSON` | 必要な場合だけ指定する、正となるハッシュ台帳JSON |
+| `UGH_ALLOWED_HOSTS` | MCPに許可する公開Host値 |
+| `UGH_ALLOWED_ORIGINS` | ブラウザクライアントを使う場合に許可するOrigin |
+
+Railwayの識別変数がある場合は、マウント先が存在し、OSのmount情報でも確認できることが必須。
+DB・台帳・バックアップはそのマウント配下に置く。通常ディレクトリを `/data` と名付けただけでは
+通過しない。SQLiteの本体・WAL・SHM・journal、招待台帳、lockのパス衝突も拒否する。
+
+既存監査DBが見つからない場合は起動を止める。空DBを意図して作る初回環境に限り
+`UGH_ALLOW_NEW_AUDIT_DB=1` を指定できる。既存環境のボリューム不備をこの設定で回避しない。
+初回の利用台帳は作成する。既存利用台帳の内容を消去・初期化して上限を返却することはない。
+
+## バックアップと移行
+
+移行は、旧プロセスが監査DBへ書き込まない配備時間帯に行う。単一ホストの同じ永続ボリュームを使う。
+前処理同士はOSの排他lockで直列化され、プロセス終了時にlockを解放する。
+
+既存schemaの変更が必要なときだけ、SQLite backup APIで `deployment-backups/` へ
+0600の新規バックアップを作り、`PRAGMA integrity_check` を通す。稼働中のWALにある
+コミット済み行もバックアップ対象になる。既存バックアップを上書きしない。
+次にバックアップのコピーを `AuditDB` で移行し、元の全列・全行が変わらず、
+所有者列のなかった旧行がNULLのままであることを検証してから本体を移行する。
+一時的に本体・バックアップ・検証コピーの容量が必要になる。
+
+同じschemaへの移行が完了した後の通常再起動では追加バックアップを作らない。
+検証失敗時は元DBと作成済みバックアップを残し、起動を止める。未解決の移行を繰り返し
+起動するとバックアップが増えることがあるため、固定エラーコードを確認してから再試行する。
+古い `quality_score` / `verdict` のbackfillが元の値を変える場合も自動で進めず、個別確認を求める。
+
+既存の利用台帳は現行schemaと時計行を検証し、カウンタと予約を維持する。
+未知・不完全な利用台帳schemaの自動移行は行わず、`usage_database_schema_unsupported` で止める。
+将来の利用台帳schema変更には別途バックアップ付き移行が必要。
+
+ログの `deployment_backup_created` はバックアップ作成を、`deployment_prepared` は前処理完了を示す。
+後者には `audit_migration`、`audit_rows`、`integrity`、`backups`、`volume_verified` を含める。
+エラーは `deployment_failed` と固定の `code` だけを出し、秘密設定や監査本文を含めない。
+前処理完了・health成功の後も、匿名401、認証履歴200、別user隔離、失効401、
+MCP接続、実際の意味照合を別途確認する。バックアップの削除や自動復元は行わない。

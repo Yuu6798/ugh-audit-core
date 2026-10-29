@@ -44,6 +44,9 @@ uvicorn ugh_audit.server:app --host 127.0.0.1 --port 8000
 外部公開にはHTTPSリバースプロキシを用意し、`/mcp/` とRESTを同じ認証境界へ接続する。
 Dockerの既存起動もこのアプリを使用する。コンテナには同じ永続ボリューム上のDBと
 秘密ファイルをマウントし、設定を環境変数で渡す。アプリのポートをTLSなしで直接公開しない。
+Docker起動は永続領域・DB・招待台帳を検証する。新規DBは明示許可が必要で、既存DBの
+スキーマ移行前にはバックアップとコピー上の移行確認を行う。Railwayでの設定と復旧手順は
+[`招待制ベータの配備`](invite-beta-deployment.md) を参照する。
 `python -m ugh_audit.mcp_server` も同じ認証済みASGIアプリを起動する。
 MCP単体の `mcp.run()` を別サーバーとして配備しない。
 
@@ -69,6 +72,9 @@ python -m ugh_audit.invites revoke --file /srv/ugh-private/invites.json --user a
 ```
 
 失効は次のHTTPリクエストから有効。すでに実行中の処理を取り消すものではない。
+ただし `UGH_INVITES_JSON` で管理するRailway構成では、環境変数のハッシュ台帳が正となる。
+この場合は環境変数内の対象キーを無効化し、再配備完了後に401を確認する。
+起動ごとに台帳を再適用するため、稼働コンテナ内のCLIによる直接編集は拒否する。
 同じuserへの追加発行は既存キーを維持し、同じ履歴・上限を共有する。
 漏えい時のローテーションはそのuserをrevokeしてから、新しい出力ファイルへissueする。
 user IDは安定した識別子として使い、別人へ再割当てしない（元の履歴が見えるため）。

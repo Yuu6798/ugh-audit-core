@@ -4,6 +4,8 @@ ugh_audit/storage/audit_db.py
 """
 from __future__ import annotations
 
+from contextlib import closing
+
 import json
 import math
 import re
@@ -230,7 +232,7 @@ class AuditDB:
         self._init_db()
 
     def _init_db(self) -> None:
-        with self._conn() as conn:
+        with closing(self._conn()) as conn, conn:
             # sqlite3's context manager does not begin a transaction for DDL.
             # Keep schema additions, rebuilding and backfills atomic together.
             # Serialize initialization before schema reads. A deferred transaction

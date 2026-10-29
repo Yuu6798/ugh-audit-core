@@ -384,7 +384,7 @@ def audit_answer(
     未校正の S・ΔE・quality_score は null、従来値は legacy_metrics に格納する。
     結果はDBに自動保存される。
 
-    question_meta が未提供の場合、auto_generate_meta=True なら LLM で動的生成を試みる。
+    question_meta の要件リストが欠落・空の場合、auto_generate_meta=True なら LLM で動的生成を試みる。
     それでも生成できない場合は verdict="degraded" を返す。
 
     Args:
@@ -393,7 +393,7 @@ def audit_answer(
         reference: 期待される正解（省略時は GoldenStore から自動検索）
         session_id: セッションID（省略時は自動生成）
         question_meta: 問題メタデータ（core_propositions 等を含む dict）
-        auto_generate_meta: question_meta 未提供時に LLM で動的生成する (opt-in)
+        auto_generate_meta: 要件リストが欠落・空の場合に LLM で動的生成する (opt-in)
     """
     require_principal()
     validate_payload(question, response, reference, session_id, question_meta)

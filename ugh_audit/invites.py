@@ -24,6 +24,13 @@ class InviteError(Exception):
     """An administration operation could not be safely completed."""
 
 
+def _require_file_managed_registry() -> None:
+    if "UGH_INVITES_JSON" in os.environ:
+        raise InviteError(
+            "Registry is managed by UGH_INVITES_JSON; update the environment registry and redeploy."
+        )
+
+
 def _user_id(value: object) -> bool:
     return isinstance(value, str) and bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", value))
 
@@ -119,6 +126,7 @@ def issue_invite(
     registry_file: Path, user_id: str, token_out: Path, expires_at: int | None = None,
 ) -> None:
     """Append a credential; existing credentials for the same owner remain active."""
+    _require_file_managed_registry()
     if not _user_id(user_id):
         raise InviteError(
             "User ID must start with an ASCII letter/digit and use 1-64 letters/digits/_/-."
@@ -161,6 +169,7 @@ def issue_invite(
 
 def revoke_invites(registry_file: Path, user_id: str) -> int:
     """Disable every credential belonging to one owner; keep history ownership stable."""
+    _require_file_managed_registry()
     if not _user_id(user_id):
         raise InviteError("Invalid user ID.")
     registry = _path(registry_file)

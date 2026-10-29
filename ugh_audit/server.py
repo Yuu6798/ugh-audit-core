@@ -123,7 +123,7 @@ class AuditRequest(BaseModel):
     auto_generate_meta: bool = Field(
         False,
         description=(
-            "要件がない・不正な場合に LLM で生成する (opt-in)。"
+            "要件リストが欠落・空の場合に LLM で生成する (opt-in)。"
             "成功した要件草案は metadata_source='llm_generated'、"
             "未検証の代替メタデータは 'fallback' として degraded にする。"
             "ANTHROPIC_API_KEY 環境変数が必要。"
