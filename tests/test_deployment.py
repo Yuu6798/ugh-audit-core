@@ -329,3 +329,103 @@ def test_invite_cli_refuses_environment_managed_registry(
     assert "Registry is managed by UGH_INVITES_JSON" in captured.err
     assert "update the environment registry and redeploy" in captured.err
     assert TOKEN not in captured.err
+
+
+@pytest.mark.parametrize("already_initialized", [False, True])
+@pytest.mark.parametrize("populated", [False, True])
+def test_v02_audit_schema_can_deploy_without_rewriting_existing_fields(
+        tmp_path, already_initialized, populated):
+    path = tmp_path / "legacy-v02.db"
+    with sqlite3.connect(path) as conn:
+        # The v0.2 schema supported by test_storage.test_migration_from_v02_schema.
+        conn.execute("""CREATE TABLE audit_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
+            model_id TEXT NOT NULL DEFAULT 'unknown', question TEXT NOT NULL,
+            response TEXT NOT NULL, reference TEXT, por REAL NOT NULL,
+            por_fired INTEGER NOT NULL, delta_e REAL NOT NULL,
+            grv_json TEXT NOT NULL DEFAULT '{}', meaning_drift TEXT NOT NULL,
+            created_at TEXT NOT NULL, original_blob BLOB
+        )""")
+        if populated:
+            conn.executemany("""INSERT INTO audit_runs
+                (session_id, model_id, question, response, por, por_fired,
+                 delta_e, meaning_drift, created_at, original_blob)
+                VALUES ('shared', 'legacy-model', 'question', ?, .85, 1, ?,
+                        'original meaning', '2026-01-01T00:00:00Z', ?)""",
+                             [(f"legacy answer {index}", delta, b"\x00original\xff")
+                              for index, delta in enumerate((0.03, 0.30, 0.0))])
+    if already_initialized:
+        AuditDB(path)
+    with sqlite3.connect(path) as conn:
+        original_columns = [row[1] for row in conn.execute("PRAGMA table_info(audit_runs)")]
+        original_rows = conn.execute("SELECT * FROM audit_runs ORDER BY id").fetchall()
+
+    environment = {"UGH_AUDIT_DB": str(path), "UGH_INVITES_JSON": json.dumps(REGISTRY)}
+    receipt = deployment.prepare_deployment(environment)
+    assert receipt["audit_migration"] == ("unchanged" if already_initialized else "migrated")
+    assert receipt["audit_rows"] == (3 if populated else 0)
+    with sqlite3.connect(path) as conn:
+        columns = ", ".join('"' + name + '"' for name in original_columns)
+        assert conn.execute(f"SELECT {columns} FROM audit_runs ORDER BY id").fetchall() == original_rows
+        assert conn.execute("SELECT COUNT(*) FROM audit_runs WHERE owner_id IS NOT NULL").fetchone() == (0,)
+        column_info = {row[1]: row for row in conn.execute("PRAGMA table_info(audit_runs)")}
+        assert column_info["verdict"][3] == column_info["hit_rate"][3] == 0
+    if not already_initialized:
+        backup, = receipt["backups"]
+        with sqlite3.connect(backup) as conn:
+            assert conn.execute("SELECT * FROM audit_runs ORDER BY id").fetchall() == original_rows
+    again = deployment.prepare_deployment(environment)
+    assert again["audit_migration"] == "unchanged"
+    assert again["backups"] == []
+
+
+def _make_column_nullable(path, table, column, column_type):
+    """Build a valid SQLite file with a weaker constraint, preserving its rows."""
+    with sqlite3.connect(path) as conn:
+        sql = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                           (table,)).fetchone()[0]
+        replacement = sql.replace(f"{column} {column_type} NOT NULL", f"{column} {column_type}")
+        assert replacement != sql
+        indexes = [row[0] for row in conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+            (table,))]
+        conn.execute(f'ALTER TABLE "{table}" RENAME TO previous_table')
+        conn.execute(replacement)
+        conn.execute(f'INSERT INTO "{table}" SELECT * FROM previous_table')
+        conn.execute("DROP TABLE previous_table")
+        for index in indexes:
+            conn.execute(index)
+
+
+@pytest.mark.parametrize("table,column,column_type", [
+    ("beta_requests", "owner_id", "TEXT"),
+    ("beta_daily_audits", "attempts", "INTEGER"),
+    ("beta_audit_leases", "expires_at", "REAL"),
+])
+def test_usage_nullability_remains_strict_after_audit_legacy_compatibility(
+        environment, table, column, column_type):
+    path = Path(environment["UGH_USAGE_DB"])
+    limiter = UsageLimiter(path)
+    limiter.check_request("alice")
+    limiter.acquire_audit("alice").release()
+    _make_column_nullable(path, table, column, column_type)
+    audit = Path(environment["UGH_AUDIT_DB"])
+    original_audit, original_usage = audit.read_bytes(), path.read_bytes()
+    with pytest.raises(deployment.DeploymentError, match="usage_database_schema_unsupported"):
+        deployment.prepare_deployment(environment)
+    assert audit.read_bytes() == original_audit
+    assert path.read_bytes() == original_usage
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT SUM(attempts) FROM beta_daily_audits").fetchone() == (1,)
+        assert conn.execute("SELECT COUNT(*) FROM beta_requests").fetchone() == (1,)
+
+
+@pytest.mark.parametrize("column", ["session_id", "question"])
+def test_audit_nullability_exception_does_not_allow_other_columns(environment, column):
+    path = Path(environment["UGH_AUDIT_DB"])
+    AuditDB(path)
+    _make_column_nullable(path, "audit_runs", column, "TEXT")
+    original = path.read_bytes()
+    with pytest.raises(deployment.DeploymentError, match="audit_database_schema_unsupported"):
+        deployment.prepare_deployment(environment)
+    assert path.read_bytes() == original

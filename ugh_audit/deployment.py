@@ -135,16 +135,23 @@ def _schema(connection: sqlite3.Connection) -> dict:
     } for table in tables}
 
 
-def _schema_compatible(actual: dict, target: dict) -> bool:
+def _schema_compatible(actual: dict, target: dict, *, legacy_audit: bool = False) -> bool:
     for table, expected in target.items():
         if table not in actual:
             return False
         columns = {row[0]: row for row in actual[table]["columns"]}
         for row in expected["columns"]:
             old = columns.get(row[0])
-            # Defaults may differ legitimately in legacy databases. Required
-            # column types, nullability and primary-key positions must agree.
-            if old is None or [old[1].upper(), old[2], old[4]] != [row[1].upper(), row[2], row[4]]:
+            # AuditDB adds these two v0.2 columns with nullable ALTER TABLE
+            # definitions, unlike its fresh CREATE TABLE. Accept only those
+            # supported variants when explicitly inspecting an audit database.
+            # Usage ledgers and every other column retain strict nullability.
+            if old is None or [old[1].upper(), old[4]] != [row[1].upper(), row[4]]:
+                return False
+            legacy_nullable = (legacy_audit and table == "audit_runs"
+                               and row[0] in {"verdict", "hit_rate"}
+                               and old[2] == 0 and row[2] == 1)
+            if old[2] != row[2] and not legacy_nullable:
                 return False
         if not set(expected["indexes"]).issubset(actual[table]["indexes"]):
             return False
@@ -269,7 +276,7 @@ def _prepare(env: Mapping[str, str]) -> dict:
                     if "audit_runs" not in actual:
                         raise DeploymentError("audit_database_schema_invalid")
                     row_count = conn.execute("SELECT COUNT(*) FROM audit_runs").fetchone()[0]
-                    migration = not _schema_compatible(actual, target_audit)
+                    migration = not _schema_compatible(actual, target_audit, legacy_audit=True)
                     if not migration and conn.execute("""
                         SELECT 1 FROM audit_runs WHERE verdict = '' OR
                         (quality_score = 5 AND delta_e != 0
@@ -298,7 +305,7 @@ def _prepare(env: Mapping[str, str]) -> dict:
                 AuditDB(candidate)
                 with closing(_readonly(candidate)) as conn:
                     _integrity(conn)
-                    if not _schema_compatible(_schema(conn), target_audit):
+                    if not _schema_compatible(_schema(conn), target_audit, legacy_audit=True):
                         raise DeploymentError("audit_database_schema_unsupported")
                 row_count = _rows_preserved(backup, candidate)
             if migration:
