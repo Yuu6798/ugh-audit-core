@@ -53,8 +53,9 @@ in the actual connection setup, and review [listing-draft.md](listing-draft.md) 
 anything to Agensi or start a deployment.
 
 The packaged connection and operator guides link to the repository's
-[data handling and deletion policy](../../docs/data-policy.md). Resolve its
-private contact channel and operating prerequisites, and complete the
+[data handling and deletion policy](../../docs/data-policy.md). The creator-operated
+beta contact is [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com). Verify actual receipt
+and the operating prerequisites separately from choosing this address, and complete the
 [release checklist](../../docs/beta-release-checklist.md), before submission.
 These repository documents are maintained outside the eight-file ZIP; check that
 their links resolve on the reviewed, merged revision before uploading. A ZIP build
