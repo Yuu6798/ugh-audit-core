@@ -151,6 +151,8 @@ ugh_audit/
 ├── soft_rescue.py    # AI草案メタデータ向け soft-hit rescue (C=0 部分回収)
 ├── server.py         # REST API + MCP 統合サーバー
 ├── retention.py      # 停止中の監査削除・期限切れ利用台帳清掃
+├── retention_supervisor.py # POSIXで子を停止・清掃・再起動する日次監督
+├── managed_files.py  # 登録済み移行バックアップと既知の旧キャッシュ清掃
 └── mcp_server.py     # MCP スタンドアロンサーバー
 
 # 実験基盤

@@ -188,7 +188,7 @@ Swagger・OpenAPI・MCPの発見も招待認証が必要で、匿名の確認用
 |---|---|
 | 最初の監査・結果の読み方 | [利用開始ガイド](docs/getting-started.md) |
 | 招待・BYOK・履歴分離・利用上限 | [招待制ベータ](docs/invite_beta.md) |
-| 永続ボリューム・バックアップ付き配備 | [配備手順](docs/invite-beta-deployment.md) |
+| 永続ボリューム・バックアップ・日次削除付き配備 | [配備手順](docs/invite-beta-deployment.md) |
 | 保存期間・削除依頼・停止中メンテナンス | [データ取扱い・削除方針](docs/data-policy.md) |
 | 公開前の証拠・残件・実監査手順 | [公開前チェック](docs/beta-release-checklist.md) |
 | REST・MCPの入力と出力 | [API仕様](docs/server_api.md) |

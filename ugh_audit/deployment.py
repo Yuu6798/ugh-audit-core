@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import closing, contextmanager
+from datetime import datetime, timezone
 import hashlib
 import json
 import math
@@ -23,6 +24,7 @@ import uuid
 from . import invites
 from .storage.audit_db import AuditDB, DEFAULT_DB_PATH
 from .usage_limits import Limits, UsageLimiter, UsageUnavailable
+from .retention_supervisor import service_lock, state_path, supervise, SupervisorError
 
 
 class DeploymentError(Exception):
@@ -230,9 +232,11 @@ def _prepare(env: Mapping[str, str]) -> dict:
     database_paths = [{path, *(Path(str(path) + suffix) for suffix in ("-wal", "-shm", "-journal"))}
                       for path in (audit, usage)]
     registry_lock = registry.with_name(registry.name + ".lock")
-    reserved = {registry, registry_lock, lock}
+    runtime_lock = _file_path(Path(str(audit) + ".supervisor.lock"), mount)
+    retention_state = _file_path(state_path(audit), mount)
+    reserved = {registry, registry_lock, lock, runtime_lock, retention_state}
     backup_directory = audit.parent / "deployment-backups"
-    if (len(reserved) != 3 or database_paths[0] & database_paths[1]
+    if (len(reserved) != 5 or database_paths[0] & database_paths[1]
             or reserved & set.union(*database_paths)
             or any(path.is_relative_to(backup_directory) for path in (audit, usage, registry, lock))):
         raise DeploymentError("deployment_paths_overlap")
@@ -296,7 +300,10 @@ def _prepare(env: Mapping[str, str]) -> dict:
 
             if existing_audit and migration:
                 backup = backup_directory / f"audit-before-{target_id}-{uuid.uuid4().hex}.sqlite"
+                backup_started = datetime.now(timezone.utc)
                 _copy_database(audit, backup)
+                from .managed_files import register_managed_backup
+                register_managed_backup(backup, now=backup_started)
                 backups.append(str(backup))
                 print(json.dumps({"event": "deployment_backup_created", "path": str(backup),
                                   "integrity": "ok", "audit_rows": row_count}), flush=True)
@@ -338,12 +345,16 @@ def _prepare(env: Mapping[str, str]) -> dict:
 
 def prepare_deployment(environ: Mapping[str, str] | None = None) -> dict:
     """Prepare an existing deployment; return only a nonsecret receipt."""
+    from .managed_files import ManagedFilesError
+
     try:
         return _prepare(os.environ if environ is None else environ)
     except DeploymentError:
         raise
     except invites.InviteError:
         raise DeploymentError("invite_configuration_invalid") from None
+    except ManagedFilesError:
+        raise DeploymentError("managed_backup_registration_failed") from None
     except (OSError, sqlite3.Error, ValueError, TypeError, UsageUnavailable):
         raise DeploymentError("deployment_preparation_failed") from None
 
@@ -356,15 +367,25 @@ def main(argv: list[str] | None = None) -> int:
         port = int(os.environ.get("PORT", "8000"))
         if not 1 <= port <= 65535:
             raise DeploymentError("invalid_port")
-        receipt = prepare_deployment()
-        os.environ["UGH_AUDIT_DB"] = receipt["audit_database"]
-        os.environ["UGH_USAGE_DB"] = receipt["usage_database"]
-        os.environ["UGH_INVITE_FILE"] = receipt["invite_file"]
-        print(json.dumps(receipt, sort_keys=True), flush=True)
-        os.execvp(sys.executable, [sys.executable, "-m", "uvicorn", "ugh_audit.server:app",
-                                  "--host", "0.0.0.0", "--port", str(port)])
-    except (DeploymentError, ValueError, OSError) as exc:
-        code = str(exc) if isinstance(exc, DeploymentError) else "deployment_start_failed"
+        automatic = os.environ.get("UGH_RETENTION_AUTOMATION", "0")
+        if automatic not in ("0", "1"):
+            raise DeploymentError("invalid_retention_automation_option")
+        if automatic == "1" and os.name != "posix":
+            raise DeploymentError("retention_automation_requires_posix")
+        audit = _file_path(os.environ.get("UGH_AUDIT_DB", str(DEFAULT_DB_PATH)), _mount(os.environ))
+        with service_lock(audit) as descriptor:
+            receipt = prepare_deployment()
+            os.environ["UGH_AUDIT_DB"] = receipt["audit_database"]
+            os.environ["UGH_USAGE_DB"] = receipt["usage_database"]
+            os.environ["UGH_INVITE_FILE"] = receipt["invite_file"]
+            print(json.dumps(receipt, sort_keys=True), flush=True)
+            command = [sys.executable, "-m", "uvicorn", "ugh_audit.server:app",
+                       "--host", "0.0.0.0", "--port", str(port)]
+            if automatic == "1":
+                return supervise([*command, "--workers", "1"], dict(os.environ), descriptor)
+            os.execvp(sys.executable, command)
+    except (DeploymentError, SupervisorError, ValueError, OSError) as exc:
+        code = str(exc) if isinstance(exc, (DeploymentError, SupervisorError)) else "deployment_start_failed"
         print(json.dumps({"event": "deployment_failed", "code": code}), file=sys.stderr, flush=True)
         return 1
     return 0
