@@ -274,10 +274,24 @@ def test_start_receipt_and_exec_do_not_expose_credentials(environment, monkeypat
     assert "private legacy answer" not in output.out + output.err
 
 
-def test_failed_start_emits_only_fixed_error_code(monkeypatch, capsys):
-    monkeypatch.setattr(deployment, "prepare_deployment", lambda: (_ for _ in ()).throw(
-        OSError("private-path-and-credential-must-not-be-printed")))
+def test_failed_start_emits_only_fixed_error_code(environment, monkeypatch, capsys):
+    # Reach preparation through a valid isolated path and lifetime lock, not an
+    # incidental home directory or deployment configuration on the test host.
+    for name in list(os.environ):
+        if name.startswith(("UGH_", "RAILWAY_")):
+            monkeypatch.delenv(name)
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("PORT", "8765")
+    calls = []
+
+    def failing_preparation():
+        calls.append(True)
+        raise OSError("private-path-and-credential-must-not-be-printed")
+
+    monkeypatch.setattr(deployment, "prepare_deployment", failing_preparation)
     assert deployment.main(["start"]) == 1
+    assert calls == [True]
     output = capsys.readouterr()
     assert output.out == ""
     assert json.loads(output.err) == {"event": "deployment_failed", "code": "deployment_start_failed"}
