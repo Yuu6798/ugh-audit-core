@@ -43,6 +43,9 @@ jobs:
           fi
           echo "README.md: $LINES / $LIMIT lines"
 
+      - name: Check documentation consistency
+        run: python scripts/doc_consistency_check.py --strict
+
       - name: Lint
         run: ruff check .
 
@@ -80,8 +83,16 @@ jobs:
         run: |
           python -m pytest -q --tb=short -rs --junitxml="${{ runner.temp }}/sbert-tests.xml"
           python -c "import xml.etree.ElementTree as E; r=E.parse('${{ runner.temp }}/sbert-tests.xml').getroot(); s=r.findall('testsuite'); assert s and all(int(x.get('skipped','0')) == 0 for x in s), 'Unexpected skipped tests'"
-      - name: Verify saved evaluation artifacts
-        run: python analysis/instruction_coverage_v4/verify_artifacts.py --current-source .
+      - name: Check out source matching the saved PR 112 regression
+        uses: actions/checkout@v4
+        with:
+          ref: ff28cc70685e997122c7774faabe94dd90446cf1
+          path: .cache/instruction-coverage-v4-source
+          persist-credentials: false
+      - name: Verify saved evaluation artifacts against their recorded source
+        # --current-source names the post-evaluation regression snapshot in this
+        # historical bundle. The current branch is tested independently above.
+        run: python analysis/instruction_coverage_v4/verify_artifacts.py --current-source .cache/instruction-coverage-v4-source
       - uses: actions/upload-artifact@v4
         if: always()
         with:

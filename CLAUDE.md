@@ -127,7 +127,7 @@ Agent({ subagent_type: "Explore", prompt: "..." })
 
 ```
 # Audit Engine（構造的意味監査パイプライン）
-audit.py              # パイプライン統合 (detect → calculate → decide)
+audit.py              # 共有の要件照合 + 意味上の欠落に基づく修復順序
 detector.py           # 検出層 — テキスト → Evidence
 ugh_calculator.py     # 電卓層 — Evidence → State (S, C, ΔE, quality_score)
 decider.py            # 判定層 — State + Evidence → Policy
@@ -173,7 +173,8 @@ railway.toml          # Railway 設定 (ヘルスチェック)
 https://ugh-audit-core-production.up.railway.app
 ```
 
-Railway にデプロイ済み。main push で自動デプロイ。永続ボリューム `/data` で DB 保持。
+既存構成は main push で Railway 自動デプロイ、永続ボリューム `/data` で DB 保持。
+個々の変更の本番反映・API疎通・DB移行の成功は、別途実行結果で確認する。
 詳細: [`docs/server_api.md`](docs/server_api.md)
 
 ### コンポーネント別設計ドキュメント
@@ -278,6 +279,9 @@ ruff check --fix .
 # Test
 pytest -q --tb=short
 
+# Documentation consistency (Windows / Linux / macOS; standard library only)
+python scripts/doc_consistency_check.py --strict
+
 # Test with coverage
 pytest --cov=ugh_audit --tb=short
 
@@ -381,15 +385,17 @@ from ugh_audit import (
 )
 ```
 
-プログラムから監査を実行する場合は REST `POST /api/audit` または MCP ツール
-`audit_answer` を利用する (`question_meta` を渡せる唯一の経路)。詳細:
-[`docs/server_api.md`](docs/server_api.md)。
+プログラムからの監査は REST `POST /api/audit`、MCP `audit_answer`、または
+Python `audit.audit(question_id, response_text, question_meta)` を利用する。
+Python/CLI も共有 `run_audit()` の要件照合を使う。REST/MCP の保存・履歴仕様は
+[`docs/server_api.md`](docs/server_api.md)、判定契約は
+[`docs/semantic_matching_v2.md`](docs/semantic_matching_v2.md) を参照。
 
 ### Deprecated (removal v0.5)
 
 - `AuditCollector` / `SessionCollector` — `question_meta` を受け取らないため常に
   `verdict="degraded"` を返す。import 時に `DeprecationWarning` 発火。
-  programmatic API が必要な場合は REST/MCP を利用する。
+  監査には上記の REST/MCP または Python `audit.audit()` を利用する。
 
 ## Git Workflow
 
@@ -444,5 +450,5 @@ CI 通過 = lint clean + 全テスト pass。追加の `test-sbert` ジョブは
 - テスト時は `_empty_store()` ヘルパーで初期データをクリアして分離する
 - cascade テスト (`tests/test_cascade_tier*.py`) は SBert 未インストール環境で自動 skip
 - 否定極性マーカー (`_NEGATION_POLARITY_FORMS`) は全トークン 2 文字以上の具体形で定義（bare 1 文字トークン禁止）
-- verdict 判定は全系統 HA48 確定値 (ΔE ≤ 0.10 / 0.25) に統一済み。旧 bin ベース (0.02/0.12/0.35) は廃止
+- HA48 の ΔE 閾値 (0.10 / 0.25) は旧診断用。現行の最終 verdict は要件別意味照合で決まり、旧数値を承認条件に戻さない
 - `engine/runtime.py` の `_POR_FIRE_THRESHOLD` / `_LEGACY_BIN*` はレガシー互換層。メインパイプラインでは未使用
