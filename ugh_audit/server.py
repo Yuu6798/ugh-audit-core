@@ -349,7 +349,8 @@ app = FastAPI(
 app.add_middleware(InviteMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://chat.openai.com", "https://chatgpt.com"],
+    allow_origins=["https://chat.openai.com", "https://chatgpt.com"]
+    + [v.strip() for v in os.environ.get("UGH_ALLOWED_ORIGINS", "").split(",") if v.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Mcp-Session-Id"],

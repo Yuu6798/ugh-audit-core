@@ -6,6 +6,9 @@ from email.message import Message
 import io
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from types import SimpleNamespace
 import urllib.error
 import urllib.request
@@ -199,3 +202,29 @@ def test_allowed_cors_preflight_preserves_real_request_authentication_and_owner_
             assert "no-store" in allowed.headers["Cache-Control"]
     finally:
         server.configure()
+
+
+def test_configured_browser_origin_is_allowed_without_bypassing_auth(tmp_path):
+    registry = tmp_path / "invites.json"
+    registry.write_text(json.dumps({"users": [{
+        "user_id": "alice", "token_sha256": hashlib.sha256(TOKEN.encode()).hexdigest(),
+    }]}))
+    # Deployment configuration is read when the server module is imported.
+    # A fresh process tests the real startup path without replacing global apps.
+    result = subprocess.run([sys.executable, "-c", '''
+from starlette.testclient import TestClient
+from ugh_audit.server import app
+with TestClient(app) as client:
+    response = client.options("/api/audit", headers={
+        "Origin": "https://pilot-client.example", "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "authorization,content-type",
+    })
+    assert response.status_code == 200
+    assert response.headers["Access-Control-Allow-Origin"] == "https://pilot-client.example"
+    denied = client.get("/api/history", headers={"Origin": "https://pilot-client.example"})
+    assert denied.status_code == 401
+    assert denied.headers["Access-Control-Allow-Origin"] == "https://pilot-client.example"
+'''], env={**os.environ, "UGH_ACCESS_MODE": "invite", "UGH_INVITE_FILE": str(registry),
+           "UGH_ALLOWED_ORIGINS": "https://pilot-client.example"},
+        capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
