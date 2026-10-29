@@ -12,4 +12,4 @@ ENV PYTHONPATH=/app
 
 ENV PORT=8000
 EXPOSE ${PORT}
-CMD uvicorn ugh_audit.server:app --host 0.0.0.0 --port ${PORT}
+CMD ["python", "-m", "ugh_audit.deployment", "start"]

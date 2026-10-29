@@ -236,6 +236,7 @@ API 仕様 (tool schema / エンドポイント / 環境変数) 全詳細:
 | mode_affordance / response_mode_signal | [`docs/mode_affordance.md`](docs/mode_affordance.md), [`addendum`](docs/mode_affordance_v1_addendum.md) |
 | メタデータパイプライン | [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md) |
 | 招待制ベータ（認証・履歴分離・上限） | [`docs/invite_beta.md`](docs/invite_beta.md) |
+| 永続ボリューム・バックアップ付き配備 | [`docs/invite-beta-deployment.md`](docs/invite-beta-deployment.md) |
 | Agensi無料掲載パッケージ | [`marketplace/agensi`](marketplace/agensi) |
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 検証結果 (HA48 / HA20 + CI + Limitations) | [`docs/validation.md`](docs/validation.md) |

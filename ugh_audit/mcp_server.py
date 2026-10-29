@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 # パイプライン A の共有基盤 (server.py と同一ロジックを参照)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
+    META_SOURCE_INLINE,
     META_SOURCE_LLM,
 )
 
@@ -297,13 +298,19 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
             "legacy_metrics": legacy, "errors": ["remote_api_invalid_metrics"],
         }
 
-    from .semantic_matching import apply_semantic_gate
+    from .semantic_matching import _requirements, apply_semantic_gate
 
     context = kwargs.get("question_meta")
-    if context is None:
+    # Match pipeline._prepare_requirements: generation applies when the canonical
+    # requirement list is absent or empty, including partial metadata dictionaries.
+    # A nonempty caller list remains authoritative even when its items are invalid.
+    if kwargs.get("auto_generate_meta") is True and not _requirements(context):
         context = result.get("assessment_context")
-        eligible = (eligible and kwargs.get("auto_generate_meta") is True
-                    and result.get("metadata_source") == "llm_generated")
+        eligible = eligible and result.get("metadata_source") == META_SOURCE_LLM
+    else:
+        # The producer must not claim generation when the caller did not request
+        # it or already supplied requirements that the pipeline would preserve.
+        eligible = eligible and result.get("metadata_source") == META_SOURCE_INLINE
     eligible = eligible and isinstance(context, dict) and bool(context)
     result = apply_semantic_gate(
         result,
@@ -377,7 +384,7 @@ def audit_answer(
     未校正の S・ΔE・quality_score は null、従来値は legacy_metrics に格納する。
     結果はDBに自動保存される。
 
-    question_meta が未提供の場合、auto_generate_meta=True なら LLM で動的生成を試みる。
+    question_meta の要件リストが欠落・空の場合、auto_generate_meta=True なら LLM で動的生成を試みる。
     それでも生成できない場合は verdict="degraded" を返す。
 
     Args:
@@ -386,7 +393,7 @@ def audit_answer(
         reference: 期待される正解（省略時は GoldenStore から自動検索）
         session_id: セッションID（省略時は自動生成）
         question_meta: 問題メタデータ（core_propositions 等を含む dict）
-        auto_generate_meta: question_meta 未提供時に LLM で動的生成する (opt-in)
+        auto_generate_meta: 要件リストが欠落・空の場合に LLM で動的生成する (opt-in)
     """
     require_principal()
     validate_payload(question, response, reference, session_id, question_meta)
