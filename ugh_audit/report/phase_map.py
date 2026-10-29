@@ -100,7 +100,9 @@ def generate_csv(history: List[dict]) -> str:
               "requirement_verdict", "requires_review", "is_reliable", "hit_rate"]
     legacy_fields = ["S", "C", "delta_e", "quality_score", "verdict"]
     output = io.StringIO(newline="")
-    writer = csv.writer(output, lineterminator="\n")
+    # Python 3.10 quotes characters present in the line terminator. Including
+    # both CR and LF keeps embedded bare CR inside one cell on every version.
+    writer = csv.writer(output, lineterminator="\r\n")
     writer.writerow(fields + ["legacy_" + name for name in legacy_fields])
     for row in _rows(history):
         legacy = row.get("legacy_metrics") or {}
