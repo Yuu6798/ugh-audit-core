@@ -14,7 +14,8 @@ import time
 import pytest
 
 from ugh_audit.retention_supervisor import (
-    LOCK_FD_ENV, PARENT_PID_ENV, service_lock, state_path, SupervisorError, validate_managed_child,
+    CHILD_DEADLINE_ENV, LOCK_FD_ENV, PARENT_PID_ENV, service_lock, state_path,
+    SupervisorError, validate_managed_child,
 )
 from ugh_audit.storage.audit_db import AuditDB
 from ugh_audit.usage_limits import UsageLimiter
@@ -24,12 +25,12 @@ CHILD = r'''
 import json, os, signal, sqlite3, sys, time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from ugh_audit.retention_supervisor import validate_managed_child
+from ugh_audit.retention_supervisor import start_managed_child_watchdog
 db, marker, ignore = sys.argv[1:]
 if os.name == "posix":
-    validate_managed_child()
     if ignore == "1":
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    start_managed_child_watchdog(poll_seconds=.03, grace_seconds=1)
 connection = sqlite3.connect(db)
 connection.execute("INSERT INTO audit_runs(owner_id, response, created_at) VALUES (?, ?, ?)",
                    ("alice", "child-generated-expired-audit", (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()))
@@ -264,20 +265,113 @@ def test_forced_child_stop_does_not_authorize_cleanup_or_restart(run_files):
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Requires inherited POSIX flock")
-def test_orphan_child_holds_runtime_lock_after_parent_sigkill(run_files):
-    process = _start(run_files, cycles=0)
+def test_orphan_child_exits_and_releases_lock_after_parent_sigkill(run_files):
+    # Ignore SIGTERM so the test covers the watchdog's own forced-stop path.
+    process = _start(run_files, cycles=0, ignore=True)
     child_pid = None
     try:
         child_pid = _wait_started(process, run_files[-1])["pid"]
+        before = state_path(run_files[0]).read_bytes()
+        # Hold the child before killing the parent so the lock assertion cannot
+        # race with a fast watchdog exit on a heavily scheduled CI host.
+        os.kill(child_pid, signal.SIGSTOP)
         process.kill()
         process.wait(timeout=5)
+        # The orphan still owns the lock until it actually exits. A replacement
+        # supervisor must not enter cleanup during the child's stop grace.
         with pytest.raises(SupervisorError, match="retention_service_already_running"):
             with service_lock(run_files[0]):
                 pass
+        os.kill(child_pid, signal.SIGCONT)
+        # stdout/stderr remain inherited by the child: EOF proves that it has
+        # exited, even on systems where init has not yet reaped its zombie.
+        out, err = process.communicate(timeout=5)
+        assert not err
+        assert state_path(run_files[0]).read_bytes() == before
+        with service_lock(run_files[0]), sqlite3.connect(run_files[0], timeout=0) as conn:
+            conn.execute("BEGIN EXCLUSIVE")
+        assert "retention_http_started" in out
     finally:
         if child_pid:
-            os.killpg(child_pid, signal.SIGKILL)
+            try:
+                os.killpg(child_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         if process.poll() is None:
             process.kill()
             process.wait(timeout=5)
         process.communicate(timeout=5)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Requires POSIX child watchdog and inherited flock")
+def test_child_deadline_exits_even_when_parent_remains_alive(run_files):
+    audit, _, child, _, marker = run_files
+    with service_lock(audit) as descriptor:
+        env = dict(os.environ, UGH_AUDIT_DB=str(audit),
+                   PYTHONPATH=str(Path(__file__).resolve().parents[1]))
+        env[LOCK_FD_ENV], env[PARENT_PID_ENV] = str(descriptor), str(os.getpid())
+        env[CHILD_DEADLINE_ENV] = (datetime.now(timezone.utc) + timedelta(seconds=2)).isoformat()
+        process = subprocess.Popen([sys.executable, str(child), str(audit), str(marker), "1"],
+                                   env=env, pass_fds=(descriptor,), start_new_session=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            _wait_started(process, marker)
+            out, err = process.communicate(timeout=6)
+            assert process.returncode == -signal.SIGKILL
+            assert not out and not err
+            with sqlite3.connect(audit, timeout=0) as conn:
+                conn.execute("BEGIN EXCLUSIVE")
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=5)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Requires POSIX child watchdog and inherited flock")
+def test_watchdog_outlives_http_lifespan_and_does_not_wait_for_stalled_logs(run_files):
+    audit, usage, _, _, marker = run_files
+    program = r'''
+import asyncio, functools, os, signal, sys, time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from threading import Event
+from ugh_audit import retention_supervisor as supervisor
+from ugh_audit.server import app, _lifespan
+supervisor.start_managed_child_watchdog = functools.partial(
+    supervisor.start_managed_child_watchdog, poll_seconds=.03, grace_seconds=.2)
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+os.environ[supervisor.CHILD_DEADLINE_ENV] = (
+    datetime.now(timezone.utc) + timedelta(seconds=1)).isoformat()
+async def lifecycle():
+    async with _lifespan(app):
+        pass
+asyncio.run(lifecycle())
+class StalledLog:
+    def write(self, text):
+        Event().wait()
+    def flush(self):
+        Event().wait()
+sys.stderr = StalledLog()
+Path(sys.argv[1]).write_text('{"lifespan_finished":true}')
+while True:
+    time.sleep(.03)
+'''
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(("UGH_", "RAILWAY_"))}
+    env.update(UGH_AUDIT_DB=str(audit), UGH_USAGE_DB=str(usage), UGH_ACCESS_MODE="local",
+               UGH_RETENTION_AUTOMATION="1", UGH_AUDIT_EMBED_CACHE_DISABLE="1",
+               PYTHONPATH=str(Path(__file__).resolve().parents[1]))
+    with service_lock(audit) as descriptor:
+        env[LOCK_FD_ENV], env[PARENT_PID_ENV] = str(descriptor), str(os.getpid())
+        process = subprocess.Popen([sys.executable, "-c", program, str(marker)],
+                                   env=env, pass_fds=(descriptor,), start_new_session=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            assert _wait_started(process, marker)["lifespan_finished"] is True
+            process.wait(timeout=5)  # No pipe draining may be needed to stop it.
+            assert process.returncode == -signal.SIGKILL
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=5)
+            process.communicate(timeout=5)

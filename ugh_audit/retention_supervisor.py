@@ -16,6 +16,7 @@ import signal
 import stat
 import subprocess
 import tempfile
+from threading import Thread
 import time
 from typing import Callable, Mapping, Optional, Sequence
 
@@ -27,6 +28,7 @@ MAINTENANCE_MARGIN_SECONDS = 60 * 60
 STOP_GRACE_SECONDS = 30
 LOCK_FD_ENV = "UGH_RETENTION_LOCK_FD"
 PARENT_PID_ENV = "UGH_RETENTION_SUPERVISOR_PID"
+CHILD_DEADLINE_ENV = "UGH_RETENTION_CHILD_DEADLINE_UTC"
 
 
 class SupervisorError(Exception):
@@ -108,6 +110,65 @@ def _time(clock: Callable[[], float]) -> float:
 
 def _iso(value: float) -> str:
     return datetime.fromtimestamp(value, timezone.utc).isoformat()
+
+
+def start_managed_child_watchdog(
+    *, poll_seconds: float = 0.25, grace_seconds: float = STOP_GRACE_SECONDS,
+    clock: Callable[[], float] = time.time, monotonic: Callable[[], float] = time.monotonic,
+) -> Thread:
+    """Bound a child's lifetime even if its supervisor dies or stops scheduling.
+
+    Deliberately never cancelled on ASGI lifespan exit: synchronous workers may
+    still keep the process and its inherited lock alive after HTTP shutdown.
+    This daemon ends with the process, or escalates its own stop after the grace
+    deadline. Production exposes no timing overrides outside this function.
+    """
+    validate_managed_child()
+    if not 0 < poll_seconds <= 1 or not 0 < grace_seconds <= STOP_GRACE_SECONDS:
+        raise SupervisorError("retention_watchdog_timing_invalid")
+    try:
+        parent = int(os.environ[PARENT_PID_ENV])
+        deadline = datetime.fromisoformat(os.environ[CHILD_DEADLINE_ENV])
+        if deadline.utcoffset() is None:
+            raise ValueError
+        deadline_utc = deadline.timestamp()
+        observed = _time(clock)
+        remaining = deadline_utc - observed
+        if not 0 < remaining <= INTERVAL_SECONDS + STOP_GRACE_SECONDS:
+            raise ValueError
+        deadline_monotonic = monotonic() + remaining
+    except (KeyError, TypeError, ValueError, OverflowError):
+        raise SupervisorError("retention_child_deadline_invalid") from None
+
+    def watch() -> None:
+        last_seen = observed
+        while True:
+            try:
+                current = _time(clock)
+                if (os.getppid() != parent or current < last_seen
+                        or current >= deadline_utc or monotonic() >= deadline_monotonic):
+                    break
+                last_seen = current
+                time.sleep(poll_seconds)
+            except Exception:
+                break
+        # Do not write logs here: a full pipe or another thread holding a stream
+        # lock must not delay termination. The living supervisor reports exits.
+        try:
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(grace_seconds)
+            # The supervisor gave this child a dedicated process group.
+            # Include any unexpected descendants retaining the runtime FD.
+            if os.getpgrp() == os.getpid():
+                os.killpg(os.getpgrp(), signal.SIGKILL)
+            else:
+                os.kill(os.getpid(), signal.SIGKILL)
+        finally:
+            os._exit(1)
+
+    thread = Thread(target=watch, name="ugh-retention-watchdog", daemon=True)
+    thread.start()
+    return thread
 
 
 def _read_state(path: Path) -> Optional[dict]:
@@ -267,7 +328,8 @@ def supervise(
                 started + interval_seconds), **receipt}), flush=True)
             if stopping:
                 return 0
-            child_env = {**environ, LOCK_FD_ENV: str(lock_fd), PARENT_PID_ENV: str(os.getpid())}
+            child_env = {**environ, LOCK_FD_ENV: str(lock_fd), PARENT_PID_ENV: str(os.getpid()),
+                         CHILD_DEADLINE_ENV: _iso(started + interval_seconds + STOP_GRACE_SECONDS)}
             kwargs = {"start_new_session": True, "pass_fds": (lock_fd,)} if os.name == "posix" else {}
             child = subprocess.Popen(list(command), env=child_env, **kwargs)
             print(json.dumps({"event": "retention_http_started"}), flush=True)
