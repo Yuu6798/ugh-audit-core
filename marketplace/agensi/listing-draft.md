@@ -39,9 +39,11 @@ offered by this listing.
 
 **Compatibility:** English skill instructions; Japanese inputs and outputs are
 supported. Both invite-token and BYOK secret-header configuration are required.
-Agensi-connected client support for these headers has not been verified. OAuth is
-not implemented by the audit server; general ChatGPT connector compatibility is
-not established. Importing the skill does not configure either credential.
+Codex CLI's direct MCP transport has been checked, but the complete Agensi skill
+load and real paid model audit have not been verified. OAuth is
+used for Agensi sign-in and is separate from UGH's invitation and BYOK headers.
+The audit server does not implement OAuth; general ChatGPT connector compatibility
+is not established. Importing the skill does not configure either credential.
 
 **Example task:** "Check whether this Japanese delivery notice communicates these
 three requirements. Show the evidence, missing instructions and suggested edits."
@@ -66,11 +68,19 @@ tool引数へ貼り付けません。実際のBYOK配備・対象クライアン
 利用者自身のAnthropicアカウントに発生します。運営者がモデル料金を負担する無料API枠は
 含みません。サーバー運営費は提供者負担です。招待と利用上限があり、無制限利用は約束しません。
 
-**互換性:** 対応BYOKプロバイダーはAnthropicです。Agensi経由エージェントの秘密ヘッダー
-対応は未確認です。OAuth未実装で、一般ChatGPTコネクタ対応も保証しません。
+**互換性:** 対応BYOKプロバイダーはAnthropicです。Codex CLIからの直接MCP接続と秘密
+ヘッダーの転送は検証済みですが、Agensi経由のスキル取得から実モデル監査までの一連の
+動作は未確認です。AgensiへのOAuthログインと、UGHへの招待認証・BYOK設定は別です。
+UGHサーバーはOAuth未実装で、一般ChatGPTコネクタ対応も保証しません。
 
 ## Creator checks before submission
 
+- Codex CLI is the selected client; direct MCP checks passed. Before
+  publication, validate the repository skill and UGH connection in the creator's
+  own agent. Agensi serves only live listings: record the OAuth → `get_skill` →
+  UGH audit end-to-end check separately after publication. Do not claim that
+  post-publication check has passed based on local tests or a ZIP build.
+  [Agensi creator FAQ](https://www.agensi.io/docs/creator-faq).
 - Replace preparation status only after recording an actual endpoint and supported
   client check for both secret headers. Put the external service, invitation and
   user-owned Anthropic API key requirement in the listing's Needs access to field.

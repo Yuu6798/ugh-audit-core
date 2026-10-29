@@ -51,3 +51,13 @@ Before publication, complete the external-service checks in
 in the actual connection setup, and review [listing-draft.md](listing-draft.md) and
 [rights-and-withdrawal.md](rights-and-withdrawal.md). This build does not submit
 anything to Agensi or start a deployment.
+
+Validation has two stages. Before publication, test the repository skill with
+the creator's own agent and check its UGH invitation and BYOK headers. Codex CLI
+is the selected client; direct MCP transport checks passed, while Agensi skill
+delivery and a real paid model audit remain unverified. Its native configuration
+example is in [connection.md](ugh-instruction-audit/references/connection.md).
+Agensi serves a listing only after it is live, so the subsequent Agensi OAuth →
+`get_skill` → UGH audit check is a separate post-publication step. Neither a ZIP
+build nor a direct UGH connection proves that delivery path.
+[Agensi creator FAQ](https://www.agensi.io/docs/creator-faq).
