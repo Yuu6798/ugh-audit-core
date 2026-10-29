@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ugh-instruction-audit": {
+      "type": "http",
+      "url": "https://audit.example.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${UGH_AUDIT_TOKEN}"
+      }
+    }
+  }
+}

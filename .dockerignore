@@ -6,6 +6,12 @@ __pycache__
 *.db
 *.sqlite
 .env
+.env.*
+**/invites.json
+**/*.token
+**/*.db-wal
+**/*.db-shm
+marketplace/
 .claude/
 tests/
 analysis/

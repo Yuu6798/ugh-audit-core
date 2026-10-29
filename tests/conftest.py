@@ -35,3 +35,9 @@ def semantic_complete_judge():
                 "stop_reason": "end_turn", "raw_response": json.dumps(value, ensure_ascii=False)}
 
     return judge
+
+
+@pytest.fixture(autouse=True)
+def explicit_local_access(monkeypatch):
+    """Legacy unit tests opt into trusted local mode; beta tests override this."""
+    monkeypatch.setenv("UGH_ACCESS_MODE", "local")

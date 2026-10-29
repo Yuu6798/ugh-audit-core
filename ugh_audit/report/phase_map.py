@@ -1,68 +1,111 @@
-"""
-ugh_audit/report/phase_map.py
-Phase Map レポート生成 — ΔE / quality_score の時系列可視化
-"""
+"""Reports of verified requirement coverage, with legacy metrics kept separate."""
 from __future__ import annotations
 
-from datetime import datetime
+import csv
+from datetime import datetime, timezone
+import io
+import math
 from typing import List
+
+from ..storage.audit_db import guard_history_row
+
+
+def _rows(history: List[dict]) -> List[dict]:
+    """Use the same history guard as REST/DB; old accepts are not current accepts."""
+    return [guard_history_row(row if isinstance(row, dict) else {}) for row in history]
+
+
+def _number(value: object) -> float | None:
+    if type(value) in (int, float):
+        try:
+            return value if math.isfinite(value) else None
+        except OverflowError:
+            return None
+    return None
+
+
+def _format_number(value: object) -> str:
+    number = _number(value)
+    return f"{number:.3f}" if number is not None else "未確定"
 
 
 def generate_text_report(history: List[dict]) -> str:
-    """テキスト形式のPhase Mapレポートを生成"""
+    """Render current coverage without substituting zero for unresolved values."""
     if not history:
         return "データなし"
 
+    rows = _rows(history)
     lines = ["=" * 60]
-    lines.append("UGH Audit Phase Map Report")
-    lines.append(f"生成: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append(f"総計: {len(history)} 件")
+    lines.append("UGH Audit Requirement Coverage Report")
+    lines.append(f"生成: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    lines.append(f"総計: {len(rows)} 件")
     lines.append("=" * 60)
-
-    avg_de = sum(r.get("delta_e", 0) for r in history) / len(history)
-    avg_qs = sum(r.get("quality_score", 0) for r in history) / len(history)
+    lines.append("C は指示要件の記載充足率。事実性や回答品質の保証ではありません。")
+    lines.append("保留・根拠不足の行は未確定。旧数値は非拘束の診断です。")
 
     verdict_counts: dict = {}
-    for r in history:
-        v = r.get("verdict", "unknown")
-        verdict_counts[v] = verdict_counts.get(v, 0) + 1
+    for row in rows:
+        verdict = row["verdict"]
+        verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
 
+    resolved = sum(row["verdict"] != "degraded" for row in rows)
     lines.append("\n集計サマリー")
-    lines.append(f"  平均 ΔE:            {avg_de:.3f}")
-    lines.append(f"  平均 quality_score: {avg_qs:.3f}")
-    lines.append("\n  verdict 分布:")
-    for v, count in sorted(verdict_counts.items(), key=lambda x: -x[1]):
-        bar = "#" * count
-        lines.append(f"    {v:12s} {bar} ({count}件)")
+    lines.append(f"  照合確定: {resolved} / {len(rows)} 件（欠落確定も含む）")
+    lines.append(f"  保留・未検証: {len(rows) - resolved} 件")
+    lines.append("  未確定行を除いた平均充足率は計算しません。")
+    lines.append("\n  現行 verdict 分布:")
+    for verdict, count in sorted(verdict_counts.items()):
+        lines.append(f"    {verdict:12s} {count} 件")
 
-    lines.append("\n時系列 (ΔE推移)")
-    lines.append(f"  {'時刻':20s} {'S':>6} {'C':>6} {'ΔE':>6} {'QS':>6} {'verdict'}")
-    lines.append(f"  {'-'*20} {'-'*6} {'-'*6} {'-'*6} {'-'*6} {'-'*12}")
-    for r in history[-20:]:
-        ts = r.get("created_at", "")[:19]
-        s = r.get("S", 0)
-        c = r.get("C", 0)
-        de = r.get("delta_e", 0)
-        qs = r.get("quality_score", 0)
-        verdict = r.get("verdict", "unknown")
-        lines.append(f"  {ts:20s} {s:6.3f} {c:6.3f} {de:6.3f} {qs:6.3f} {verdict}")
+    lines.append("\n入力順の末尾20件（要件記載充足）")
+    lines.append(f"  {'時刻':20s} {'C':>6} {'verdict':12s} {'要レビュー':8s} {'元schema'}")
+    for row in rows[-20:]:
+        timestamp = str(row.get("created_at") or "未記録")
+        timestamp = timestamp.replace("\n", " ").replace("\r", " ")[:19]
+        source = str(row.get("source_schema_version") or "未記録")
+        source = source.replace("\n", " ").replace("\r", " ")
+        review = "必要" if row["requires_review"] else "不要"
+        lines.append(
+            f"  {timestamp:20s} {_format_number(row['C']):>6} "
+            f"{row['verdict']:12s} {review:8s} {source}"
+        )
 
     lines.append("=" * 60)
     return "\n".join(lines)
+
+
+def _csv_cell(value: object) -> str | int | float:
+    """Use explicit nulls and neutralize formula-like string cells in spreadsheets."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if type(value) in (int, float):
+        return value if _number(value) is not None else "null"
+    text = str(value)
+    if (text.lstrip(" \t\r\n\v\f\ufeff").startswith(("=", "+", "-", "@"))
+            or text.startswith(("\t", "\r", "\n"))):
+        return "'" + text
+    return text
 
 
 def generate_csv(history: List[dict]) -> str:
-    """CSV形式でエクスポート"""
-    headers = ["created_at", "S", "C", "delta_e", "quality_score", "verdict"]
-    lines = [",".join(headers)]
-    for r in history:
-        row = [
-            r.get("created_at", ""),
-            str(r.get("S", 0)),
-            str(r.get("C", 0)),
-            str(r.get("delta_e", 0)),
-            str(r.get("quality_score", 0)),
-            r.get("verdict", ""),
-        ]
-        lines.append(",".join(row))
-    return "\n".join(lines)
+    """Export guarded schema 4 rows; legacy columns are nonbinding diagnostics.
+
+    Missing values are the literal ``null``. Added scope/provenance columns make
+    the meanings explicit; formula-like string cells receive an apostrophe.
+    """
+    fields = ["created_at", "S", "C", "delta_e", "quality_score", "verdict",
+              "schema_version", "source_schema_version", "decision_scope", "metrics_scope",
+              "requirement_verdict", "requires_review", "is_reliable", "hit_rate"]
+    legacy_fields = ["S", "C", "delta_e", "quality_score", "verdict"]
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(fields + ["legacy_" + name for name in legacy_fields])
+    for row in _rows(history):
+        legacy = row.get("legacy_metrics") or {}
+        values = [row.get(name) for name in fields]
+        values += [legacy.get(name) if name == "verdict" else _number(legacy.get(name))
+                   for name in legacy_fields]
+        writer.writerow([_csv_cell(value) for value in values])
+    return output.getvalue()

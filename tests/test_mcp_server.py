@@ -37,7 +37,7 @@ def _configure_mcp(tmp_db, tmp_golden):
 
 def _run(coro):
     """asyncio.run のヘルパー"""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def test_tools_list_includes_audit_answer():

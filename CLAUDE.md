@@ -188,6 +188,8 @@ https://ugh-audit-core-production.up.railway.app
 | 意味損失関数 L_sem | [`docs/semantic_loss.md`](docs/semantic_loss.md) |
 | LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
+| 招待制ベータ（認証・履歴分離・上限） | [`docs/invite_beta.md`](docs/invite_beta.md) |
+| Agensi無料掲載パッケージ | [`marketplace/agensi`](marketplace/agensi) |
 | 検証結果 (HA48 / HA20 / baseline) | [`docs/validation.md`](docs/validation.md) |
 | schema 4 の検証・移行・保存証拠 | [`docs/instruction_coverage_v4_validation.md`](docs/instruction_coverage_v4_validation.md) |
 | Self-Audit 実験 (Claude 出力の proxy 測定) | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |

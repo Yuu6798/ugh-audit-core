@@ -46,6 +46,9 @@ jobs:
       - name: Check documentation consistency
         run: python scripts/doc_consistency_check.py --strict
 
+      - name: Validate Agensi free-listing package
+        run: python scripts/build_agensi_package.py --output "${{ runner.temp }}/ugh-agensi-free.zip"
+
       - name: Lint
         run: ruff check .
 

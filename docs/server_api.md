@@ -1,7 +1,10 @@
 # REST API + MCP サーバー設計
 
 `ugh_audit/server.py` は REST API と MCP サーバーを統合した FastAPI
-アプリケーション。`ugh_audit/mcp_server.py` は MCP スタンドアロン版。
+アプリケーション。`python -m ugh_audit.mcp_server` も同じ認証付きアプリを起動する。
+
+既定は招待制Bearer認証。キー発行・所有者分離・上限・配備条件は
+[`invite_beta.md`](invite_beta.md) を参照。OAuthは未実装。
 
 ## 既存公開URLの設定記録 (Railway)
 
@@ -18,15 +21,17 @@ https://ugh-audit-core-production.up.railway.app
 | `/docs` | Swagger UI（API ドキュメント、ブラウザで操作可能） |
 | `/api/audit` | POST: 意味監査 |
 | `/api/history` | GET: 監査履歴 |
-| `/mcp` | MCP エンドポイント（ChatGPT Connectors 等から接続） |
+| `/mcp` | MCP エンドポイント（Bearer設定対応クライアントから接続） |
 
 ## ローカル起動方法
 
+先に招待台帳と環境変数を設定する。認証設定がなければ503となる。
+
 ```bash
 # REST API + MCP 統合サーバー
-uvicorn ugh_audit.server:app --host 0.0.0.0 --port 8000
+uvicorn ugh_audit.server:app --host 127.0.0.1 --port 8000
 
-# MCP スタンドアロン
+# 同じ認証付き統合アプリ
 python -m ugh_audit.mcp_server --port 8000
 ```
 
