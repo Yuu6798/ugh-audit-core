@@ -67,5 +67,14 @@ python analysis/instruction_coverage_v4/verify_artifacts.py
 pytest中は外部DNSを遮断・HF offlineに設定し、スキップ0を要求する。
 APIへの接続は回帰に使わず、保存モデル応答と明示的なテスト用判定器を使う。
 FastMCPを使う現行実装の依存は `mcp>=1.0,<2`。MCP 2系への移行は含めない。
-GitHub ActionsのJUnitをartifactに保存する。mainへのマージは既存Railway自動デプロイに
-つながるため、このPR準備では実行しない。
+GitHub ActionsのJUnitをartifactに保存する。
+
+保存済みの `regression/pr-head.xml` と source hash は PR #112 当時の固定記録であり、
+後続変更の証拠へ上書きしない。CI はマージコミット
+`ff28cc70685e997122c7774faabe94dd90446cf1` を別ディレクトリへ取得し、検算器の
+`--current-source` に渡す。この引数は保存束内の「モデル評価後の回帰 source」との
+バイト照合であり、常に最新ブランチを指す名前ではない。最新ブランチは先に実行する
+その run の pytest と JUnit で検証する。過去の1,053件成功を後続変更の成功と混同しない。
+
+PR #112 はmainへ統合済み。既存Railway自動デプロイの起動条件と、実際の本番反映・
+API疎通・DB移行の成否は別に確認する。

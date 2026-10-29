@@ -121,8 +121,9 @@ class AuditRequest(BaseModel):
     auto_generate_meta: bool = Field(
         False,
         description=(
-            "question_meta 未提供時に LLM で動的生成する (opt-in)。"
-            "metadata_source='llm_generated' として結果に明示される。"
+            "要件がない・不正な場合に LLM で生成する (opt-in)。"
+            "成功した要件草案は metadata_source='llm_generated'、"
+            "未検証の代替メタデータは 'fallback' として degraded にする。"
             "ANTHROPIC_API_KEY 環境変数が必要。"
         ),
     )
@@ -156,22 +157,24 @@ class AuditResponse(BaseModel):
         None, description="未校正のため null"
     )
     verdict: str = Field(
-        ..., description="判定: accept / rewrite / regenerate / degraded"
+        ..., description="要件充足の判定: accept / rewrite / degraded"
     )
     semantic_matching: dict = Field(..., description="v2の要件別照合と根拠・由来")
     requirement_verdict: str = Field(..., description="complete / incomplete / undetermined")
-    requires_review: bool = Field(..., description="欠落・保留等による要確認")
-    legacy_metrics: dict = Field(..., description="v2ゲート適用前の従来指標（参考）")
-    hit_rate: Optional[str] = Field(None, description="命題ヒット率 (例: '3/5')")
+    requires_review: bool = Field(..., description="欠落・保留・AI草案要件による要確認")
+    legacy_metrics: dict = Field(..., description="最終判定に影響しない旧診断値")
+    hit_rate: Optional[str] = Field(None, description="要件充足比率 (例: '3/5') / 保留時 null")
     structural_gate: Optional[StructuralGateResponse] = None
     saved_id: Optional[int] = Field(None, description="DB保存時の行ID (degraded時はnull)")
     retry_of: Optional[int] = Field(None, description="再監査元の saved_id (初回はnull)")
     mode: str = Field(..., description="実行モード: computed / computed_ai_draft / degraded")
     is_reliable: bool = Field(
-        ..., description="結果が信頼できるか (mode=computed かつ verdict が計算済みの場合 true)"
+        ..., description="全要件の照合が確定した場合 true。回答の真実性や承認は意味しない"
     )
     matched_id: Optional[str] = Field(None, description="対応づけた question_id")
-    metadata_source: str = Field(..., description="メタデータ源: inline / golden_store / none")
+    metadata_source: str = Field(
+        ..., description="メタデータ源: inline / llm_generated / fallback / none"
+    )
     computed_components: List[str] = Field(
         default_factory=list, description="計算済みコンポーネントのリスト"
     )
@@ -183,7 +186,7 @@ class AuditResponse(BaseModel):
         default_factory=list, description="degraded 時の理由リスト"
     )
     soft_rescue: Optional[dict] = Field(
-        None, description="AI草案メタデータの soft-hit rescue 結果 (該当時のみ)"
+        None, description="旧 soft-hit rescue の互換フィールド。schema 4 では null"
     )
     mode_affordance: Optional[dict] = Field(
         None, description="質問の応答形式 {primary, secondary} (未設定時は null)"
@@ -203,11 +206,7 @@ class AuditResponse(BaseModel):
     )
     advisory_flags: List[str] = Field(
         default_factory=list,
-        description=(
-            "Phase E: advisory downgrade 発火ルールのリスト。"
-            "未知の flag は無視されるべき。"
-            "例: mcg_collapse_downgrade, mcg_anchor_missing"
-        ),
+        description="schema 4 では空配列。旧 advisory は legacy_metrics に保存。",
     )
     hit_sources: Optional[dict] = Field(
         None,

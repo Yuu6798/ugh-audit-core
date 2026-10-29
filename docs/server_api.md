@@ -5,7 +5,8 @@
 
 ## 既存公開URLの設定記録 (Railway)
 
-以下は既存環境の設定記録。このローカル schema 4 作業版は公開していない。
+以下は既存環境の設定記録。本書の schema 4 仕様が公開環境に反映され、API疎通・
+DB移行まで成功したかは別途確認を要する。
 
 ```
 https://ugh-audit-core-production.up.railway.app
@@ -94,8 +95,25 @@ AI 生成の要件は草案であり、常に `requires_review=true`。
 ```
 
 `is_reliable=true` は全要件の照合が確定したことを表す。欠落が確定した rewrite にも
-true となり、真実性や承認を意味しない。AI 草案メタデータなら mode は
+true となり、真実性や承認を意味しない。照合が確定した AI 草案メタデータなら mode は
 `computed_ai_draft` であり、accept でも `requires_review=true`。
+
+### メタデータの由来と mode
+
+`metadata_source` は要件メタデータの由来であり、照合の確定状態を表す `mode` とは別の値。
+
+| metadata_source | 意味 |
+|---|---|
+| `inline` | 呼び出し元が渡したメタデータ |
+| `llm_generated` | opt-in の自動生成で不足要件を補った AI 草案 |
+| `fallback` | メタ生成器が `_is_fallback` を付けた未検証の代替メタデータ |
+| `none` | メタデータなし |
+
+`auto_generate_meta=true` は要件がない・不正な場合の生成を許可する。
+生成結果が `fallback` の場合、最終 verdict と mode は `degraded`、
+`degraded_reason` に `metadata_fallback_unverified` を含み、`C` / `hit_rate` は null、
+`is_reliable=false`、`requires_review=true` となる。代替要件に本文があっても意味照合の
+承認には使わず、新規の通常履歴には保存しない (`saved_id=null`)。
 
 ### degraded と制限
 
@@ -156,7 +174,7 @@ S / ΔE / quality は null。旧品質の時系列として解釈しない。
 
 | カラム | 型 | 説明 |
 |--------|-----|------|
-| `metadata_source` | TEXT | `inline` / `llm_generated` / `none` |
+| `metadata_source` | TEXT | `inline` / `llm_generated` / `fallback` / `none`（新規 degraded は通常履歴へ保存しない） |
 | `generated_meta` | TEXT | LLM 生成メタの JSON（llm_generated 時のみ） |
 | `hit_sources` | TEXT | 要件別 fulfilled / missing / unknown の JSON |
 | `semantic_matching` / `question_meta` | TEXT | 全照合根拠・要件文脈の JSON |
