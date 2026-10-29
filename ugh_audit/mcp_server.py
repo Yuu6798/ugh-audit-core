@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 # パイプライン A の共有基盤 (server.py と同一ロジックを参照)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ugh_calculator import (  # noqa: E402
+    META_SOURCE_INLINE,
     META_SOURCE_LLM,
 )
 
@@ -297,13 +298,19 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
             "legacy_metrics": legacy, "errors": ["remote_api_invalid_metrics"],
         }
 
-    from .semantic_matching import apply_semantic_gate
+    from .semantic_matching import _requirements, apply_semantic_gate
 
     context = kwargs.get("question_meta")
-    if context is None:
+    # Match pipeline._prepare_requirements: generation applies when the canonical
+    # requirement list is absent or empty, including partial metadata dictionaries.
+    # A nonempty caller list remains authoritative even when its items are invalid.
+    if kwargs.get("auto_generate_meta") is True and not _requirements(context):
         context = result.get("assessment_context")
-        eligible = (eligible and kwargs.get("auto_generate_meta") is True
-                    and result.get("metadata_source") == "llm_generated")
+        eligible = eligible and result.get("metadata_source") == META_SOURCE_LLM
+    else:
+        # The producer must not claim generation when the caller did not request
+        # it or already supplied requirements that the pipeline would preserve.
+        eligible = eligible and result.get("metadata_source") == META_SOURCE_INLINE
     eligible = eligible and isinstance(context, dict) and bool(context)
     result = apply_semantic_gate(
         result,
