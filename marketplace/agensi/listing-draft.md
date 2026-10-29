@@ -27,8 +27,8 @@ per-user invitation token, your own Anthropic API account/key (BYOK), and an age
 that supports Streamable HTTP with Authorization and custom secret HTTP headers.
 Every audit sends your provider key as `X-UGH-Anthropic-Key`; never put it in chat
 or tool arguments. Agensi provides the skill instructions, not the server or its credentials.
-No hosted-service entitlement is included. The listing is a preparation draft;
-the real endpoint and supported client must be verified before publication.
+No hosted-service entitlement is included. The listing remains a preparation
+draft on publication hold; the verified direct Codex connection is described below.
 
 **Cost:** The skill is free on Agensi. Model calls are billed to your own Anthropic
 API account, including audits with explicit requirements. Hosting costs are borne
@@ -42,13 +42,16 @@ operator; the requirements and draft also reach Anthropic for assessment. Your
 provider key passes through the operator to Anthropic but is not saved to audit
 history or application logs. Resolved audits, including their text and evidence,
 may be saved. Read the operator's policy before supplying confidential material.
-The creator-operated invitation beta is being prepared for 30-day audit retention,
+The creator-operated invitation beta's proposed terms are 30-day audit retention,
 deletion within seven days after identity verification, and removal from backups
-within 30 days after deletion. These are the proposed operating terms, not a claim
-that every independently hosted server follows them. The creator-operated beta's
+within 30 days after deletion. Automated retention is enabled and its initial
+production cleanup has passed; manual request handling and the public effective
+date still await acceptance. These terms do not describe every independently
+hosted server. The creator-operated beta's
 private support and deletion contact is [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com).
-The address is selected; receipt verification and activation of daily operations
-remain pending, so invitations and publication remain on hold. Do not email API keys,
+Ordinary mailbox send/receive evidence is confirmed. Manual deletion intake, identity
+checks, replies and the responsible operator still await acceptance, so invitations
+and publication remain on hold. Do not email API keys,
 invitation tokens or full audit text. Independently hosted services use their own
 operator's contact. See
 [data handling and deletion](../../docs/data-policy.md) and the
@@ -56,8 +59,10 @@ operator's contact. See
 
 **Compatibility:** English skill instructions; Japanese inputs and outputs are
 supported. Both invite-token and BYOK secret-header configuration are required.
-Codex CLI's direct MCP transport has been checked, but the complete Agensi skill
-load and real paid model audit have not been verified. OAuth is
+Codex CLI's direct MCP connection completed one synthetic production audit with two
+real Anthropic calls and no retries; history retrieval, owner isolation and text/CSV
+reports passed. Agensi skill delivery, automatic agent skill selection and real-model
+requirement auto-generation remain unverified. OAuth is
 used for Agensi sign-in and is separate from UGH's invitation and BYOK headers.
 The audit server does not implement OAuth; general ChatGPT connector compatibility
 is not established. Importing the skill does not configure either credential.
@@ -79,7 +84,7 @@ three requirements. Show the evidence, missing instructions and suggested edits.
 MCPサーバーへ接続します。利用者向けのZIPダウンロードは不要です。外部サーバーの招待
 トークン、利用者自身のAnthropic APIキー（BYOK）、秘密HTTPヘッダーを設定できる
 クライアントが必要です。APIキーは `X-UGH-Anthropic-Key` ヘッダーに設定し、チャットや
-tool引数へ貼り付けません。実際のBYOK配備・対象クライアントの接続確認が掲載前に必要です。
+tool引数へ貼り付けません。Codex CLIの直接接続は下記の範囲で確認済みですが、掲載は保留中です。
 
 **料金:** Agensiのスキルは無料です。明示要件の監査にもモデル呼出があり、そのAPI料金は
 利用者自身のAnthropicアカウントに発生します。運営者がモデル料金を負担する無料API枠は
@@ -89,28 +94,30 @@ tool引数へ貼り付けません。実際のBYOK配備・対象クライアン
 Anthropicへ送られます。APIキーも運営者を経由しますが、監査履歴やアプリのログには
 保存しません。判定できた監査の本文・根拠は保存される場合があります。提供者の招待制
 ベータは、監査履歴30日、本人確認後7日以内の削除、削除後30日以内のバックアップ消去
-を運営案として準備中です。独自運営のすべてのサーバーへの保証ではありません。
+を運営案としています。自動削除は有効化され、本番の初回清掃を確認済みです。手動の依頼対応と
+対外的な適用開始日は受入待ちです。独自運営のすべてのサーバーへの保証ではありません。
 提供者のベータの非公開問い合わせ・削除依頼先は
-[kkoo6798@gmail.com](mailto:kkoo6798@gmail.com)です。アドレスの確定と、実際の受信確認・
-日次運用の開始は別です。受信確認と実施体制が整うまで招待開始・掲載は保留します。
+[kkoo6798@gmail.com](mailto:kkoo6798@gmail.com)です。通常メールの送受信実績は確認済みです。
+削除依頼の受付・本人確認・返信手順と担当者の受入が完了するまで、招待開始・掲載は保留します。
 キー・招待トークン・監査本文全体はメールへ記載しないでください。独自運営の場合はその運営者の窓口を使います。
 [保存・削除方針](../../docs/data-policy.md)を確認してからデータを送ってください。
 
-**互換性:** 対応BYOKプロバイダーはAnthropicです。Codex CLIからの直接MCP接続と秘密
-ヘッダーの転送は検証済みですが、Agensi経由のスキル取得から実モデル監査までの一連の
-動作は未確認です。AgensiへのOAuthログインと、UGHへの招待認証・BYOK設定は別です。
+**互換性:** 対応BYOKプロバイダーはAnthropicです。Codex CLIの直接MCP接続で、実モデルを
+使った合成監査1件（Anthropic呼出2回・再試行なし）、本人履歴の再取得、別利用者の取得拒否、
+text/CSVの整合を確認済みです。Agensi経由の配信、エージェントの自動スキル選択、実モデルによる
+要件自動生成は未確認です。AgensiへのOAuthログインと、UGHへの招待認証・BYOK設定は別です。
 UGHサーバーはOAuth未実装で、一般ChatGPTコネクタ対応も保証しません。
 
 ## Creator checks before submission
 
-- Codex CLI is the selected client; direct MCP checks passed. Before
-  publication, validate the repository skill and UGH connection in the creator's
-  own agent. Agensi serves only live listings: record the OAuth → `get_skill` →
+- Codex CLI is the selected client; direct MCP checks and one real synthetic
+  model audit passed. Automatic agent skill selection remains untested.
+  Agensi serves only live listings: record the OAuth → `get_skill` →
   UGH audit end-to-end check separately after publication. Do not claim that
   post-publication check has passed based on local tests or a ZIP build.
   [Agensi creator FAQ](https://www.agensi.io/docs/creator-faq).
-- Replace preparation status only after recording an actual endpoint and supported
-  client check for both secret headers. Put the external service, invitation and
+- Keep the recorded endpoint and Codex checks scoped to direct MCP use; they do not
+  establish Agensi delivery. Put the external service, invitation and
   user-owned Anthropic API key requirement in the listing's Needs access to field.
 - Disclose the external invitation dependency during Agensi's listing review;
   it must not be represented as an off-platform skill unlock or licence sale.
@@ -119,9 +126,10 @@ UGHサーバーはOAuth未実装で、一般ChatGPTコネクタ対応も保証�
   are accurate and setup templates/instructions are bundled. It does not establish
   approval of this particular listing.
 - Complete the [release checklist](../../docs/beta-release-checklist.md), including
-  receipt verification at the selected private deletion contact and the retention
-  procedure, the approved real-BYOK
-  audit, and the creator's publication decision. Keep submission and publication
+  acceptance of manual deletion intake, identity checks, replies, the responsible
+  operator, records outside automated cleanup, the public policy effective date and
+  the creator's publication decision. Initial production cleanup and the approved
+  real-BYOK audit are recorded there. Keep submission and publication
   on hold while those conditions are unresolved. Delisting does not establish
   immediate revocation of existing users' Agensi access.
 - Set Free explicitly. Do not add a separate refund promise, external checkout,
