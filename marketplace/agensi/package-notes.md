@@ -5,6 +5,10 @@ they do not install this ZIP. The external MCP server is operated separately.
 The listing draft and withdrawal notes beside the skill directory are creator
 working materials. The skill ZIP includes client connection templates and operator
 setup references; operators read the latter only when setup is actually requested.
+Free distribution requires an external invitation, the user's own Anthropic API
+key (BYOK), and a client supporting both secret headers. The ZIP contains empty
+client placeholders and environment references only; it contains no usable key,
+model credit, working endpoint or proof of Agensi-client compatibility.
 
 From the repository root, select a new output path explicitly:
 

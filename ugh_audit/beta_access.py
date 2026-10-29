@@ -21,6 +21,8 @@ from starlette.responses import JSONResponse
 from .usage_limits import Limits, LimitExceeded, UsageLimiter, UsageUnavailable
 
 MAX_BODY_BYTES = 262144
+PROVIDER_KEY_HEADER = "X-UGH-Anthropic-Key"
+BYOK_CAPABILITIES = {"provider_credentials": "request_only", "byok_version": 1}
 
 
 class AccessError(Exception):
@@ -33,6 +35,7 @@ class AccessError(Exception):
 class Principal:
     owner_id: Optional[str]
     token: Optional[str] = field(default=None, repr=False)
+    provider_key: Optional[str] = field(default=None, repr=False)
 
 
 _principal: ContextVar[Optional[Principal]] = ContextVar("ugh_principal", default=None)
@@ -57,6 +60,36 @@ def require_principal() -> Principal:
     raise AccessError(401, "authentication_required")
 
 
+def is_http_request() -> bool:
+    """The middleware also establishes a context for explicitly local HTTP."""
+    return _principal.get() is not None
+
+
+def request_provider_key() -> Optional[str]:
+    """HTTP uses only the caller's key; trusted direct Python retains env support."""
+    principal = _principal.get()
+    if principal is not None:
+        return principal.provider_key
+    return os.environ.get("ANTHROPIC_API_KEY", "").strip() or None
+
+
+def _provider_key_header(headers) -> Optional[str]:
+    values = [value for key, value in headers if key.lower() == b"x-ugh-anthropic-key"]
+    if not values:
+        return None
+    if len(values) != 1:
+        raise AccessError(400, "invalid_provider_key")
+    try:
+        value = values[0].decode("ascii")
+    except UnicodeError:
+        raise AccessError(400, "invalid_provider_key") from None
+    # Treat keys as opaque credentials, without assuming a provider prefix.
+    # Whitespace/control characters cannot enter an outbound HTTP header.
+    if not re.fullmatch(r"[!-~]{16,512}", value):
+        raise AccessError(400, "invalid_provider_key")
+    return value
+
+
 def _unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -68,7 +101,7 @@ def _unique_object(pairs):
 
 def authenticate(headers) -> Principal:
     if access_mode() == "local":
-        return Principal(None)
+        return Principal(None, provider_key=_provider_key_header(headers))
     path = os.environ.get("UGH_INVITE_FILE")
     try:
         if not path:
@@ -114,7 +147,7 @@ def authenticate(headers) -> Principal:
         if (hmac.compare_digest(digest, user["token_sha256"])
                 and user.get("enabled", True)
                 and (user.get("expires_at") is None or user["expires_at"] > time.time())):
-            return Principal(user["user_id"], token)
+            return Principal(user["user_id"], token, _provider_key_header(headers))
     raise AccessError(401, "invalid_credential")
 
 
@@ -153,6 +186,8 @@ def _limit_error(exc):
 def audit_access(db, retry_of=None):
     """Admit actual synchronous work; retain its slot through client cancellation."""
     principal = require_principal()
+    if is_http_request() and not request_provider_key():
+        raise AccessError(400, "provider_key_required")
     if principal.owner_id is not None and retry_of is not None:
         if type(retry_of) is not int or retry_of <= 0 or db.get_by_id(
             retry_of, owner_id=principal.owner_id

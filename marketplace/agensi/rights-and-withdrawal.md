@@ -28,11 +28,15 @@ before relying on it. [Protect your work](https://www.agensi.io/docs/protect-you
 
 The service invite token authenticates an external MCP endpoint. It is not an
 Agensi account credential or an off-platform license/unlock key for this skill.
-Disclose the dependency under Needs access to, and confirm its treatment during
+The user's separate Anthropic API key pays for external model use; it is not a
+skill unlock key either. Disclose both dependencies and the BYOK cost under Needs
+access to, and confirm their treatment during
 listing review. No external checkout, paid upgrade link or custom refund promise
 is part of this package. [Listing rules](https://www.agensi.io/docs/protect-your-work)
 
 The operator must separately publish truthful access, retention, contact and
-shutdown information before making a hosted-service offer. The prepared package
+shutdown information before making a hosted-service offer, including that provider
+keys pass through the service, model charges belong to the user, and hosting
+charges belong to the operator. The prepared package
 does not grant a hosted-service entitlement, announce a live endpoint or authorize
 a listing submission, deployment, purchase, email or message to Agensi.

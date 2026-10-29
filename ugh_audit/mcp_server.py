@@ -26,7 +26,10 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from . import dependencies as _deps
-from .beta_access import audit_access, require_principal, validate_payload
+from .beta_access import (
+    AccessError, BYOK_CAPABILITIES, PROVIDER_KEY_HEADER, audit_access, require_principal,
+    request_provider_key, validate_payload,
+)
 
 if TYPE_CHECKING:
     from .reference.golden_store import GoldenStore
@@ -63,10 +66,11 @@ logger = logging.getLogger(__name__)
 
 
 def _make_semantic_judge():
-    """Use server configuration only, never an assessment supplied by a caller."""
-    from .semantic_matching import make_judge_from_env
+    """Use the request credential without a host-key fallback for HTTP tools."""
+    from .semantic_matching import SemanticJudge
 
-    return make_judge_from_env()
+    key = request_provider_key()
+    return SemanticJudge(key) if key else None
 
 
 def _valid_remote_metrics(result: dict) -> bool:
@@ -231,19 +235,32 @@ class AuditOutput:
 # ---------------------------------------------------------------------------
 
 
-def _remote_open(req, timeout):
+def _remote_open(req, timeout, *, forward_provider_key=False):
     """Forward this caller's identity only over TLS, without following redirects."""
     import urllib.request
     from urllib.parse import urlsplit
 
     principal = require_principal()
     token = principal.token or os.environ.get("UGH_REMOTE_TOKEN")
-    if not token:
-        return urllib.request.urlopen(req, timeout=timeout)
     parsed = urlsplit(req.full_url)
+    # Never propagate a provider credential accidentally attached to a read.
+    for name, _ in req.header_items():
+        if name.lower() == PROVIDER_KEY_HEADER.lower():
+            req.remove_header(name)
+    provider_key = request_provider_key() if forward_provider_key else None
+    if forward_provider_key and (
+        req.get_method() != "POST" or not parsed.path.endswith("/api/audit")
+        or parsed.query or parsed.fragment or not provider_key
+    ):
+        raise ValueError("Invalid provider credential destination")
+    if not token and not forward_provider_key:
+        return urllib.request.urlopen(req, timeout=timeout)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Authenticated upstream requires HTTPS")
-    req.add_header("Authorization", "Bearer " + token)
+    if token:
+        req.add_header("Authorization", "Bearer " + token)
+    if provider_key:
+        req.add_header(PROVIDER_KEY_HEADER, provider_key)
 
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -252,10 +269,38 @@ def _remote_open(req, timeout):
     return urllib.request.build_opener(NoRedirect()).open(req, timeout=timeout)
 
 
+def _require_remote_byok(remote_api: str) -> None:
+    """Refuse legacy upstreams before they can charge a server-owned API key."""
+    import urllib.request
+    from urllib.parse import urlsplit
+
+    if not request_provider_key():
+        raise AccessError(400, "provider_key_required")
+    principal = require_principal()
+    if not (principal.token or os.environ.get("UGH_REMOTE_TOKEN")):
+        raise AccessError(503, "remote_byok_auth_required")
+    parsed = urlsplit(remote_api)
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+            or parsed.query or parsed.fragment):
+        raise AccessError(503, "remote_byok_unavailable")
+    request = urllib.request.Request(remote_api.rstrip("/") + "/api/capabilities", method="GET")
+    try:
+        with _remote_open(request, timeout=10) as response:
+            if response.status != 200:
+                raise ValueError("Invalid capability response")
+            capabilities = _read_remote_json(response)
+    except Exception:
+        raise AccessError(503, "remote_byok_unavailable") from None
+    if (not isinstance(capabilities, dict) or capabilities != BYOK_CAPABILITIES
+            or type(capabilities.get("byok_version")) is not int):
+        raise AccessError(503, "remote_byok_unsupported")
+
+
 def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
     """リモート API に監査リクエストを転送し、結果を AuditOutput に変換する"""
     import urllib.request
 
+    _require_remote_byok(remote_api)
     url = remote_api.rstrip("/") + "/api/audit"
     payload = {k: v for k, v in kwargs.items() if v is not None}
     data = _json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -265,7 +310,7 @@ def _proxy_audit(remote_api: str, **kwargs) -> AuditOutput:
         method="POST",
     )
     try:
-        with _remote_open(req, timeout=60) as resp:
+        with _remote_open(req, timeout=60, forward_provider_key=True) as resp:
             result = _read_remote_json(resp)
     except Exception as exc:
         # Error bodies and exception messages can echo request contents.

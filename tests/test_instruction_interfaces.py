@@ -198,18 +198,34 @@ def test_failed_nullable_migration_rolls_back_without_losing_the_original_schema
     (b" " * (2 * 1024 * 1024 + 1), 200),
 ])
 def test_remote_invalid_transport_or_json_cannot_reuse_embedded_complete_proof(monkeypatch, body, status):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-test-provider-key")
+    monkeypatch.setenv("UGH_REMOTE_TOKEN", "offline-test-invite-token")
     complete = json.dumps(remote_frame(), ensure_ascii=False).encode()
+    calls = []
+
     class Response:
+        def __init__(self, value, response_status):
+            self.value, self.status = value, response_status
         def __enter__(self):
             return self
         def __exit__(self, *args):
             pass
         def read(self, size=-1):
-            value = complete if body is None else body
+            value = self.value
             return value if size < 0 else value[:size]
-    Response.status = status
-    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: Response())
+
+    def remote_open(request, timeout, *, forward_provider_key=False):
+        calls.append((request.get_method(), request.full_url, forward_provider_key))
+        if request.full_url.endswith("/api/capabilities"):
+            return Response(json.dumps(mcp_server.BYOK_CAPABILITIES).encode(), 200)
+        return Response(complete if body is None else body, status)
+
+    monkeypatch.setattr(mcp_server, "_remote_open", remote_open)
     result = mcp_server._proxy_audit("https://example.invalid", question="Q", response=ANSWER, question_meta=META)
+    assert calls == [
+        ("GET", "https://example.invalid/api/capabilities", False),
+        ("POST", "https://example.invalid/api/audit", True),
+    ]
     assert result.verdict == "degraded" and result.C is None
     assert result.saved_id is None and result.is_reliable is False
 

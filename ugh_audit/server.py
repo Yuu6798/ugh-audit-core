@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from . import dependencies as _deps
 from .beta_access import (
     AccessError, InviteMiddleware, audit_access, error_response, require_principal, validate_payload,
+    BYOK_CAPABILITIES, PROVIDER_KEY_HEADER, request_provider_key,
 )
 from . import pipeline as _pipeline
 from .semantic_matching import DECISION_SCOPE, METRICS_SCOPE
@@ -68,10 +69,11 @@ logger = logging.getLogger(__name__)
 
 
 def _make_semantic_judge():
-    """Build the server-owned judge; request metadata cannot disable it."""
-    from .semantic_matching import make_judge_from_env
+    """Use the authenticated request's credential, never a host key fallback."""
+    from .semantic_matching import SemanticJudge
 
-    return make_judge_from_env()
+    key = request_provider_key()
+    return SemanticJudge(key) if key else None
 
 
 def _run_pipeline(
@@ -126,7 +128,7 @@ class AuditRequest(BaseModel):
             "要件リストが欠落・空の場合に LLM で生成する (opt-in)。"
             "成功した要件草案は metadata_source='llm_generated'、"
             "未検証の代替メタデータは 'fallback' として degraded にする。"
-            "ANTHROPIC_API_KEY 環境変数が必要。"
+            "HTTPでは利用者の X-UGH-Anthropic-Key ヘッダーが必要。"
         ),
     )
     retry_of: Optional[int] = Field(
@@ -352,7 +354,8 @@ app.add_middleware(
     allow_origins=["https://chat.openai.com", "https://chatgpt.com"]
     + [v.strip() for v in os.environ.get("UGH_ALLOWED_ORIGINS", "").split(",") if v.strip()],
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "Mcp-Session-Id", "Mcp-Protocol-Version",
+                   "Last-Event-ID", PROVIDER_KEY_HEADER],
     expose_headers=["Mcp-Session-Id"],
 )
 
@@ -362,6 +365,12 @@ async def access_error_handler(request, exc):
 
 
 app.mount("/mcp", _mcp_http_app)
+
+
+@app.get("/api/capabilities", summary="Authenticated provider-credential contract")
+def capabilities() -> dict:
+    require_principal()
+    return dict(BYOK_CAPABILITIES)
 
 # ---------------------------------------------------------------------------
 # 共有インスタンス

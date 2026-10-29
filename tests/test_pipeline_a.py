@@ -171,7 +171,7 @@ class TestAPIOutput:
         db = AuditDB(db_path=tmp_path / "test.db")
         golden = GoldenStore(path=tmp_path / "golden.json")
         configure(db=db, golden=golden)
-        with TestClient(app) as c:
+        with TestClient(app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}) as c:
             yield c
         configure(db=None, golden=None)
 

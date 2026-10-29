@@ -67,12 +67,14 @@ def package_bytes(repository: Path) -> tuple[bytes, dict]:
 
     env_lines = entries[".env.example"].decode("utf-8").splitlines()
     assignments = [line for line in env_lines if line and not line.startswith("#")]
-    if assignments != ["UGH_MCP_ENDPOINT=https://audit.example.com/mcp/", "UGH_AUDIT_TOKEN="]:
-        raise ValueError("Client .env.example must contain only the empty-token example")
+    if assignments != ["UGH_MCP_ENDPOINT=https://audit.example.com/mcp/", "UGH_AUDIT_TOKEN=",
+                       "UGH_ANTHROPIC_API_KEY="]:
+        raise ValueError("Client .env.example must contain only empty credential examples")
     config = json.loads(entries["templates/mcp-config.json"])
     expected = {"mcpServers": {"ugh-instruction-audit": {
         "type": "http", "url": "https://audit.example.com/mcp/",
-        "headers": {"Authorization": "Bearer ${UGH_AUDIT_TOKEN}"},
+        "headers": {"Authorization": "Bearer ${UGH_AUDIT_TOKEN}",
+                    "X-UGH-Anthropic-Key": "${UGH_ANTHROPIC_API_KEY}"},
     }}}
     if config != expected:
         raise ValueError("MCP template must retain the nonworking endpoint and token placeholder")

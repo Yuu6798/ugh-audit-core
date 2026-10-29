@@ -5,6 +5,8 @@ MCP サーバーのテスト — audit_answer ツールの動作を検証（パ�
 from __future__ import annotations
 
 import asyncio
+import io
+import json
 
 import pytest
 
@@ -38,6 +40,37 @@ def _configure_mcp(tmp_db, tmp_golden):
 def _run(coro):
     """asyncio.run のヘルパー"""
     return asyncio.run(coro)
+
+
+def _proxy_remote(monkeypatch, payload=None, *, error=None):
+    """Complete BYOK preflight, then exercise the original audit response boundary."""
+    from ugh_audit import mcp_server as m
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-test-provider-key")
+    monkeypatch.setenv("UGH_REMOTE_TOKEN", "offline-test-invite-token")
+    calls = []
+
+    def remote_open(request, timeout, *, forward_provider_key=False):
+        calls.append((request.get_method(), request.full_url, forward_provider_key))
+        if request.full_url.endswith("/api/capabilities"):
+            frame = m.BYOK_CAPABILITIES
+        else:
+            if error is not None:
+                raise error
+            frame = payload
+        response = io.BytesIO(json.dumps(frame).encode("utf-8"))
+        response.status = 200
+        return response
+
+    monkeypatch.setattr(m, "_remote_open", remote_open)
+    return calls
+
+
+def _assert_audit_requested(calls):
+    assert calls == [
+        ("GET", "https://fake.invalid/api/capabilities", False),
+        ("POST", "https://fake.invalid/api/audit", True),
+    ]
 
 
 def test_tools_list_includes_audit_answer():
@@ -178,9 +211,6 @@ def test_audit_answer_schema_includes_advisory_fields():
 
 def test_proxy_audit_rejects_unchecked_legacy_accept(monkeypatch):
     """旧remoteの意味判定なしacceptをadvisory経由でも信用しない。"""
-    import json
-    import os
-
     from ugh_audit import mcp_server as m
 
     fake_response = {
@@ -204,28 +234,14 @@ def test_proxy_audit_rejects_unchecked_legacy_accept(monkeypatch):
         "mode_conditioned_grv": {"anchor_alignment": 0.5, "collapse_risk": 0.95},
     }
 
-    class _FakeResp:
-        status = 200
-        def __init__(self, body): self._body = body
-        def __enter__(self): return self
-        def __exit__(self, *a): pass
-        def read(self, size=-1): return self._body[:size] if size >= 0 else self._body
-
-    def _fake_urlopen(req, timeout=60):
-        return _FakeResp(json.dumps(fake_response).encode("utf-8"))
-
-    # patch the urllib used inside _proxy_audit
-    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
-    monkeypatch.setenv("UGH_REMOTE_API", "http://fake.invalid")
-    try:
-        result = m._proxy_audit(
-            os.environ["UGH_REMOTE_API"],
-            question="q", response="r",
-            reference=None, session_id=None,
-            question_meta=None, auto_generate_meta=False, retry_of=None,
-        )
-    finally:
-        monkeypatch.delenv("UGH_REMOTE_API", raising=False)
+    calls = _proxy_remote(monkeypatch, fake_response)
+    result = m._proxy_audit(
+        "https://fake.invalid",
+        question="q", response="r",
+        reference=None, session_id=None,
+        question_meta=None, auto_generate_meta=False, retry_of=None,
+    )
+    _assert_audit_requested(calls)
 
     assert result.verdict == "degraded"
     assert result.verdict_advisory == "degraded"
@@ -240,16 +256,14 @@ def test_proxy_audit_error_falls_back_to_degraded_advisory(monkeypatch):
     """proxy エラー時、advisory も degraded にフォールバックする"""
     from ugh_audit import mcp_server as m
 
-    def _raise(req, timeout=60):
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr("urllib.request.urlopen", _raise)
+    calls = _proxy_remote(monkeypatch, error=RuntimeError("boom"))
     result = m._proxy_audit(
-        "http://fake.invalid",
+        "https://fake.invalid",
         question="q", response="r",
         reference=None, session_id=None,
         question_meta=None, auto_generate_meta=False, retry_of=None,
     )
+    _assert_audit_requested(calls)
     assert result.verdict == "degraded"
     assert result.verdict_advisory == "degraded"
     assert result.advisory_flags == []
@@ -301,8 +315,6 @@ def test_audit_answer_hit_sources_schema_in_outputSchema():
 
 def test_proxy_audit_relays_hit_sources(monkeypatch):
     """旧hit_sourcesは診断として転送するが、意味確認なしではacceptしない。"""
-    import json
-
     from ugh_audit import mcp_server as m
 
     fake_response = {
@@ -333,23 +345,14 @@ def test_proxy_audit_relays_hit_sources(monkeypatch):
         },
     }
 
-    class _FakeResp:
-        status = 200
-        def __init__(self, body): self._body = body
-        def __enter__(self): return self
-        def __exit__(self, *a): pass
-        def read(self, size=-1): return self._body[:size] if size >= 0 else self._body
-
-    def _fake_urlopen(req, timeout=60):
-        return _FakeResp(json.dumps(fake_response).encode("utf-8"))
-
-    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    calls = _proxy_remote(monkeypatch, fake_response)
     result = m._proxy_audit(
-        "http://fake.invalid",
+        "https://fake.invalid",
         question="q", response="r",
         reference=None, session_id=None,
         question_meta=None, auto_generate_meta=False, retry_of=None,
     )
+    _assert_audit_requested(calls)
     assert result.hit_sources is not None
     assert result.hit_sources["source"] == "llm_semantic"
     assert result.hit_sources["total"] == 0

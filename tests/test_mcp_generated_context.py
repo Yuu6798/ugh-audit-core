@@ -38,7 +38,8 @@ def stack(tmp_path, monkeypatch, semantic_complete_judge):
     db = AuditDB(tmp_path / "audits.db")
     server.configure(db=db, golden=GoldenStore(tmp_path / "golden.json"))
     monkeypatch.delenv("UGH_REMOTE_API", raising=False)
-    monkeypatch.delenv("UGH_REMOTE_TOKEN", raising=False)
+    monkeypatch.setenv("UGH_REMOTE_TOKEN", "offline-test-invite-token")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-test-provider-key")
 
     def generate(question):
         state.calls.append(question)
@@ -70,8 +71,12 @@ def stack(tmp_path, monkeypatch, semantic_complete_judge):
     monkeypatch.setattr(mcp_server, "_make_semantic_judge", lambda: judge)
     monkeypatch.setattr(pipeline, "_run_legacy_diagnostics", omit_optional_diagnostics)
     try:
-        with TestClient(server.app, base_url="http://localhost") as client:
-            def remote_open(request, timeout):
+        with TestClient(server.app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}, base_url="http://localhost") as client:
+            def remote_open(request, timeout, **kwargs):
+                if request.full_url.endswith("/api/capabilities"):
+                    result = io.BytesIO(json.dumps(client.get("/api/capabilities").json()).encode())
+                    result.status = 200
+                    return result
                 payload = json.loads(request.data)
                 reply = client.post("/api/audit", json=payload)
                 assert reply.status_code == 200, reply.text
@@ -220,8 +225,9 @@ def test_generated_remote_result_cannot_enable_generation_without_caller_opt_in(
     }).json()
     assert generated["verdict"] == "accept"
 
-    def copied_result(*args, **kwargs):
-        result = io.BytesIO(json.dumps(generated).encode())
+    def copied_result(request, *args, **kwargs):
+        frame = mcp_server.BYOK_CAPABILITIES if request.full_url.endswith("/api/capabilities") else generated
+        result = io.BytesIO(json.dumps(frame).encode())
         result.status = 200
         return result
 
@@ -251,8 +257,9 @@ def test_explicit_caller_requirements_reject_copied_proof_for_other_generated_co
     }).json()
     generated.update(metadata_source="inline", mode="computed", requires_review=False)
 
-    def copied_result(*args, **kwargs):
-        result = io.BytesIO(json.dumps(generated).encode())
+    def copied_result(request, *args, **kwargs):
+        frame = mcp_server.BYOK_CAPABILITIES if request.full_url.endswith("/api/capabilities") else generated
+        result = io.BytesIO(json.dumps(frame).encode())
         result.status = 200
         return result
 

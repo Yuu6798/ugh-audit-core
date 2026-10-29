@@ -2,7 +2,8 @@
 Claude API による question_meta 動的生成
 
 自由質問から detect() が消費する question_meta を生成する。
-ANTHROPIC_API_KEY 環境変数が必要。未設定時は最小限の fallback を返す。
+公開HTTPでは利用者のリクエストキーだけを使用し、共有キャッシュを使わない。
+ローカル実験CLIは自身の ANTHROPIC_API_KEY とキャッシュを使用できる。
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import json
 import logging
 import os
 import re
+import sys
 from typing import List, Optional
 
 from .prompts.meta_generation_v1 import (
@@ -83,7 +85,7 @@ def _coerce_str_list(value: object) -> List[str]:
     return [p for p in value if isinstance(p, str) and len(p) > 0]
 
 
-def _validate_meta(meta: dict, question: str) -> dict:
+def _validate_meta(meta: dict, question: str, *, log_contents: bool = True) -> dict:
     """question_meta のスキーマバリデーションと正規化
 
     question は常に入力値を使用（LLM の言い換え/切り詰めを防止）。
@@ -93,7 +95,8 @@ def _validate_meta(meta: dict, question: str) -> dict:
     if not isinstance(trap_type, str):
         trap_type = ""
     if trap_type not in _VALID_TRAP_TYPES:
-        logger.warning("不明な trap_type '%s' を空文字に修正しました", trap_type)
+        if log_contents:
+            logger.warning("不明な trap_type '%s' を空文字に修正しました", trap_type)
         trap_type = ""
 
     # disqualifying_shortcuts のメタ言語的記述をフィルタ
@@ -103,7 +106,7 @@ def _validate_meta(meta: dict, question: str) -> dict:
         s for s in raw_shortcuts
         if not _META_DESCRIPTION_RE.search(s)
     ]
-    if len(filtered_shortcuts) < len(raw_shortcuts):
+    if log_contents and len(filtered_shortcuts) < len(raw_shortcuts):
         dropped = set(raw_shortcuts) - set(filtered_shortcuts)
         logger.warning("メタ言語的ショートカットを除外: %s", dropped)
 
@@ -145,6 +148,36 @@ def _fallback_meta(question: str) -> dict:
     }
 
 
+def _generate_http_meta(question: str, model: str, api_key: str | None) -> dict:
+    """Use one bounded request with this user's credential and no shared state."""
+    if not api_key:
+        return _fallback_meta(question)
+    from ugh_audit._semantic_http import AnthropicHTTP
+
+    try:
+        with AnthropicHTTP(api_key, timeout=10.0) as client:
+            message = client.messages.create(
+                model=model, max_tokens=1024, system=META_GEN_SYSTEM,
+                messages=[{"role": "user", "content": META_GEN_USER.format(question=question)}],
+            )
+        blocks = getattr(message, "content", None)
+        if (getattr(message, "model", None) != model
+                or getattr(message, "stop_reason", None) != "end_turn"
+                or not isinstance(blocks, list) or not blocks
+                or any(getattr(block, "type", None) != "text"
+                       or not isinstance(getattr(block, "text", None), str) for block in blocks)):
+            return _fallback_meta(question)
+        parsed = _parse_json_response("".join(block.text for block in blocks))
+        if not isinstance(parsed, dict):
+            return _fallback_meta(question)
+        return _validate_meta(parsed, question, log_contents=False)
+    except Exception:
+        # Provider exceptions may contain credentials or private input. Neither
+        # their bodies nor generated content belong in a shared service's logs.
+        logger.warning("HTTP metadata generation failed; returning unverified fallback")
+        return _fallback_meta(question)
+
+
 def generate_meta(
     question: str,
     model: str = DEFAULT_MODEL,
@@ -155,12 +188,18 @@ def generate_meta(
     Args:
         question: 質問テキスト
         model: 使用する Claude モデル
-        use_cache: キャッシュを使用するか
+        use_cache: ローカル実験でキャッシュを使用するか（公開HTTPでは常に無効）
 
     Returns:
         detect() が消費する question_meta dict
     """
-    # キャッシュチェック
+    # HTTP always loads beta_access before invoking the pipeline. Inspect the
+    # already loaded boundary so standalone experiments need no server extras.
+    access = sys.modules.get("ugh_audit.beta_access")
+    if access is not None and access.is_http_request():
+        return _generate_http_meta(question, model, access.request_provider_key())
+
+    # Trusted local experiments retain their explicit environment/cache behavior.
     if use_cache:
         from .meta_cache import get_cached_meta, save_cached_meta
         cached = get_cached_meta(question, model)

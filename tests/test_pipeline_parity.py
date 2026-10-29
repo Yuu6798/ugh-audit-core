@@ -39,7 +39,7 @@ def shared_infra(tmp_path):
 
 @pytest.fixture
 def rest_client(shared_infra):
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}) as c:
         yield c
 
 

@@ -60,7 +60,7 @@ def infrastructure(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "_detect", detection)
     monkeypatch.setattr(mcp_server, "_HAS_DETECTOR", True)
     monkeypatch.setattr(mcp_server, "_detect", detection)
-    with TestClient(server.app) as client:
+    with TestClient(server.app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}) as client:
         yield client, db
     server.configure(db=None, golden=None)
 
@@ -164,15 +164,21 @@ def remote_frame(statuses=("fulfilled",) * 3):
 
 
 def fake_remote(monkeypatch, result):
+    from ugh_audit import mcp_server
+    monkeypatch.setenv("UGH_REMOTE_TOKEN", "offline-test-invite-token")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-test-provider-key")
     class Response:
         status = 200
+        def __init__(self, frame):
+            self.frame = frame
         def __enter__(self):
             return self
         def __exit__(self, *args):
             pass
         def read(self, size=-1):
-            return json.dumps(result, ensure_ascii=False).encode()
-    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: Response())
+            return json.dumps(self.frame, ensure_ascii=False).encode()
+    monkeypatch.setattr(mcp_server, "_remote_open", lambda request, *args, **kwargs: Response(
+        mcp_server.BYOK_CAPABILITIES if request.full_url.endswith("/api/capabilities") else result))
 
 
 @pytest.mark.parametrize("failure", [
@@ -303,9 +309,16 @@ def test_session_with_missing_and_unknown_is_still_unverified(infrastructure):
 
 
 def test_remote_transport_errors_do_not_echo_exception_contents(monkeypatch):
-    def failure(*args, **kwargs):
+    import io
+    monkeypatch.setenv("UGH_REMOTE_TOKEN", "offline-test-invite-token")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-test-provider-key")
+    def failure(request, *args, **kwargs):
+        if request.full_url.endswith("/api/capabilities"):
+            reply = io.BytesIO(json.dumps(mcp_server.BYOK_CAPABILITIES).encode())
+            reply.status = 200
+            return reply
         raise RuntimeError("private request body must not be logged")
-    monkeypatch.setattr("urllib.request.urlopen", failure)
+    monkeypatch.setattr(mcp_server, "_remote_open", failure)
     result = mcp_server._proxy_audit("https://example.invalid", question="Q", response=ANSWER,
                                     question_meta=META)
     assert result.verdict == "degraded"

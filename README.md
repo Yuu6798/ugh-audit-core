@@ -47,7 +47,8 @@ REST、ローカル MCP、Python の `audit.audit()` と CLI は共有の
 数値式と重みは [`docs/formulas.md`](docs/formulas.md) に保存している。
 これらを加えると単純な LLM 監査より有用になるという根拠は、この契約からは主張しない。
 
-意味照合にはサーバー環境の `ANTHROPIC_API_KEY` が必要。認証情報不足、API障害、時間切れ、
+公開監査は利用者自身のAnthropicキーを使うBYOK方式。ローカルCLIは `ANTHROPIC_API_KEY` を使う。
+設定は [招待制ベータ手順](docs/invite_beta.md) を参照。認証情報不足、API障害、時間切れ、
 不正JSON、架空引用、モデルの不一致を充足扱いにしない。1回答16要件、回答32,000文字、
 1要件2,000文字を上限とし、一部だけを捨てて合格にしない。SBert は任意の診断用依存である。
 
@@ -117,7 +118,8 @@ python audit.py --question-id q001 --response "AIは..." \
 ### REST API
 
 招待制が既定。先に [招待・上限・配備の手順](docs/invite_beta.md) でキーと台帳を設定する。
-以下は発行済みキーを環境変数 `UGH_TOKEN_FILE` で指定した例。
+以下は招待キーの秘密ファイルを `UGH_TOKEN_FILE`、利用者自身のモデルキーをクライアントの
+秘密環境変数 `UGH_ANTHROPIC_API_KEY` で指定した例。公開接続はHTTPSを使う。
 
 ```bash
 uvicorn ugh_audit.server:app --host 127.0.0.1 --port 8000
@@ -128,26 +130,19 @@ import httpx
 import os
 from pathlib import Path
 
-headers = {"Authorization": "Bearer " + Path(os.environ["UGH_TOKEN_FILE"]).read_text().strip()}
+headers = {
+    "Authorization": "Bearer " + Path(os.environ["UGH_TOKEN_FILE"]).read_text().strip(),
+    "X-UGH-Anthropic-Key": os.environ["UGH_ANTHROPIC_API_KEY"],
+}
 
 # 人が定義した指示要件
 resp = httpx.post("http://localhost:8000/api/audit", headers=headers, json={
     "question": "書類送付の案内を作成してください。",
     "response": "申請書は金曜日までに担当者へ送付してください。",
-    "question_meta": {
-        "core_propositions": ["申請書は金曜日までに担当者へ送付する"]
-    }
-})
-
-# AI 草案要件を使う場合は、要件自体のレビューが必要
-resp = httpx.post("http://localhost:8000/api/audit", headers=headers, json={
-    "question": "書類送付の案内を作成してください。",
-    "response": "申請書を担当者へ送付してください。",
-    "auto_generate_meta": True,
+    "question_meta": {"core_propositions": ["申請書は金曜日までに担当者へ送付する"]},
 })
 ```
-
-REST / MCP API 仕様の全詳細: [`docs/server_api.md`](docs/server_api.md)。
+AI草案要件の生成・レビューとAPI仕様: [`docs/server_api.md`](docs/server_api.md)。
 
 ---
 
@@ -203,7 +198,8 @@ from ugh_audit import (
 
 ## MCP サーバー
 
-Bearerヘッダーを設定できるMCPクライアントから利用する。`stateless_http` モードで動作。
+招待Bearerと `X-UGH-Anthropic-Key` を秘密ヘッダーとして設定できるMCPクライアントで利用する。
+モデル料金は利用者のAnthropicアカウントに発生する。`stateless_http` モードで動作。
 OAuthは未実装。対象クライアントの接続確認は [招待制ベータ手順](docs/invite_beta.md) に従う。
 
 ```bash
