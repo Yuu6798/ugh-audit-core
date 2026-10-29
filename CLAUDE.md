@@ -181,6 +181,7 @@ https://ugh-audit-core-production.up.railway.app
 
 | コンポーネント | ドキュメント |
 |---|---|
+| 外部利用者の導入・最初の監査 | [`docs/getting-started.md`](docs/getting-started.md) |
 | 検出層 (演算子フレーム + Relaxed Tier1) | [`docs/detector_design.md`](docs/detector_design.md) |
 | Cascade Matcher (SBert Tier 2/3 + 永続キャッシュ) | [`docs/cascade_design.md`](docs/cascade_design.md) |
 | GoldenStore リファレンス検索 (bigram + SBert rerank) | [`docs/golden_store.md`](docs/golden_store.md) |

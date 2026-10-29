@@ -1,261 +1,235 @@
-# ugh-audit-core
+# UGH Audit Core
 
-**UGH Audit Core** は、明示された要件が回答文に伝えられているかを要件ごとに照合し、
-根拠と判定を記録するツール。現在の契約は **schema 4.0.0 / `instruction_coverage_v2`**。
-本書はリポジトリ内の仕様を示す。公開環境への反映・疎通・DB移行の成功は別途確認を要する。
+**日本語の案内文・回答文に、伝えるべき指示が書かれているかを点検するツールです。**
+人が確認した要件と文章を照合し、要件ごとの根拠、欠落、矛盾、判定保留を返します。
 
-## 判定する対象
+[はじめて使う](docs/getting-started.md) · [API仕様](docs/server_api.md) ·
+[検証と限界](docs/instruction_coverage_v4_validation.md) · [開発に参加する](CONTRIBUTING.md)
 
-人が用意した `question_meta.core_propositions` を基準に、回答が伝えるべき業務の
-指示・制約の記載を点検する。同義の言い換えを認め、主体・対象・数量・日時・条件・
-義務・禁止の極性を照合する。要件と回答の正しさ、現実の業務の実行、回答全体の品質を
-認定するものではない。禁止指示の記載が必要な課題で、禁止行為が書かれていないだけでは
-充足にならない。完成した成果物の規則遵守を判定する別の課題へそのまま一般化しない。
+> **招待制ベータ / Python 3.10+ / MIT**
+> HTTP・MCPで監査するには、利用者ごとの招待キーと本人のAnthropic APIキーが必要です。
+> モデル料金は利用者負担です。一般向けの自動登録や、モデルAPIの無料利用枠はありません。
 
-各要件を `fulfilled` / `missing` / `unknown` に分類する。`missing` は単純欠落
-(`absence`) または明示矛盾 (`contradiction`)。単に書かれていない情報は欠落であり、
-曖昧で読みを確定できない場合やシステム障害は保留となる。
+## どんな点検ができるか
 
-| 照合結果 | 最終 `verdict` | 上位 `C` |
-|---|---|---|
-| 1件以上の要件がすべて fulfilled | `accept` | 1.0 |
-| unknown がなく、missing がある | `rewrite` | fulfilled / 全要件数 |
-| unknown がある、要件がない・不正、照合不能 | `degraded` | null |
+たとえば、次の案内文を送る前に、指示の書き落としを点検します。
 
-上位 `S`・`delta_e`・`quality_score` は常に null。`C` は全要件を判定できた場合の
-記述充足率であり、回答品質や事実の正確さのスコアではない。保留を分母から除かない。
-`decision_scope="instruction_coverage_v2"`、`metrics_scope="semantic_coverage_only"`。
-この契約では `regenerate` を最終判定として生成しない。
+**文章：**「申請書は金曜日までに送付してください。」
 
-`requires_review` は欠落・保留がある場合に加え、AI が生成した要件メタデータにも true。
-AI 草案を使った `accept` も、基準となる要件自体のレビューが必要である。
-`is_reliable` は照合結果が確定したことを示し、真実性や無条件の承認を表さない。
+| 伝えるべき要件 | 点検で区別したい内容 |
+|---|---|
+| 申請書を金曜日までに送付するよう伝える | 期限の指示が書かれている |
+| 申請書の送付先が担当者であることを伝える | 送付先が書かれていない |
 
-## 実行経路と診断値
+これは使い方の説明例で、実モデルの実行記録ではありません。
+実行時はサービスが返す根拠と判定を確認します。
 
-REST、ローカル MCP、Python の `audit.audit()` と CLI は共有の
-`ugh_audit.pipeline.run_audit()` を使う。
-
-1. 明示要件を準備する。`auto_generate_meta=true` は不足要件を AI 草案として補う opt-in。
-2. 必須の意味照合を実行する。要件準備後に 25 秒の予算を開始し、1要件は残り時間以下・
-   最大10秒。任意の埋め込み・旧検出器より先に行う。
-3. 旧 `detect → calculate → decide`、SBert、grv 等は任意の診断として計算する。
-4. 検証済みの要件照合だけから上位の充足率と最終判定を返す。
-
-旧数値・旧 verdict は `legacy_metrics` に残す。構造ゲートは `binding=false`。
-旧値や advisory は最終判定を上下させず、診断の失敗も確認済みの要件充足を取り消さない。
-数値式と重みは [`docs/formulas.md`](docs/formulas.md) に保存している。
-これらを加えると単純な LLM 監査より有用になるという根拠は、この契約からは主張しない。
-
-公開監査は利用者自身のAnthropicキーを使うBYOK方式。ローカルCLIは `ANTHROPIC_API_KEY` を使う。
-設定は [招待制ベータ手順](docs/invite_beta.md) を参照。認証情報不足、API障害、時間切れ、
-不正JSON、架空引用、モデルの不一致を充足扱いにしない。1回答16要件、回答32,000文字、
-1要件2,000文字を上限とし、一部だけを捨てて合格にしない。SBert は任意の診断用依存である。
-
-Python の修復順序も意味照合に基づく。`rewrite` の確認済み欠落ごとに `ADD_PROPOSITION`、
-最後に `STOP_REWRITE` を返す。旧 f1〜f4・数値から修復を追加しない。保留時に充足を補完した
-ことにしたり、実際の修復効果を保証したりする機能ではない。
-
-## schema 4.0.0 への移行
-
-schema 3 の「旧数値判定を意味ゲートで抑止する」契約からの破壊的変更である。
-上位の `S`・`delta_e`・`quality_score` の数値、旧 `C`、旧 structural gate を承認条件に
-使うクライアントは更新が必要。現行の `C` と要件別根拠を読む。
-履歴・remote proxy も同じ契約で再検証し、旧 accept をそのまま再公開しない。
-元の保存値は `legacy_metrics` に残し、現在の照合根拠を確認できない履歴は degraded とする。
-詳細: [`docs/semantic_matching_v2.md`](docs/semantic_matching_v2.md)、
-[`docs/server_api.md`](docs/server_api.md)。
-
-## 旧数値の検証記録
-
-以下は **2026-04 の旧 pipeline** に対する保存記録であり、v4 の品質保証、
-単純な LLM 監査への上乗せ価値、独立評価の根拠ではない。
-
-| 旧指標 (HA48, n=48) | Spearman ρ | 95% CI (Fisher z) |
-|---|---|---|
-| ΔE vs O (system C) | -0.4817 | [-0.6736, -0.2289] |
-| L_sem vs O (Phase 5) | -0.5477 | [-0.7198, -0.3121] |
-| ΔE vs O (human C) | +0.8616 | [+0.7647, +0.9204] |
-
-小標本・単一評価者の制約がある。修正前 HA48 CSV は完全保存し、既知データの現行
-legacy 診断は 96/146 hits。数値と版の対応: [`docs/validation.md`](docs/validation.md)、
-[`docs/ha48_snapshot_versions.md`](docs/ha48_snapshot_versions.md)。
-
----
-
-## インストール
-
-Python 3.10+ を前提とする。仮想環境を推奨:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate           # Linux / macOS
-# .venv\Scripts\activate            # Windows PowerShell
-
-pip install -e ".[dev]"        # 基本（テスト + サーバー依存）
-pip install -e ".[server]"     # サーバーデプロイ (REST API + MCP)
-pip install -e ".[analysis]"   # 分析スクリプト (scipy + matplotlib)
-pip install -e ".[experiment]" # 実験基盤 (Claude/GPT オーケストレーション)
+```mermaid
+flowchart LR
+    A["人が確認した要件"] --> C["要件ごとの意味照合"]
+    B["点検したい文章"] --> C
+    C --> D["充足・欠落・保留と根拠"]
+    D --> E["人による確認・修正"]
 ```
 
-PEP 668 環境では仮想環境での install 必須。詳細は
-[`docs/troubleshooting.md`](docs/troubleshooting.md) 参照。
+事実の正しさ、文章全体の品質、現実の業務が実行されたかは判定しません。
+「氏名を公開しないよう伝える」という要件は、その禁止指示を文章に書く必要があります。
+氏名が文章に出てこないだけでは、この要件を満たしたことにはなりません。
 
----
+## 目的から選ぶ
+
+| 目的 | 最初に読むもの | 必要なもの |
+|---|---|---|
+| 招待を受けてMCPで監査する | [利用開始ガイド](docs/getting-started.md) | 接続先・自分の招待キー・自分のAnthropicキー・秘密ヘッダー対応クライアント |
+| 自分のサーバーで運営する | [招待制ベータの運用](docs/invite_beta.md) → [配備とバックアップ](docs/invite-beta-deployment.md) | Python環境、HTTPS、永続ストレージ、利用者への招待発行 |
+| REST APIを組み込む | [API仕様](docs/server_api.md) | 利用者ごとの認証・BYOK設定と、判定保留を扱うクライアント |
+| コードを読む・改善する | [開発参加ガイド](CONTRIBUTING.md) | Git、Python 3.10+、開発用仮想環境 |
+| 評価結果や仕組みを調べる | [現行契約](docs/semantic_matching_v2.md) → [検証記録](docs/instruction_coverage_v4_validation.md) | 過去の診断値と現行の判定範囲の区別 |
 
 ## クイックスタート
 
-### CLI（Audit Engine）
+1. [利用開始ガイド](docs/getting-started.md)で接続の前提を確認します。招待がない場合は、利用するサービスの運営者へ確認してください。
+2. 招待キーと本人のAnthropicキーを、クライアントの秘密接続設定に登録します。
+3. 文章と、人が確認した2〜5件の短い要件を用意し、MCPの `audit_answer` へ渡します。
+4. 要件ごとの根拠・欠落・保留を読み、人が修正の要否を決めます。
 
-`core_propositions` は回答が伝えるべき指示として人が定義する。
-既存データ中の哲学的・一般的な問いは、現在の記述監査の性能根拠にはしない。
+[コピーできる合成データのリクエスト例と結果の読み方](docs/getting-started.md)を用意しています。
+要件の自動生成は任意です。最初の利用では `auto_generate_meta=false` とし、明示要件を使います。
 
-```bash
-python audit.py --question-id q001 --response "AIは..." \
-    --data data/question_sets/ugh-audit-100q-v3-1.jsonl --pretty
+## 認証・料金・データ
+
+| 設定 | 用途 |
+|---|---|
+| `Authorization: Bearer <招待キー>` | 利用者の識別、履歴の分離、サービス利用上限 |
+| `X-UGH-Anthropic-Key` | 利用者自身のAnthropic APIキー（BYOK） |
+
+HTTP監査は利用者のモデルキーがなければ拒否され、サーバー共通キーへ切り替わりません。
+キーはチャット、ツール引数、監査本文、Gitへ入れず、秘密ヘッダーとして設定します。
+MCPは `/mcp/`、REST監査は `/api/audit`。外部接続にはHTTPSを使います。
+
+文章・要件とモデルキーは信頼する監査運営者を経由してAnthropicへ送られます。
+確定した監査の本文・根拠は運営者のDBへ保存されるため、利用前に保存・削除方針を確認してください。
+モデルキーはアプリの監査履歴へ保存しません。クライアントやプロキシの秘密ヘッダーも保護してください。
+回数制限は金額の上限ではありません。モデル提供者側の支出設定も確認してください。
+詳細は [認証・履歴・利用上限](docs/invite_beta.md) にまとめています。
+
+## 判定する対象
+
+現在の契約は **schema 4.0.0 / `instruction_coverage_v2`** です。
+要件の主体・対象・数量・日時・条件・義務・禁止を照合し、同義の言い換えも扱います。
+
+| 要件ごとの結果 | 最終 `verdict` | 充足率 `C` |
+|---|---|---|
+| 1件以上あり、すべて `fulfilled` | `accept` | 1.0 |
+| `unknown` はなく、`missing` がある | `rewrite` | fulfilled / 全要件数 |
+| `unknown` がある、要件がない・不正、照合できない | `degraded` | null（不明） |
+
+`missing` は欠落または明示矛盾、`unknown` は曖昧さやシステム障害などの判定保留です。
+保留を0点と扱ったり、分母から除外して合格にしたりしません。
+`requires_review` は欠落・保留・AI生成要件で true。AI草案の要件は `accept` でもレビューが必要です。
+`is_reliable` は照合の確定を示し、事実の正しさや自動承認を保証しません。
+上位 `S`・`delta_e`・`quality_score` は null、`metrics_scope="semantic_coverage_only"`。
+フィールドの詳細は [現行契約](docs/semantic_matching_v2.md) を参照してください。
+
+## 検証範囲とベータの状態
+
+短い日本語の文章と、2〜5件の明示要件を使うパイロットが対象です。
+schema 4の保存済み評価は合成20場面・80回答・280要件で、モデルによるラベル作成・レビューを含みます。
+人による独立評価や、長文・他言語・実業務全般の精度保証を示すものではありません。
+入力上限（16要件・回答32,000文字・1要件2,000文字）は、精度を検証した範囲とは異なります。
+
+認証・BYOK・履歴分離・利用上限の実装と回帰テストはありますが、CI成功だけで本番の動作は保証できません。
+Agensiでの当該スキル取得から実モデル監査までの確認は未完了で、掲載判断は保留です。
+Agensiはスキルを配信し、監査サーバーをホスティングしません。
+[掲載準備資料](marketplace/agensi/listing-draft.md)と[検証記録・制約](docs/instruction_coverage_v4_validation.md)を確認してください。
+
+## インストール
+
+接続済みMCPを利用する人は、リポジトリのインストールは不要です。
+コードを読む場合は次のコマンドで取得できます。これだけでは監査もモデルAPI呼び出しも実行しません。
+
+```console
+git clone https://github.com/Yuu6798/ugh-audit-core.git
+cd ugh-audit-core
+python -m venv .venv
 ```
 
-### REST API
+仮想環境の有効化、依存の選択、ローカルテストは [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+サーバー運営では `.[server]` と [招待台帳・永続DBの設定](docs/invite_beta.md) が必要です。
+信頼されたローカルCLI・直接Python呼出は自分の `ANTHROPIC_API_KEY` を利用できますが、
+公開HTTPのBYOK設定とは別です。インストールしただけでAPI認証や招待は設定されません。
 
-招待制が既定。先に [招待・上限・配備の手順](docs/invite_beta.md) でキーと台帳を設定する。
-以下は招待キーの秘密ファイルを `UGH_TOKEN_FILE`、利用者自身のモデルキーをクライアントの
-秘密環境変数 `UGH_ANTHROPIC_API_KEY` で指定した例。公開接続はHTTPSを使う。
+## 実行経路と診断値
 
-```bash
-uvicorn ugh_audit.server:app --host 127.0.0.1 --port 8000
-```
+REST、ローカルMCP、Python `audit.audit()`、CLIは共有の `ugh_audit.pipeline.run_audit()` を使います。
+必須の要件別意味照合を先に実行し、その結果から最終判定を決めます。
+SBert・grv・旧検出器などは任意の診断で、最終判定を変更しません。
+旧数値や旧判定は `legacy_metrics` に保持します。
+内部実装と数値式は [現行契約](docs/semantic_matching_v2.md) と [旧診断の計算式](docs/formulas.md) を参照してください。
 
-```python
-import httpx
-import os
-from pathlib import Path
+## schema 4.0.0 への移行
 
-headers = {
-    "Authorization": "Bearer " + Path(os.environ["UGH_TOKEN_FILE"]).read_text().strip(),
-    "X-UGH-Anthropic-Key": os.environ["UGH_ANTHROPIC_API_KEY"],
-}
+schema 3からの破壊的変更です。旧 `C`、上位 `S`・`delta_e`・`quality_score`、構造ゲートを
+承認条件に使うクライアントは、要件別の根拠と現行 `C` を読むよう更新してください。
+履歴も現在の根拠を再検証し、確認できない旧判定は `degraded` とします。
+[移行契約](docs/semantic_matching_v2.md)と[API仕様](docs/server_api.md)に詳細があります。
 
-# 人が定義した指示要件
-resp = httpx.post("http://localhost:8000/api/audit", headers=headers, json={
-    "question": "書類送付の案内を作成してください。",
-    "response": "申請書は金曜日までに担当者へ送付してください。",
-    "question_meta": {"core_propositions": ["申請書は金曜日までに担当者へ送付する"]},
-})
-```
-AI草案要件の生成・レビューとAPI仕様: [`docs/server_api.md`](docs/server_api.md)。
+## 旧数値の検証記録
 
----
+2026年4月のHA48などの記録は、旧診断を対象とする保存資料です。
+現行schema 4の精度や、単純なLLM監査への追加効果を保証するものではありません。
+[旧評価と限界](docs/validation.md)、[版ごとの数値](docs/ha48_snapshot_versions.md)を参照してください。
 
 ## ディレクトリ構成
 
+```text
+ugh_audit/           REST・MCP、共有パイプライン、認証、保存、レポート
+audit.py             Python API・CLI
+detector.py          旧検出層
+ugh_calculator.py    旧数値の計算
+decider.py           旧判定層
+cascade_matcher.py   SBertなどの回収補助
+grv_calculator.py    grv診断
+mode_signal.py       response_mode_signal
+mode_grv.py          モード条件付きgrv診断
+semantic_loss.py     意味損失の診断
+batch_audit_102.py   既存データの一括監査
+registry/ opcodes/   辞書・修復操作の定義
+tests/              回帰・認証・利用者分離のテスト
+docs/               利用手順・契約・設計・評価
+examples/           開発用サンプル
+analysis/ data/     保存された評価資料・分析
+experiments/        研究用のLLMオーケストレーション
+marketplace/agensi/  無料スキルの掲載準備・設定テンプレート
 ```
-# Audit Engine（要件照合と任意の旧診断）
-audit.py              # 共有の要件照合 + 意味上の欠落に基づく修復順序
-detector.py           # 検出層 — テキスト → Evidence
-ugh_calculator.py     # 電卓層 — Evidence → State (S, C, ΔE, quality_score)
-decider.py            # 判定層 — State + Evidence → Policy
-cascade_matcher.py    # 回収補助 — SBert Tier 2/3 (optional)
-grv_calculator.py     # 因果構造損失 grv (drift/dispersion/collapse)
-mode_signal.py        # 応答モード適合度信号 response_mode_signal
-mode_grv.py           # mode_conditioned_grv v2 (Phase 7/8)
-semantic_loss.py      # 意味損失関数 L_sem (診断用)
-batch_audit_102.py    # 102問一括監査
-registry/             # YAML辞書（予約語・演算子・前提フレーム）
-opcodes/              # 修復opcode定義
-
-# UGH Audit Layer（REST/MCP サーバー + 永続化）
-ugh_audit/{server,mcp_server}.py         # REST API + MCP
-ugh_audit/{pipeline,semantic_matching}.py # schema 4 の共有要件照合
-ugh_audit/{collector,storage,reference,report,engine}/
-ugh_audit/{metadata_generator,metadata_policy,soft_rescue}.py
-
-# 実験基盤（LLM オーケストレーション）
-experiments/{meta_generator,meta_cache,response_source,orchestrator,validate_against_102}.py
-
-examples/ tests/ docs/ analysis/
-```
-
----
 
 ## Public API
 
-```python
-from ugh_audit import (
-    AuditDB,
-    GoldenStore, GoldenEntry,
-    generate_text_report, generate_csv,
-)
-```
-
-プログラムから監査を行う場合は REST `POST /api/audit` または MCP ツール
-`audit_answer` を利用する (詳細は [`docs/server_api.md`](docs/server_api.md))。
-
-> **Deprecated (v0.4, removal v0.5)**: `AuditCollector` / `SessionCollector` は
-> `question_meta` を受け取らないため常に `verdict="degraded"` を返す欠陥 API。
-> import すると `DeprecationWarning` が発生する。v0.5 で削除予定。
-
----
+監査はREST `POST /api/audit`、MCP `audit_answer`、Python `audit.audit()` を使います。
+保存・レポート用には `AuditDB`、`GoldenStore`、`GoldenEntry`、
+`generate_text_report`、`generate_csv` を `ugh_audit` からimportできます。
+`AuditCollector` / `SessionCollector` は要件を受け取れず常に `degraded` となる非推奨APIです。
+監査の新規組み込みには使用しないでください。
 
 ## MCP サーバー
 
-招待Bearerと `X-UGH-Anthropic-Key` を秘密ヘッダーとして設定できるMCPクライアントで利用する。
-モデル料金は利用者のAnthropicアカウントに発生する。`stateless_http` モードで動作。
-OAuthは未実装。対象クライアントの接続確認は [招待制ベータ手順](docs/invite_beta.md) に従う。
-
-```bash
-pip install -e ".[server]"
-python -m ugh_audit.mcp_server                 # 認証付き統合アプリ (port 8000)
-uvicorn ugh_audit.server:app --port 8000       # REST + MCP 統合
-# → MCP:  http://localhost:8000/mcp/
-# → REST: http://localhost:8000/api/audit, /api/history
-```
-
-API 仕様 (tool schema / エンドポイント / 環境変数) 全詳細:
-[`docs/server_api.md`](docs/server_api.md)。
-トラブルシューティング: [`docs/troubleshooting.md`](docs/troubleshooting.md)。
-
----
+Streamable HTTPで動作し、招待Bearerと `X-UGH-Anthropic-Key` の秘密ヘッダー設定が必要です。
+監査サーバーのOAuthは未実装です。AgensiのOAuth認証だけではUGH側へ接続できません。
+Swagger・OpenAPI・MCPの発見も招待認証が必要で、匿名の確認用は `/health` のみです。
+[運営手順](docs/invite_beta.md)、[API仕様](docs/server_api.md)、[トラブルシューティング](docs/troubleshooting.md)を参照してください。
 
 ## 設計ドキュメント
 
-| コンポーネント | ドキュメント |
-|---|---|
-| 検出層 (演算子フレーム + Relaxed Tier1) | [`docs/detector_design.md`](docs/detector_design.md) |
-| Cascade Matcher (SBert Tier 2/3) | [`docs/cascade_design.md`](docs/cascade_design.md) |
-| GoldenStore リファレンス検索 | [`docs/golden_store.md`](docs/golden_store.md) |
-| 現行の要件照合契約 (schema 4) | [`docs/semantic_matching_v2.md`](docs/semantic_matching_v2.md) |
-| schema 4 の検証・移行・保存証拠 | [`docs/instruction_coverage_v4_validation.md`](docs/instruction_coverage_v4_validation.md) |
-| 旧診断の計算式 (PoR / ΔE / verdict) | [`docs/formulas.md`](docs/formulas.md) |
-| 意味損失関数 L_sem | [`docs/semantic_loss.md`](docs/semantic_loss.md) |
-| grv 因果構造損失 | [`docs/grv_design.md`](docs/grv_design.md) |
-| LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
-| mode_affordance / response_mode_signal | [`docs/mode_affordance.md`](docs/mode_affordance.md), [`addendum`](docs/mode_affordance_v1_addendum.md) |
-| メタデータパイプライン | [`docs/metadata_pipeline.md`](docs/metadata_pipeline.md) |
-| 招待制ベータ（認証・履歴分離・上限） | [`docs/invite_beta.md`](docs/invite_beta.md) |
-| 永続ボリューム・バックアップ付き配備 | [`docs/invite-beta-deployment.md`](docs/invite-beta-deployment.md) |
-| Agensi無料掲載パッケージ | [`marketplace/agensi`](marketplace/agensi) |
-| REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
-| 検証結果 (HA48 / HA20 + CI + Limitations) | [`docs/validation.md`](docs/validation.md) |
-| Self-Audit 実験 | [`docs/self_audit_experiment.md`](docs/self_audit_experiment.md) |
-| Phase 8 verdict_advisory 統合 | [`docs/phase_e_verdict_integration.md`](docs/phase_e_verdict_integration.md) |
-| HA-accept40 アノテーションプロトコル | [`docs/annotation_protocol.md`](docs/annotation_protocol.md) |
-| 閾値一覧と導出根拠の索引 | [`docs/thresholds.md`](docs/thresholds.md) |
-| フェーズロードマップ + サブシステム紹介 | [`docs/roadmap.md`](docs/roadmap.md) |
-| トラブルシューティング | [`docs/troubleshooting.md`](docs/troubleshooting.md) |
-| SVP-RPE 統合実装プラン（関連プロジェクト） | [`docs/svp_rpe_implementation_plan.md`](docs/svp_rpe_implementation_plan.md) |
-| 修復 opcode 評価プロトコル (plan, scope 外) | [`docs/opcode_evaluation_plan.md`](docs/opcode_evaluation_plan.md) |
+### 利用・運営
 
----
+| 読みたいこと | ドキュメント |
+|---|---|
+| 最初の監査・結果の読み方 | [利用開始ガイド](docs/getting-started.md) |
+| 招待・BYOK・履歴分離・利用上限 | [招待制ベータ](docs/invite_beta.md) |
+| 永続ボリューム・バックアップ付き配備 | [配備手順](docs/invite-beta-deployment.md) |
+| REST・MCPの入力と出力 | [API仕様](docs/server_api.md) |
+| 接続・インストールの問題 | [トラブルシューティング](docs/troubleshooting.md) |
+
+### 判定契約・検証
+
+| 読みたいこと | ドキュメント |
+|---|---|
+| schema 4の判定契約 | [要件別意味照合](docs/semantic_matching_v2.md) |
+| 現行の検証・移行・保存証拠 | [schema 4の検証](docs/instruction_coverage_v4_validation.md) |
+| AI生成要件の扱い | [メタデータパイプライン](docs/metadata_pipeline.md) |
+| 旧HA48・HA20の結果と限界 | [旧評価記録](docs/validation.md) |
+| 旧HA48の版と数値の対応 | [スナップショット履歴](docs/ha48_snapshot_versions.md) |
+| 人手評価の手順 | [アノテーションプロトコル](docs/annotation_protocol.md) |
+
+### 内部設計・研究資料
+
+以下には旧診断や研究計画も含まれます。現在の公開判定の契約は上記のschema 4を参照してください。
+
+| 読みたいこと | ドキュメント |
+|---|---|
+| 検出・回収・リファレンス検索 | [検出層](docs/detector_design.md)、[Cascade](docs/cascade_design.md)、[GoldenStore](docs/golden_store.md) |
+| 旧数値式・閾値 | [計算式](docs/formulas.md)、[閾値索引](docs/thresholds.md) |
+| 旧意味損失・grv | [L_sem](docs/semantic_loss.md)、[grv](docs/grv_design.md) |
+| モード診断・advisory | [mode_affordance](docs/mode_affordance.md)、[補足](docs/mode_affordance_v1_addendum.md)、[Phase 8](docs/phase_e_verdict_integration.md) |
+| 研究用オーケストレーション | [設計](docs/orchestration_design.md)、[Self-Audit実験](docs/self_audit_experiment.md) |
+| 計画・関連プロジェクト | [ロードマップ](docs/roadmap.md)、[SVP/RPE](docs/svp_rpe_implementation_plan.md)、[修復opcode評価計画](docs/opcode_evaluation_plan.md) |
+
+## 問い合わせ・開発参加
+
+質問・再現可能な不具合・改善案は [GitHub Issues](https://github.com/Yuu6798/ugh-audit-core/issues) へ。
+使用コミット、環境、秘密を除いた合成入力、期待した動作と実際の結果を添えてください。
+APIキー、招待キー、実利用者の文章・履歴は公開しないでください。
+手順とPRの確認項目は [開発参加ガイド](CONTRIBUTING.md) にあります。
 
 ## 理論背景
 
-- [無意識的重力仮説（UGHer）](https://note.com/kamo6798/n/n5aeea478d12e)
-- [RPE入門](https://note.com/kamo6798/n/n99cbb5307e13)
-- [SVPとRPEの実践メモ](https://note.com/kamo6798/n/nb45c716a2c61)
-- [ugh3-metrics-lib](https://github.com/Yuu6798/ugh3-metrics-lib)
-
----
+背景研究として [UGHer](https://note.com/kamo6798/n/n5aeea478d12e)、
+[RPE入門](https://note.com/kamo6798/n/n99cbb5307e13)、
+[SVPとRPE](https://note.com/kamo6798/n/nb45c716a2c61)、
+[ugh3-metrics-lib](https://github.com/Yuu6798/ugh3-metrics-lib) があります。
+利用開始にこれらの理論を理解する必要はありません。
 
 ## License
 
-MIT License (C) 2025 Yuu6798
+[MIT License](LICENSE) © 2025 Yuu6798。
+ソースのライセンスは、外部ホスティングやAnthropicのAPI利用枠を含みません。

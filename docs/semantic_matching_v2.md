@@ -48,8 +48,11 @@ AI草案の `computed_ai_draft` は、全件 fulfilled でも `requires_review=t
 temperature=0、max_tokens=1024を使用する。モードは `instruction_coverage_v2`。
 APIへ送るのは固定モード・単一要件・回答で、質問の他の要件を混入しない。
 
-サーバー側の `ANTHROPIC_API_KEY` を設定する。特定のローカルenvファイルは
-本体へ埋め込まない。標準ライブラリのHTTPSを使い、TLS検証、固定の公式ホスト、
+HTTP・MCP監査は、利用者自身のAnthropicキーを秘密ヘッダー `X-UGH-Anthropic-Key` で
+渡すBYOK方式。招待認証の `Authorization` とは別で、サーバーの環境キーへ代替しない。
+信頼されたローカルCLI・直接Python呼出だけは自分の `ANTHROPIC_API_KEY` を利用できる。
+認証・費用・データ取扱いは [招待制ベータ](invite_beta.md) を参照する。
+特定のローカルenvファイルを本体へ埋め込まない。標準ライブラリのHTTPSを使い、TLS検証、固定の公式ホスト、
 リダイレクト禁止、再試行なし。v2照合にAnthropic SDKは不要。
 キーがなくても従来の未確認acceptへフォールバックしない。
 

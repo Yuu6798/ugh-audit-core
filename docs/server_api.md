@@ -3,7 +3,10 @@
 `ugh_audit/server.py` は REST API と MCP サーバーを統合した FastAPI
 アプリケーション。`python -m ugh_audit.mcp_server` も同じ認証付きアプリを起動する。
 
-既定は招待制Bearer認証。キー発行・所有者分離・上限・配備条件は
+既定は招待制Bearer認証。監査には、これとは別に利用者自身のAnthropicキーを
+秘密ヘッダー `X-UGH-Anthropic-Key` で渡すBYOK設定が必要。利用者キーがなければ
+`provider_key_required`（RESTは400）で拒否し、サーバーの環境キーへ代替しない。
+キー発行・費用・データ取扱い・所有者分離・上限・配備条件は
 [`invite_beta.md`](invite_beta.md) を参照。OAuthは未実装。
 
 ## 既存公開URLの設定記録 (Railway)
@@ -18,10 +21,10 @@ https://ugh-audit-core-production.up.railway.app
 | パス | 用途 |
 |------|------|
 | `/health` | ヘルスチェック |
-| `/docs` | Swagger UI（API ドキュメント、ブラウザで操作可能） |
+| `/docs` | Swagger UI（閲覧にも招待Bearerが必要。匿名ブラウザアクセス不可） |
 | `/api/audit` | POST: 意味監査 |
 | `/api/history` | GET: 監査履歴 |
-| `/mcp` | MCP エンドポイント（Bearer設定対応クライアントから接続） |
+| `/mcp/` | MCP エンドポイント（招待BearerとBYOKの秘密ヘッダーに対応するクライアントから接続） |
 
 ## ローカル起動方法
 
@@ -44,7 +47,8 @@ python -m ugh_audit.mcp_server --port 8000
 | GET | `/api/history` | 直近の監査履歴 |
 | GET | `/api/session/{session_id}` | セッション単位の集計サマリー |
 | GET | `/api/drift` | 要件充足率・判定の履歴（旧数値は診断） |
-| POST | `/mcp` | MCP Streamable HTTP |
+| POST | `/mcp/` | MCP Streamable HTTP（末尾スラッシュを含める） |
+| GET | `/api/capabilities` | 認証・BYOK契約の確認（招待Bearerが必要、モデル呼び出しなし） |
 | GET | `/health` | ヘルスチェック (`{"status": "ok"}`) |
 
 ## API 出力契約 (schema_version: 4.0.0)
@@ -231,7 +235,7 @@ python -m ugh_audit.cli drift --limit 50
 
 | 変数 | 設定値 | 備考 |
 |------|--------|------|
-| `ANTHROPIC_API_KEY` | サーバー側の秘密設定 | 必須の意味照合と opt-in メタ生成用。入力メタデータから読まない |
+| `ANTHROPIC_API_KEY` | 未設定または空 | 公開HTTPでは使わない。意味照合・opt-inメタ生成とも利用者のBYOKヘッダーが必要 |
 | `UGH_AUDIT_DB` | `/data/audit.db` | Dockerfile で定義 |
 | `UGH_AUDIT_CACHE_DIR` | `/data` | Dockerfile で定義 |
 | `UGH_META_CACHE_DIR` | `/data/meta_cache` | Dockerfile で定義 |
