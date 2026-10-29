@@ -150,6 +150,7 @@ ugh_audit/
 ├── metadata_policy.py     # AI草案メタデータの昇格ポリシー
 ├── soft_rescue.py    # AI草案メタデータ向け soft-hit rescue (C=0 部分回収)
 ├── server.py         # REST API + MCP 統合サーバー
+├── retention.py      # 停止中の監査削除・期限切れ利用台帳清掃
 └── mcp_server.py     # MCP スタンドアロンサーバー
 
 # 実験基盤
@@ -190,6 +191,8 @@ https://ugh-audit-core-production.up.railway.app
 | LLM オーケストレーション | [`docs/orchestration_design.md`](docs/orchestration_design.md) |
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 招待制ベータ（認証・履歴分離・上限） | [`docs/invite_beta.md`](docs/invite_beta.md) |
+| 保存期間・削除・バックアップ運用 | [`docs/data-policy.md`](docs/data-policy.md) |
+| 公開前の証拠・残件・実監査手順 | [`docs/beta-release-checklist.md`](docs/beta-release-checklist.md) |
 | Agensi無料掲載パッケージ | [`marketplace/agensi`](marketplace/agensi) |
 | 検証結果 (HA48 / HA20 / baseline) | [`docs/validation.md`](docs/validation.md) |
 | schema 4 の検証・移行・保存証拠 | [`docs/instruction_coverage_v4_validation.md`](docs/instruction_coverage_v4_validation.md) |

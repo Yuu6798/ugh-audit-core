@@ -20,6 +20,11 @@ your own judgment for a service result.
 Keep both credentials in the host's secret connection settings. Never request,
 read back or place an API key in chat, tool arguments, audit text or saved output.
 Agensi-client compatibility with these headers requires an actual connection test.
+Before the user's first hosted audit, make the operator's data handling and private
+deletion contact available as described in [connection.md](references/connection.md).
+The draft and requirements are sent to the operator and Anthropic, and resolved
+audits may be saved. Use only text the user has authorized sharing; an existing
+connection alone does not establish that permission for every document.
 Only when the user is acting as a server operator and requests setup, read
 [operator-setup.md](references/operator-setup.md); loading this skill alone does
 not authorize deployment or credential creation.

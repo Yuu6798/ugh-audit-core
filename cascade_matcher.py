@@ -12,6 +12,7 @@ import hashlib
 import logging
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -82,6 +83,12 @@ _cache_embed_dim: Optional[int] = None
 # これにより invalidate → 再エンコード → save のフローで、disk 上の stale
 # エントリが merge で復活するのを防ぐ。
 _invalidation_pending: bool = False
+
+
+def _is_http_request() -> bool:
+    """Use the loaded request boundary without adding server extras to local tools."""
+    access = sys.modules.get("ugh_audit.beta_access")
+    return access is not None and access.is_http_request()
 
 
 def _make_cache_key(text: str, model_name: str) -> str:
@@ -234,6 +241,10 @@ def invalidate_embedding_cache(reason: str = "") -> None:
         reason: ログに残す破棄理由（任意）。
     """
     global _embedding_cache, _cache_dirty, _cache_embed_dim, _invalidation_pending
+    # HTTP encodes without the shared cache. A shape fallback must not load or
+    # invalidate local users' persisted vectors (or log a caller-supplied reason).
+    if _is_http_request():
+        return
 
     # disk 上のキャッシュを先に読み込む。これにより起動直後（メモリ空）の
     # invalidate 呼び出しが no-op にならない。
@@ -328,7 +339,7 @@ def get_shared_model() -> Optional["SentenceTransformer"]:
             "shared SBert model load failed (attempt %d/%d): %s",
             _shared_load_failures,
             _MAX_SHARED_LOAD_ATTEMPTS,
-            e,
+            type(e).__name__ if _is_http_request() else e,
         )
         return None
 
@@ -438,6 +449,7 @@ def encode_texts_cached(
 
     キャッシュに存在するテキストはディスク / メモリから取得し、未キャッシュ
     のものだけを 1 バッチでモデルに投げる。戻り値の順序は `texts` と一致する。
+    HTTPリクエストでは利用者データを残さないため、メモリ・ディスクとも使用しない。
 
     **使い分け指針**: この関数は **再利用性の高いテキスト**
     （リファレンス命題、GoldenStore の question など）にのみ使うこと。
@@ -465,7 +477,9 @@ def encode_texts_cached(
     if not texts:
         return np.zeros((0, 0), dtype=np.float32)
 
-    if _CACHE_DISABLED:
+    # Public requests can contain private requirements. Do not even read the
+    # shared cache, and never leave their vectors for the atexit disk flush.
+    if _CACHE_DISABLED or _is_http_request():
         return encode_texts(model, texts, batch_size=batch_size)
 
     _load_embedding_cache()

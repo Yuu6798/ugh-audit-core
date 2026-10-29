@@ -131,3 +131,27 @@ successful `/health` alone does not prove semantic assessment or database migrat
 Record the deployed commit, smoke-test result and retention/contact policy. Verify
 the selected agent's actual connection before advertising compatibility. Nothing
 in this preparation confirms those deployment checks have occurred.
+
+## Retention and deletion readiness
+
+Before accepting user data, establish the private contact and operating procedure
+in the repository's
+[data handling and deletion policy](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/data-policy.md).
+The creator-operated beta is preparing a 30-day audit retention period, deletion
+within seven days after identity verification, and backup removal within 30 days
+after deletion. Other operators must disclose and implement their own applicable
+terms. Do not claim that installing the server or loading this skill activates a
+scheduled deletion process.
+
+Verify identity through the invitation's established private channel, without
+requesting provider keys or tokens in a message. Plan maintenance, confirm the
+affected owner and records before any deletion, and include backups and restored
+copies in the procedure. Preserve other users' data and the service's quota and
+invitation controls. Revocation prevents future access; it does not erase history.
+Do not resume a restored service until previously required deletions have been
+reapplied. Keep completion evidence without audit text or credentials.
+
+The [release checklist](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/beta-release-checklist.md)
+tracks these operating prerequisites separately from the real-BYOK audit and
+post-publication Agensi delivery test. Preparing a ZIP authorizes none of those
+external operations by itself.
