@@ -245,7 +245,13 @@ def _run_legacy_diagnostics(
             evidence = detect_fn(question_id, response, question_meta)
             detected = True
         except Exception as exc:
-            logger.exception("detector raised for question_id=%s", question_id)
+            access = sys.modules.get("ugh_audit.beta_access")
+            if access is not None and access.is_http_request():
+                # IDs, exception text and tracebacks may contain private input
+                # or credentials supplied to an optional diagnostic component.
+                logger.warning("HTTP detector failed: %s", type(exc).__name__)
+            else:
+                logger.exception("detector raised for question_id=%s", question_id)
             evidence = Evidence(question_id=question_id, f4_premise=None)
             errors.append(f"detector_error:{type(exc).__name__}")
             detector_failed = True

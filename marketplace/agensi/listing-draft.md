@@ -37,6 +37,19 @@ Access is invitation based and subject to quotas; this is not a promise of
 unlimited free API use. No outside paid upgrade or checkout is
 offered by this listing.
 
+**Data and deletion:** The question, draft and requirements reach the audit
+operator; the requirements and draft also reach Anthropic for assessment. Your
+provider key passes through the operator to Anthropic but is not saved to audit
+history or application logs. Resolved audits, including their text and evidence,
+may be saved. Read the operator's policy before supplying confidential material.
+The creator-operated invitation beta is being prepared for 30-day audit retention,
+deletion within seven days after identity verification, and removal from backups
+within 30 days after deletion. These are the proposed operating terms, not a claim
+that every independently hosted server follows them. The private contact channel
+and operational readiness must be confirmed before invitations start. See
+[data handling and deletion](../../docs/data-policy.md) and the
+[release checklist](../../docs/beta-release-checklist.md).
+
 **Compatibility:** English skill instructions; Japanese inputs and outputs are
 supported. Both invite-token and BYOK secret-header configuration are required.
 Codex CLI's direct MCP transport has been checked, but the complete Agensi skill
@@ -68,6 +81,14 @@ tool引数へ貼り付けません。実際のBYOK配備・対象クライアン
 利用者自身のAnthropicアカウントに発生します。運営者がモデル料金を負担する無料API枠は
 含みません。サーバー運営費は提供者負担です。招待と利用上限があり、無制限利用は約束しません。
 
+**データと削除:** 質問・回答・要件は監査運営者へ送られ、意味照合の要件・回答は
+Anthropicへ送られます。APIキーも運営者を経由しますが、監査履歴やアプリのログには
+保存しません。判定できた監査の本文・根拠は保存される場合があります。提供者の招待制
+ベータは、監査履歴30日、本人確認後7日以内の削除、削除後30日以内のバックアップ消去
+を運営案として準備中です。独自運営のすべてのサーバーへの保証ではありません。
+招待開始前に非公開の問い合わせ窓口と実施体制を確定します。
+[保存・削除方針](../../docs/data-policy.md)を確認してからデータを送ってください。
+
 **互換性:** 対応BYOKプロバイダーはAnthropicです。Codex CLIからの直接MCP接続と秘密
 ヘッダーの転送は検証済みですが、Agensi経由のスキル取得から実モデル監査までの一連の
 動作は未確認です。AgensiへのOAuthログインと、UGHへの招待認証・BYOK設定は別です。
@@ -84,8 +105,17 @@ UGHサーバーはOAuth未実装で、一般ChatGPTコネクタ対応も保証�
 - Replace preparation status only after recording an actual endpoint and supported
   client check for both secret headers. Put the external service, invitation and
   user-owned Anthropic API key requirement in the listing's Needs access to field.
-- Confirm with Agensi that the declared external invitation dependency is accepted;
+- Disclose the external invitation dependency during Agensi's listing review;
   it must not be represented as an off-platform skill unlock or licence sale.
+  The creator-received support guidance permits free listings linked to a
+  separately operated MCP server when the advertised function and prerequisites
+  are accurate and setup templates/instructions are bundled. It does not establish
+  approval of this particular listing.
+- Complete the [release checklist](../../docs/beta-release-checklist.md), including
+  the private deletion contact and retention procedure, the approved real-BYOK
+  audit, and the creator's publication decision. Keep submission and publication
+  on hold while those conditions are unresolved. Delisting does not establish
+  immediate revocation of existing users' Agensi access.
 - Set Free explicitly. Do not add a separate refund promise, external checkout,
   compatibility badge or accuracy guarantee.
 - Read [rights-and-withdrawal.md](rights-and-withdrawal.md), retain the MIT notice,

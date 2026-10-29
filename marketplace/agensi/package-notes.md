@@ -52,6 +52,14 @@ in the actual connection setup, and review [listing-draft.md](listing-draft.md) 
 [rights-and-withdrawal.md](rights-and-withdrawal.md). This build does not submit
 anything to Agensi or start a deployment.
 
+The packaged connection and operator guides link to the repository's
+[data handling and deletion policy](../../docs/data-policy.md). Resolve its
+private contact channel and operating prerequisites, and complete the
+[release checklist](../../docs/beta-release-checklist.md), before submission.
+These repository documents are maintained outside the eight-file ZIP; check that
+their links resolve on the reviewed, merged revision before uploading. A ZIP build
+does not activate retention, accept a deletion request, or lift the publication hold.
+
 Validation has two stages. Before publication, test the repository skill with
 the creator's own agent and check its UGH invitation and BYOK headers. Codex CLI
 is the selected client; direct MCP transport checks passed, while Agensi skill

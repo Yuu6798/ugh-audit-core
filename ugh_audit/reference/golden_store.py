@@ -23,6 +23,7 @@ Reference セット管理 — 暫定基準（研究段階）
 from __future__ import annotations
 import json
 import logging
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -398,7 +399,9 @@ class GoldenStore:
 
             scores = _cosine_similarity_batch(query_emb, target_embs)
         except Exception as e:  # noqa: BLE001
-            _logger.warning("GoldenStore SBert rerank failed: %s", e)
+            access = sys.modules.get("ugh_audit.beta_access")
+            detail = type(e).__name__ if access is not None and access.is_http_request() else e
+            _logger.warning("GoldenStore SBert rerank failed: %s", detail)
             return None
 
         reranked = [

@@ -26,6 +26,12 @@ Do not promise that withdrawal instantly revokes everyone, or that it guarantees
 permanent hosted API access. Confirm the intended removal process with Agensi
 before relying on it. [Protect your work](https://www.agensi.io/docs/protect-your-work)
 
+The creator-provided support response separately states that a listing may be
+withdrawn at any time and that already-earned revenue will be paid. The same
+response does not confirm what access existing users retain after withdrawal.
+Keep that uncertainty in the publication decision; do not turn the withdrawal
+statement into an assurance of immediate access revocation or data deletion.
+
 The service invite token authenticates an external MCP endpoint. It is not an
 Agensi account credential or an off-platform license/unlock key for this skill.
 The user's separate Anthropic API key pays for external model use; it is not a
@@ -40,3 +46,13 @@ keys pass through the service, model charges belong to the user, and hosting
 charges belong to the operator. The prepared package
 does not grant a hosted-service entitlement, announce a live endpoint or authorize
 a listing submission, deployment, purchase, email or message to Agensi.
+
+For the creator-operated invitation beta, the
+[data handling and deletion policy](../../docs/data-policy.md) and
+[release checklist](../../docs/beta-release-checklist.md) record the proposed
+retention terms and the remaining operational checks. An Agensi takedown,
+external-service shutdown, invitation revocation and deletion of saved audit
+data are separate operations. Notify invited users through the established
+private contact channel before a planned service closure and handle saved data
+under the disclosed policy. Do not promise that closing the external service
+removes copies previously delivered by Agensi or independently obtained from GitHub.

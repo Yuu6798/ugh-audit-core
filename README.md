@@ -68,7 +68,8 @@ HTTP監査は利用者のモデルキーがなければ拒否され、サーバ�
 MCPは `/mcp/`、REST監査は `/api/audit`。外部接続にはHTTPSを使います。
 
 文章・要件とモデルキーは信頼する監査運営者を経由してAnthropicへ送られます。
-確定した監査の本文・根拠は運営者のDBへ保存されるため、利用前に保存・削除方針を確認してください。
+確定した監査の本文・根拠は運営者のDBへ保存されます。[保存・削除方針の運用案](docs/data-policy.md)を確認してください。
+運用窓口と開始条件が未確定の間は掲載・一般の招待開始を保留します。
 モデルキーはアプリの監査履歴へ保存しません。クライアントやプロキシの秘密ヘッダーも保護してください。
 回数制限は金額の上限ではありません。モデル提供者側の支出設定も確認してください。
 詳細は [認証・履歴・利用上限](docs/invite_beta.md) にまとめています。
@@ -101,7 +102,8 @@ schema 4の保存済み評価は合成20場面・80回答・280要件で、モ�
 認証・BYOK・履歴分離・利用上限の実装と回帰テストはありますが、CI成功だけで本番の動作は保証できません。
 Agensiでの当該スキル取得から実モデル監査までの確認は未完了で、掲載判断は保留です。
 Agensiはスキルを配信し、監査サーバーをホスティングしません。
-[掲載準備資料](marketplace/agensi/listing-draft.md)と[検証記録・制約](docs/instruction_coverage_v4_validation.md)を確認してください。
+[公開前チェックと残件](docs/beta-release-checklist.md)、[掲載準備資料](marketplace/agensi/listing-draft.md)、
+[検証記録・制約](docs/instruction_coverage_v4_validation.md)を確認してください。
 
 ## インストール
 
@@ -187,6 +189,8 @@ Swagger・OpenAPI・MCPの発見も招待認証が必要で、匿名の確認用
 | 最初の監査・結果の読み方 | [利用開始ガイド](docs/getting-started.md) |
 | 招待・BYOK・履歴分離・利用上限 | [招待制ベータ](docs/invite_beta.md) |
 | 永続ボリューム・バックアップ付き配備 | [配備手順](docs/invite-beta-deployment.md) |
+| 保存期間・削除依頼・停止中メンテナンス | [データ取扱い・削除方針](docs/data-policy.md) |
+| 公開前の証拠・残件・実監査手順 | [公開前チェック](docs/beta-release-checklist.md) |
 | REST・MCPの入力と出力 | [API仕様](docs/server_api.md) |
 | 接続・インストールの問題 | [トラブルシューティング](docs/troubleshooting.md) |
 
@@ -219,6 +223,7 @@ Swagger・OpenAPI・MCPの発見も招待認証が必要で、匿名の確認用
 質問・再現可能な不具合・改善案は [GitHub Issues](https://github.com/Yuu6798/ugh-audit-core/issues) へ。
 使用コミット、環境、秘密を除いた合成入力、期待した動作と実際の結果を添えてください。
 APIキー、招待キー、実利用者の文章・履歴は公開しないでください。
+個別の監査・削除依頼には[非公開窓口](docs/data-policy.md#削除依頼問い合わせ窓口)を使います。窓口確定までは一般の招待開始を保留します。
 手順とPRの確認項目は [開発参加ガイド](CONTRIBUTING.md) にあります。
 
 ## 理論背景

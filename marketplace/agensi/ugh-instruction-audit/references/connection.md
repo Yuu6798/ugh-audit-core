@@ -100,7 +100,14 @@ requirement and answer to Anthropic. Optional requirement generation uses the
 same user key and bypasses shared metadata caches in public invite mode.
 Successful resolved audits may be saved in the operator's database. Confirm the
 operator's retention and deletion policy before sending confidential material.
-The package itself supplies no production privacy policy or hosted-service SLA.
+For the creator-operated invitation beta, read the repository's
+[data handling and deletion policy](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/data-policy.md).
+It describes the preparation status and required private contact channel. A
+different operator must provide its own applicable policy. Do not send a provider
+key, invitation token or audit text to a public GitHub issue when asking about
+deletion. Revoking an invitation and deleting saved audit data are separate actions.
+The package supplies no hosted-service SLA; publication readiness is tracked in
+the [release checklist](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/beta-release-checklist.md).
 
 An audit without the provider header is refused with `provider_key_required`
 (REST HTTP 400). A server environment key is never a substitute in public invite
