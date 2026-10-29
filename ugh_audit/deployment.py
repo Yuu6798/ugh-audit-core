@@ -103,7 +103,11 @@ def _validated_registry(raw: str, directory: Path) -> dict:
         with os.fdopen(descriptor, "wb") as stream:
             stream.write(payload)
         # Reuse the administration validator, whose schema matches HTTP access.
-        return invites._registry(temporary)
+        config = invites._registry(temporary)
+        canonical = (json.dumps(config, ensure_ascii=True, indent=2) + "\n").encode("utf-8")
+        if len(canonical) > 262144:
+            raise DeploymentError("invite_configuration_invalid")
+        return config
     except (invites.InviteError, UnicodeError):
         raise DeploymentError("invite_configuration_invalid") from None
     finally:

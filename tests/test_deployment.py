@@ -58,6 +58,22 @@ def _original_rows(path):
         return conn.execute("SELECT id, response, original_blob, quality_score, verdict FROM audit_runs").fetchall()
 
 
+def test_expanded_registry_size_is_rejected_before_database_changes(environment):
+    config = {"users": [{"user_id": "a" * 64, "token_sha256": f"{i:064x}",
+                         "enabled": True, "expires_at": 10 ** 40} for i in range(1000)]}
+    raw = json.dumps(config, separators=(",", ":"))
+    assert len(raw.encode()) <= 262144 < len(json.dumps(config, indent=2).encode())
+    audit = Path(environment["UGH_AUDIT_DB"])
+    registry = Path(environment["UGH_INVITE_FILE"])
+    before_audit, before_registry = audit.read_bytes(), registry.read_bytes()
+    environment["UGH_INVITES_JSON"] = raw
+    with pytest.raises(deployment.DeploymentError, match="invite_configuration_invalid"):
+        deployment.prepare_deployment(environment)
+    assert audit.read_bytes() == before_audit
+    assert registry.read_bytes() == before_registry
+    assert not Path(environment["UGH_USAGE_DB"]).exists()
+
+
 def test_backup_migration_preserves_original_fields_and_null_owner_once(environment, capsys):
     audit = Path(environment["UGH_AUDIT_DB"])
     original = _original_rows(audit)
