@@ -148,6 +148,16 @@ after deletion. Other operators must disclose and implement their own applicable
 terms. Do not claim that installing the server or loading this skill activates a
 scheduled deletion process.
 
+For a single POSIX host, the repository provides opt-in daily maintenance with
+`UGH_RETENTION_AUTOMATION=1` and `python -m ugh_audit.deployment start`. The parent
+stops and reaps its HTTP child before cleaning aged owner records, expired quota
+rows, registered migration backups and known retired caches; it restarts HTTP
+only on success. Cleanup runs at startup and every 23 hours, with brief downtime.
+Review and explicitly register legacy backups before enabling it. Windows,
+unmanaged concurrent servers, cloud snapshots and operator exports require
+separate procedures. See the
+[deployment guide](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/invite-beta-deployment.md).
+
 Verify identity through the invitation's established private channel, without
 requesting provider keys or tokens in a message. Plan maintenance, confirm the
 affected owner and records before any deletion, and include backups and restored

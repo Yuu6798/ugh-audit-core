@@ -308,6 +308,9 @@ _mcp_http_app = _mcp_instance.streamable_http_app()
 
 @asynccontextmanager
 async def _lifespan(a: FastAPI):
+    if os.environ.get("UGH_RETENTION_AUTOMATION") == "1":
+        from .retention_supervisor import validate_managed_child
+        validate_managed_child()
     from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
     from mcp.server.transport_security import TransportSecuritySettings
 
