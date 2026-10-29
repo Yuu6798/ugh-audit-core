@@ -138,9 +138,13 @@ Before accepting user data, verify the private contact's ability to receive requ
 and establish the operating procedure in the repository's
 [data handling and deletion policy](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/data-policy.md).
 The creator-operated beta uses [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com)
-for private support and deletion requests. Selecting this address does not confirm
-receipt or activate daily operations; both remain pending and publication is on
-hold. Do not request API keys, invitation tokens or full audit text by email.
+for private support and deletion requests. Ordinary mailbox send/receive history
+has been checked. Production automatic cleanup was activated on 2026-10-29 UTC;
+its initial cleanup and a separately authorized real-model audit passed the
+[release checks](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/beta-release-checklist.md).
+Acceptance of the manual identity/deletion/response procedure and the public
+effective date remain pending; publication is on hold. Do not request API keys,
+invitation tokens or full audit text by email.
 Self-hosted services must name and verify their own operator's contact.
 The creator-operated beta is preparing a 30-day audit retention period, deletion
 within seven days after identity verification, and backup removal within 30 days

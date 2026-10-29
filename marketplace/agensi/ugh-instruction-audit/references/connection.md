@@ -42,9 +42,11 @@ literal interpolation marker as a credential or assume `${...}` works in every h
 
 Codex CLI is the selected client. Its native MCP client was checked with both
 headers against a local controlled provider, and with invite-only reads and
-missing-provider refusal against the deployed service (2026-10-29,
-`codex-cli 0.165.0-alpha.1.2`). This was a direct MCP client check, without an agent
-model turn, paid Anthropic call or Agensi skill load. This example uses native
+missing-provider refusal against the deployed service. On 2026-10-29 UTC,
+`codex-cli 0.165.0-alpha.1.2` also completed one synthetic production audit with
+two real Anthropic calls and no retries. Saved history, owner isolation and text/CSV
+reports passed. No agent model turn or Agensi skill load was involved; real-model
+requirement auto-generation remains untested. This example uses native
 `config.toml` fields rather than the illustrative JSON template:
 
 ```toml
@@ -73,7 +75,7 @@ do not establish end-to-end compatibility by themselves.
 
 This implementation provides invite-token authentication. It does not implement
 an OAuth authorization server. General ChatGPT connector OAuth compatibility has
-not been established. The complete Agensi skill-delivery and paid-audit workflow
+not been established. The complete Agensi skill-delivery-to-audit workflow
 still requires an actual test; the direct Codex check does not establish it. Do not claim
 that importing this template connects every agent, or direct a user to disable
 authentication to make a connector work.
@@ -103,9 +105,12 @@ operator's retention and deletion policy before sending confidential material.
 For the creator-operated invitation beta, read the repository's
 [data handling and deletion policy](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/data-policy.md).
 The creator-operated beta's private support and deletion contact is
-[kkoo6798@gmail.com](mailto:kkoo6798@gmail.com). The address is selected, while
-receipt verification and daily operations remain pending; this does not lift the
-invitation or publication hold. Do not email keys, invite tokens or full audit text.
+[kkoo6798@gmail.com](mailto:kkoo6798@gmail.com). Ordinary mailbox send/receive
+evidence is confirmed, and automated retention is enabled with its initial
+production cleanup verified. Acceptance of manual deletion intake, identity checks,
+replies, the responsible operator and the public policy effective date remains
+pending; invitations and publication stay on hold. Do not email keys, invite tokens
+or full audit text.
 A different operator must provide its own applicable policy and contact. Do not send a provider
 key, invitation token or audit text to a public GitHub issue when asking about
 deletion. Revoking an invitation and deleting saved audit data are separate actions.

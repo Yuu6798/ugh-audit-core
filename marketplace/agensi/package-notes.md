@@ -54,8 +54,10 @@ anything to Agensi or start a deployment.
 
 The packaged connection and operator guides link to the repository's
 [data handling and deletion policy](../../docs/data-policy.md). The creator-operated
-beta contact is [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com). Verify actual receipt
-and the operating prerequisites separately from choosing this address, and complete the
+beta contact is [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com). Ordinary mailbox
+send/receive evidence and the initial production automated cleanup are confirmed.
+Manual deletion intake, identity checks, replies, the responsible operator and the
+public policy effective date still await acceptance. Complete the
 [release checklist](../../docs/beta-release-checklist.md), before submission.
 These repository documents are maintained outside the eight-file ZIP; check that
 their links resolve on the reviewed, merged revision before uploading. A ZIP build
@@ -63,8 +65,10 @@ does not activate retention, accept a deletion request, or lift the publication 
 
 Validation has two stages. Before publication, test the repository skill with
 the creator's own agent and check its UGH invitation and BYOK headers. Codex CLI
-is the selected client; direct MCP transport checks passed, while Agensi skill
-delivery and a real paid model audit remain unverified. Its native configuration
+is the selected client; direct MCP checks and one synthetic production audit with
+two real Anthropic calls passed, including history retrieval, owner isolation and
+text/CSV reports. Agensi skill delivery, automatic agent skill selection and
+real-model requirement auto-generation remain unverified. Its native configuration
 example is in [connection.md](ugh-instruction-audit/references/connection.md).
 Agensi serves a listing only after it is live, so the subsequent Agensi OAuth →
 `get_skill` → UGH audit check is a separate post-publication step. Neither a ZIP
