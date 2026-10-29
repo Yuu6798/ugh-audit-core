@@ -45,8 +45,12 @@ may be saved. Read the operator's policy before supplying confidential material.
 The creator-operated invitation beta is being prepared for 30-day audit retention,
 deletion within seven days after identity verification, and removal from backups
 within 30 days after deletion. These are the proposed operating terms, not a claim
-that every independently hosted server follows them. The private contact channel
-and operational readiness must be confirmed before invitations start. See
+that every independently hosted server follows them. The creator-operated beta's
+private support and deletion contact is [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com).
+The address is selected; receipt verification and activation of daily operations
+remain pending, so invitations and publication remain on hold. Do not email API keys,
+invitation tokens or full audit text. Independently hosted services use their own
+operator's contact. See
 [data handling and deletion](../../docs/data-policy.md) and the
 [release checklist](../../docs/beta-release-checklist.md).
 
@@ -86,7 +90,10 @@ Anthropicへ送られます。APIキーも運営者を経由しますが、監�
 保存しません。判定できた監査の本文・根拠は保存される場合があります。提供者の招待制
 ベータは、監査履歴30日、本人確認後7日以内の削除、削除後30日以内のバックアップ消去
 を運営案として準備中です。独自運営のすべてのサーバーへの保証ではありません。
-招待開始前に非公開の問い合わせ窓口と実施体制を確定します。
+提供者のベータの非公開問い合わせ・削除依頼先は
+[kkoo6798@gmail.com](mailto:kkoo6798@gmail.com)です。アドレスの確定と、実際の受信確認・
+日次運用の開始は別です。受信確認と実施体制が整うまで招待開始・掲載は保留します。
+キー・招待トークン・監査本文全体はメールへ記載しないでください。独自運営の場合はその運営者の窓口を使います。
 [保存・削除方針](../../docs/data-policy.md)を確認してからデータを送ってください。
 
 **互換性:** 対応BYOKプロバイダーはAnthropicです。Codex CLIからの直接MCP接続と秘密
@@ -112,7 +119,8 @@ UGHサーバーはOAuth未実装で、一般ChatGPTコネクタ対応も保証�
   are accurate and setup templates/instructions are bundled. It does not establish
   approval of this particular listing.
 - Complete the [release checklist](../../docs/beta-release-checklist.md), including
-  the private deletion contact and retention procedure, the approved real-BYOK
+  receipt verification at the selected private deletion contact and the retention
+  procedure, the approved real-BYOK
   audit, and the creator's publication decision. Keep submission and publication
   on hold while those conditions are unresolved. Delisting does not establish
   immediate revocation of existing users' Agensi access.

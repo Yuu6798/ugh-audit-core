@@ -134,9 +134,14 @@ in this preparation confirms those deployment checks have occurred.
 
 ## Retention and deletion readiness
 
-Before accepting user data, establish the private contact and operating procedure
-in the repository's
+Before accepting user data, verify the private contact's ability to receive requests
+and establish the operating procedure in the repository's
 [data handling and deletion policy](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/data-policy.md).
+The creator-operated beta uses [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com)
+for private support and deletion requests. Selecting this address does not confirm
+receipt or activate daily operations; both remain pending and publication is on
+hold. Do not request API keys, invitation tokens or full audit text by email.
+Self-hosted services must name and verify their own operator's contact.
 The creator-operated beta is preparing a 30-day audit retention period, deletion
 within seven days after identity verification, and backup removal within 30 days
 after deletion. Other operators must disclose and implement their own applicable

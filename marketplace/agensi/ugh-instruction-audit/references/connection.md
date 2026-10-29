@@ -102,8 +102,11 @@ Successful resolved audits may be saved in the operator's database. Confirm the
 operator's retention and deletion policy before sending confidential material.
 For the creator-operated invitation beta, read the repository's
 [data handling and deletion policy](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/data-policy.md).
-It describes the preparation status and required private contact channel. A
-different operator must provide its own applicable policy. Do not send a provider
+The creator-operated beta's private support and deletion contact is
+[kkoo6798@gmail.com](mailto:kkoo6798@gmail.com). The address is selected, while
+receipt verification and daily operations remain pending; this does not lift the
+invitation or publication hold. Do not email keys, invite tokens or full audit text.
+A different operator must provide its own applicable policy and contact. Do not send a provider
 key, invitation token or audit text to a public GitHub issue when asking about
 deletion. Revoking an invitation and deleting saved audit data are separate actions.
 The package supplies no hosted-service SLA; publication readiness is tracked in
