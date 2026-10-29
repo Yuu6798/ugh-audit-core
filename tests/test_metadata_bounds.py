@@ -65,7 +65,7 @@ def test_rest_deep_optional_metadata_returns_scoped_success(monkeypatch, semanti
     payload = dict(question="提出方法", response=ANSWER,
                    question_meta={"core_propositions": [REQUIREMENT],
                                   "diagnostic_extension": nested_json(500)})
-    client = TestClient(server.app, raise_server_exceptions=False)
+    client = TestClient(server.app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}, raise_server_exceptions=False)
     response = client.post("/api/audit", content=json.dumps(payload),
                            headers={"Content-Type": "application/json"})
     assert response.status_code == 200

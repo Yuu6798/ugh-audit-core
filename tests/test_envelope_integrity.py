@@ -70,8 +70,15 @@ def _frame(statuses=("fulfilled", "fulfilled")):
 
 
 def _remote(monkeypatch, payload):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-test-provider-key")
+    monkeypatch.setenv("UGH_REMOTE_TOKEN", "offline-test-invite-token")
+    calls = []
+
     class Response:
         status = 200
+
+        def __init__(self, frame):
+            self.frame = frame
 
         def __enter__(self):
             return self
@@ -80,21 +87,34 @@ def _remote(monkeypatch, payload):
             pass
 
         def read(self, size=-1):
-            raw = json.dumps(payload).encode("utf-8")
+            raw = json.dumps(self.frame).encode("utf-8")
             return raw if size < 0 else raw[:size]
 
-    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: Response())
+    def remote_open(request, timeout, *, forward_provider_key=False):
+        calls.append((request.get_method(), request.full_url, forward_provider_key))
+        if request.full_url.endswith("/api/capabilities"):
+            assert request.get_method() == "GET" and not forward_provider_key
+            return Response(mcp_server.BYOK_CAPABILITIES)
+        return Response(payload)
+
+    monkeypatch.setattr(mcp_server, "_remote_open", remote_open)
+    return calls
 
 
 def _request(monkeypatch, frame, channel):
     path = {"audit": "/api/audit/1", "history": "/api/history", "drift": "/api/drift"}
     payload = [frame] if channel in ("history", "drift") else frame
-    _remote(monkeypatch, payload)
+    calls = _remote(monkeypatch, payload)
     if channel == "post":
-        return vars(mcp_server._proxy_audit(
+        result = vars(mcp_server._proxy_audit(
             "https://example.invalid", question="Follow both instructions", response=ANSWER,
             question_meta=META,
         ))
+        assert calls == [
+            ("GET", "https://example.invalid/api/capabilities", False),
+            ("POST", "https://example.invalid/api/audit", True),
+        ]
+        return result
     result = mcp_server._proxy_get("https://example.invalid", path[channel])
     return result[0] if isinstance(result, list) else result
 

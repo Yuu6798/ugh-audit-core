@@ -338,7 +338,7 @@ python examples/basic_audit.py
 | 変数名 | 説明 | デフォルト |
 |--------|------|-----------|
 | `UGH_AUDIT_DB` | SQLite DB ファイルパス | `~/.ugh_audit/audit.db` |
-| `ANTHROPIC_API_KEY` | Claude API キー（LLM meta 生成 / 実験基盤用） | なし |
+| `ANTHROPIC_API_KEY` | 信頼されたローカルCLI・実験用。公開HTTPでは参照しない | なし |
 | `OPENAI_API_KEY` | OpenAI API キー（GPT/Codex 回答生成用） | なし |
 | `UGH_META_CACHE_DIR` | LLM meta キャッシュディレクトリ | `~/.ugh_audit/meta_cache/` |
 | `UGH_AUDIT_CACHE_DIR` | 埋め込みキャッシュディレクトリ | `~/.ugh_audit/` |
@@ -347,7 +347,9 @@ python examples/basic_audit.py
 
 読み取り専用環境では `UGH_AUDIT_DB=/tmp/audit.db` / `UGH_AUDIT_CACHE_DIR=/tmp/ugh_cache`
 で書き込み可能パスを指定する。
-`ANTHROPIC_API_KEY` は現行の必須意味照合にも必要。未設定・照合不能はdegraded。
+公開HTTP/MCPはBYOK。利用者が接続ヘッダー `X-UGH-Anthropic-Key` に自分のキーを設定する。
+未指定時は監査を実行せず、意味照合・要件生成ともサーバーの `ANTHROPIC_API_KEY` へ代替しない。
+提供者の認証エラー等も代替せず未確定にする。キーをツール引数・監査本文・履歴へ入れない。
 `OPENAI_API_KEY` は任意の `experiments/` 用で、現行の意味照合には使わない。
 
 ## 旧診断の定数（現行の公開合否には使用しない）

@@ -30,7 +30,7 @@ def tmp_golden(tmp_path):
 def client(tmp_db, tmp_golden):
     """テスト用クライアント（tmp_path DB / GoldenStore を使用）"""
     configure(db=tmp_db, golden=tmp_golden)
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}) as c:
         yield c
     # リセット
     configure(db=None, golden=None)
@@ -159,7 +159,7 @@ def test_audit_resolves_reference_from_golden(tmp_db, tmp_path):
     assert ref is not None
     # degraded なので DB 保存はないが、GoldenStore は動作している
     configure(db=tmp_db, golden=golden)
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}) as c:
         resp = c.post("/api/audit", json={
             "question": "AIは意味を持てるか？",
             "response": "AIは意味を処理できます。",
@@ -278,7 +278,7 @@ def test_legacy_advisory_collapse_cannot_downgrade_complete_requirements(
     monkeypatch.setattr(mode_grv, "_TAU_ANCHOR_LOW", 1.0)
 
     configure(db=tmp_db, golden=tmp_golden)
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}) as c:
         resp = c.post("/api/audit", json={
             # accept を確実にするため命題と回答を高マッチにする。
             # mcg の collapse_risk を None にしないよう命題 2 本 (>=2 で applicable)。

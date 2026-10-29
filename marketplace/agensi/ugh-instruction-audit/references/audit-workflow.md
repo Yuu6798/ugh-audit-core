@@ -19,8 +19,11 @@ Example request, containing synthetic data only:
 }
 ```
 
-No token, owner identifier, supplied verdict, or supplied judge belongs in this
-tool request. Authentication is configured on the connection. The service derives
+No invite token, Anthropic API key, owner identifier, supplied verdict, or supplied
+judge belongs in this tool request. The connection sends the invite in
+`Authorization` and the user's own provider key in `X-UGH-Anthropic-Key`.
+Never move a secret header into tool arguments to work around a host limitation.
+The service derives
 ownership from the credential. Never ask to inspect another user's history.
 
 The returned contract must be schema `4.0.0`,
@@ -57,7 +60,8 @@ explicitly when needed.
 
 The semantic check has a 25-second budget after requirement preparation and a
 maximum 10-second request timeout per requirement. This is not an end-to-end
-response-time guarantee. The service makes external Anthropic calls; no result
+response-time guarantee. The service makes external Anthropic calls billed to the
+user's own API account, even when the requirements are explicit; no result
 should be described as entirely local or offline.
 
 New degraded audits are not saved in ordinary history. Explain `saved_id=null`

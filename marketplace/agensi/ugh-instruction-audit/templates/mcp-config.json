@@ -4,7 +4,8 @@
       "type": "http",
       "url": "https://audit.example.com/mcp/",
       "headers": {
-        "Authorization": "Bearer ${UGH_AUDIT_TOKEN}"
+        "Authorization": "Bearer ${UGH_AUDIT_TOKEN}",
+        "X-UGH-Anthropic-Key": "${UGH_ANTHROPIC_API_KEY}"
       }
     }
   }

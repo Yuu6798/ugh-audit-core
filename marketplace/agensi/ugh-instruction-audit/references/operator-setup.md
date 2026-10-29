@@ -7,15 +7,15 @@ needed. Agensi does not run this server.
 
 ## Install the reviewed implementation
 
-Use Python 3.10+ and the exact reviewed commit from the invitation-beta PR, not an
-old package bearing version `0.3.0`. Replace `APPROVED_INVITE_BETA_COMMIT` below
+Use Python 3.10+ and the exact reviewed commit with invitation-beta BYOK support, not an
+old package bearing version `0.3.0`. Replace `APPROVED_BYOK_BETA_COMMIT` below
 with that PR's full immutable commit SHA once review is complete. It must contain
 `ugh_audit/beta_access.py`, `usage_limits.py` and `invites.py`.
 
 ```console
 git clone https://github.com/Yuu6798/ugh-audit-core.git
 cd ugh-audit-core
-git checkout --detach APPROVED_INVITE_BETA_COMMIT
+git checkout --detach APPROVED_BYOK_BETA_COMMIT
 python -m venv .venv
 ```
 
@@ -60,6 +60,14 @@ skill. Do not put the registry or token file in Git, the upload ZIP, public logs
 or chat. Check the CLI help for rotation and revocation operations in the reviewed
 commit; do not edit hashes by inventing a token format.
 
+For deployments managed by `UGH_INVITES_JSON`, the environment registry is the
+source of truth and is reapplied on startup. The CLI refuses issue/revoke while
+that variable is present. Change the environment's hashed registry and redeploy,
+then verify revocation with the old token. For offline registry preparation only,
+explicitly unset that variable before using the CLI and copy the resulting hashed
+registry back to the deployment configuration. Editing only the running file is
+not a persistent revocation in this mode.
+
 Persist `UGH_AUDIT_DB` and `UGH_USAGE_DB`. All workers governed by one global quota
 must share the same usage SQLite file on a supported shared local volume. Separate
 replicas with unrelated files do not share a global limit. An ephemeral filesystem
@@ -70,13 +78,25 @@ Current defaults from `beta_access.py` are 60 requests/minute/user, 100 admitted
 audit attempts/day/user, 500/day globally, one concurrent audit/user and four
 globally. Daily limits use UTC. Failed model calls and disconnected clients can
 still consume admitted attempts. Limits count attempts, not currency; they do
-not guarantee a monetary spending cap. Hosting and Anthropic costs remain the
-operator's responsibility even when the Agensi skill is free.
+not guarantee a monetary spending cap. Hosting costs remain the operator's
+responsibility. Anthropic model calls are billed to each user's own API account;
+free skill access does not include model credits. Users should set their own
+provider spending limits.
 
-Set `ANTHROPIC_API_KEY` only on the server. It is required for meaningful semantic
-assessment even when the caller supplies requirements. Missing credentials cause
-degraded results, not offline acceptance. Optional `auto_generate_meta` also uses
-Anthropic, but the packaged pilot skill disables it and uses reviewed requirements.
+Keep the server's `ANTHROPIC_API_KEY` unset or empty. In public invite mode every
+audit requires the caller's own `X-UGH-Anthropic-Key`, separately from the
+Authorization invite token. Even an accidentally configured server key is not
+used as a fallback. Missing user keys block audits with `provider_key_required`
+(REST HTTP 400) before model work. History and MCP initialization do not require
+a provider key. The invite registry never contains provider keys.
+
+The service uses provider keys only for the request and does not save them to
+history or logs. Configure proxies, observability and clients to avoid logging
+secret headers. The key reaches the operator's service before it is forwarded to
+Anthropic; disclose this trust boundary and data handling to users.
+Optional `auto_generate_meta` uses the caller's key and bypasses shared metadata
+caches in public invite mode. The packaged pilot skill keeps it disabled and uses
+reviewed requirements. Both paths still make paid semantic-check calls.
 
 ## Connect and verify before inviting users
 
@@ -86,8 +106,11 @@ python -m uvicorn ugh_audit.server:app --host 127.0.0.1 --port 8000
 
 Expose the service through an authenticated-by-application HTTPS deployment or
 reverse proxy; the remote MCP route is `/mcp/` (keep the trailing slash). Configure
-a client capable of Streamable HTTP plus an Authorization Bearer header. OAuth connector support is
-not implemented, and general ChatGPT connector compatibility is not promised.
+a client capable of Streamable HTTP with both an Authorization Bearer header and
+the custom secret `X-UGH-Anthropic-Key` header. Environment substitution in the
+example is client-specific; use the host's supported secret configuration.
+OAuth connector support is not implemented, and general ChatGPT connector
+compatibility is not promised.
 An external URL is intentionally absent until an actual deployment is verified.
 
 Set `UGH_ALLOWED_HOSTS` to the real public Host value, including its port when
@@ -100,8 +123,9 @@ disable the transport protection to hide a connection mismatch.
 
 Before listing, confirm unauthenticated access is refused except `/health`, test
 two separate invite identities cannot retrieve each other's records, exercise
-quota refusals, and inspect one authorized synthetic schema 4 audit. A model call
-has an external cost; perform it only under the operator's approved budget. A
+quota refusals, provider-key-required rejection, and inspect one authorized
+synthetic schema 4 audit with a user-owned API key and approved spending budget.
+Check that a server environment key cannot enable a request lacking BYOK. A
 successful `/health` alone does not prove semantic assessment or database migration.
 
 Record the deployed commit, smoke-test result and retention/contact policy. Verify

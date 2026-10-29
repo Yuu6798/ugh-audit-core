@@ -32,7 +32,8 @@ def _credential(owner, token=None, **extra):
 
 
 def _headers(owner="alice"):
-    return {"Authorization": "Bearer " + TOKENS[owner]}
+    return {"Authorization": "Bearer " + TOKENS[owner],
+            "X-UGH-Anthropic-Key": "offline-provider-key-" + owner}
 
 
 def _payload(owner="alice", **extra):
@@ -59,7 +60,7 @@ def invite(tmp_path, monkeypatch, semantic_complete_judge):
     db = AuditDB(tmp_path / "audits.sqlite")
     configure(db=db, golden=GoldenStore(tmp_path / "golden.json"))
     try:
-        with TestClient(app, base_url="http://localhost") as client:
+        with TestClient(app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}, base_url="http://localhost") as client:
             yield SimpleNamespace(client=client, db=db, registry=registry, usage_path=usage_path)
     finally:
         configure()

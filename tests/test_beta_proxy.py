@@ -182,7 +182,7 @@ def test_allowed_cors_preflight_preserves_real_request_authentication_and_owner_
     db.save(owner_id="bob", question="bob-private", response="bob-response")
     server.configure(db=db)
     try:
-        with TestClient(server.app) as client:
+        with TestClient(server.app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}) as client:
             preflight = client.options("/api/audit", headers={
                 "Origin": "https://chatgpt.com", "Access-Control-Request-Method": "POST",
                 "Access-Control-Request-Headers": "authorization,content-type",
@@ -214,7 +214,7 @@ def test_configured_browser_origin_is_allowed_without_bypassing_auth(tmp_path):
     result = subprocess.run([sys.executable, "-c", '''
 from starlette.testclient import TestClient
 from ugh_audit.server import app
-with TestClient(app) as client:
+with TestClient(app, headers={"X-UGH-Anthropic-Key": "offline-test-provider-key"}) as client:
     response = client.options("/api/audit", headers={
         "Origin": "https://pilot-client.example", "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "authorization,content-type",
