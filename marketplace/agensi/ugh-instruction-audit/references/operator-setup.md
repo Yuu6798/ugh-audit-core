@@ -145,6 +145,10 @@ its initial cleanup and a separately authorized real-model audit passed the
 Acceptance of the manual identity/deletion/response procedure and the public
 effective date remain pending; publication is on hold. Do not request API keys,
 invitation tokens or full audit text by email.
+The creator's proposed responsible operator, response procedure, maintenance
+handoff and conditional effective date are in the
+[manual operations proposal](https://github.com/Yuu6798/ugh-audit-core/blob/main/docs/beta-manual-operations.md).
+The proposal is not an accepted duty assignment or permission to publish.
 Self-hosted services must name and verify their own operator's contact.
 The creator-operated beta is preparing a 30-day audit retention period, deletion
 within seven days after identity verification, and backup removal within 30 days

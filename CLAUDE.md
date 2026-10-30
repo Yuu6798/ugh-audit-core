@@ -194,6 +194,7 @@ https://ugh-audit-core-production.up.railway.app
 | REST API + MCP サーバー | [`docs/server_api.md`](docs/server_api.md) |
 | 招待制ベータ（認証・履歴分離・上限） | [`docs/invite_beta.md`](docs/invite_beta.md) |
 | 保存期間・削除・バックアップ運用 | [`docs/data-policy.md`](docs/data-policy.md) |
+| 手動受付・本人確認・担当者・適用開始の案 | [`docs/beta-manual-operations.md`](docs/beta-manual-operations.md) |
 | 公開前の証拠・残件・実監査手順 | [`docs/beta-release-checklist.md`](docs/beta-release-checklist.md) |
 | Agensi無料掲載パッケージ | [`marketplace/agensi`](marketplace/agensi) |
 | 検証結果 (HA48 / HA20 / baseline) | [`docs/validation.md`](docs/validation.md) |
