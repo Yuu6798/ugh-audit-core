@@ -419,3 +419,218 @@ def test_cleanup_failure_reports_that_deletion_already_committed(database, monke
     assert error.value.deletion_committed
     assert [row[1] for row in _rows(path)] == ["bob", None]
     assert "synthetic disk" not in str(error.value)
+
+
+def test_selected_audit_preview_and_delete_preserve_unselected_rows(database):
+    path, (old, new, _, _) = database
+    before = _rows(path)
+    digest = path.read_bytes()
+    preview = maintain_audits(path, owner="alice", audit_ids=[old])
+    assert preview["scope"] == "audit_ids"
+    assert preview["requested_audits"] == preview["matched_audits"] == 1
+    assert preview["already_absent_audits"] == preview["deleted_audits"] == 0
+    assert "alice" not in json.dumps(preview) and "PRIVATE" not in json.dumps(preview)
+    assert path.read_bytes() == digest
+    assert not Path(str(path) + ".deployment.lock").exists()
+
+    result = maintain_audits(path, owner="alice", audit_ids=[old],
+                             apply=True, service_stopped=True)
+    assert result["deleted_audits"] == result["retry_links_cleared"] == 1
+    assert result["database_compacted"]
+    assert _rows(path) == [(new, "alice", before[1][2], None), *before[2:]]
+    assert b"ALICE_PRIVATE_OLD_SENTINEL" not in path.read_bytes()
+    assert b"ALICE_PRIVATE_NEW_SENTINEL" in path.read_bytes()
+
+
+@pytest.mark.parametrize("foreign_index", [2, 3])
+@pytest.mark.parametrize("foreign_first", [False, True])
+@pytest.mark.parametrize("apply", [False, True])
+def test_selected_foreign_or_legacy_id_rejects_entire_request(
+        database, foreign_index, foreign_first, apply):
+    path, ids = database
+    selected = [ids[0], ids[foreign_index]]
+    if foreign_first:
+        selected.reverse()
+    before = path.read_bytes()
+    with pytest.raises(RetentionError, match="audit_id_owner_mismatch") as error:
+        maintain_audits(path, owner="alice", audit_ids=selected,
+                        apply=apply, service_stopped=True)
+    assert not error.value.deletion_committed
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("audit_ids", [
+    [], (), True, 1, "1", b"\x01", bytearray([1]), {1}, [True], [False],
+    [1.0], ["1"], [None], [0], [-1],
+    [1, 1], [2**63],
+])
+def test_invalid_selected_ids_are_rejected_before_database_access(database, audit_ids):
+    path, _ = database
+    before = path.read_bytes()
+    with pytest.raises(RetentionError, match="valid_unique_audit_ids_required"):
+        maintain_audits(path, owner="alice", audit_ids=audit_ids,
+                        apply=True, service_stopped=True)
+    assert path.read_bytes() == before
+    assert not Path(str(path) + ".deployment.lock").exists()
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"audit_ids": [1]}, {"audit_ids": [1], "older_than_days": 30},
+    {"audit_ids": [1], "owner": "alice", "older_than_days": 30},
+    {"audit_ids": [1], "owner": ""}, {"audit_ids": [1], "owner": True},
+])
+def test_selected_ids_require_owner_and_forbid_age_scope(database, kwargs):
+    path, _ = database
+    before = path.read_bytes()
+    with pytest.raises(RetentionError, match="one_valid_deletion_scope_required"):
+        maintain_audits(path, **kwargs)
+    assert path.read_bytes() == before
+
+
+def test_selected_ids_require_service_stop_acknowledgment(database):
+    path, (old, *_) = database
+    before = path.read_bytes()
+    with pytest.raises(RetentionError, match="service_stop_acknowledgment_required"):
+        maintain_audits(path, owner="alice", audit_ids=[old], apply=True)
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("missing", [5, 2**63 - 1])
+@pytest.mark.parametrize("apply", [False, True])
+def test_future_audit_ids_fail_without_partial_deletion(database, missing, apply):
+    path, (old, *_) = database
+    before = path.read_bytes()
+    with pytest.raises(RetentionError, match="audit_id_not_previously_allocated") as error:
+        maintain_audits(path, owner="alice", audit_ids=[old, missing],
+                        apply=apply, service_stopped=True)
+    assert not error.value.deletion_committed
+    assert path.read_bytes() == before
+
+
+def test_selected_deletion_restores_and_reapplies_without_deleting_new_audits(database):
+    path, (old, new, _, _) = database
+    last = AuditDB(path).save(owner_id="alice", response="SELECTED_HIGHEST_PRIVATE")
+    snapshot = path.read_bytes()
+    selected = (old, last)
+    original_rows = _rows(path)
+    for restore in (False, True):
+        if restore:
+            # Reapply the recorded deletion before accepting writes on restore.
+            path.write_bytes(snapshot)
+        result = maintain_audits(path, owner="alice", audit_ids=selected,
+                                 apply=True, service_stopped=True)
+        assert result["deleted_audits"] == 2
+        assert result["retry_links_cleared"] == 1
+        assert _rows(path) == [(new, "alice", original_rows[1][2], None), *original_rows[2:4]]
+        added = AuditDB(path).save(owner_id="alice", response="POST_DELETE_NEW_AUDIT")
+        assert added > last
+        before_replay = _rows(path)
+        repeated = maintain_audits(path, owner="alice", audit_ids=selected,
+                                   apply=True, service_stopped=True)
+        assert repeated["deleted_audits"] == repeated["matched_audits"] == 0
+        assert repeated["already_absent_audits"] == 2
+        assert repeated["requested_audits"] == 2
+        assert _rows(path) == before_replay
+        assert b"POST_DELETE_NEW_AUDIT" in path.read_bytes()
+
+
+def test_selected_deletion_accepts_mixed_existing_and_already_deleted_ids(database):
+    path, (old, new, _, _) = database
+    maintain_audits(path, owner="alice", audit_ids=[old], apply=True, service_stopped=True)
+    result = maintain_audits(path, owner="alice", audit_ids=[old, new],
+                             apply=True, service_stopped=True)
+    assert result["already_absent_audits"] == result["deleted_audits"] == 1
+    assert result["requested_audits"] == 2
+    assert [row[1] for row in _rows(path)] == ["bob", None]
+
+
+def test_restore_before_selected_id_allocation_refuses_replay(database):
+    path, _ = database
+    snapshot = path.read_bytes()
+    selected = AuditDB(path).save(owner_id="alice")
+    maintain_audits(path, owner="alice", audit_ids=[selected], apply=True, service_stopped=True)
+    path.write_bytes(snapshot)
+    with pytest.raises(RetentionError, match="audit_id_not_previously_allocated"):
+        maintain_audits(path, owner="alice", audit_ids=[selected],
+                        apply=True, service_stopped=True)
+    assert path.read_bytes() == snapshot
+
+
+@pytest.mark.parametrize("child_index", [2, 3])
+def test_selected_deletion_refuses_corrupt_foreign_retry_without_mutating_rows(database, child_index):
+    path, ids = database
+    with sqlite3.connect(path) as conn:
+        conn.execute("UPDATE audit_runs SET retry_of=? WHERE id=?", (ids[0], ids[child_index]))
+    before = path.read_bytes()
+    with pytest.raises(RetentionError, match="cross_owner_retry_reference") as error:
+        maintain_audits(path, owner="alice", audit_ids=[ids[0]],
+                        apply=True, service_stopped=True)
+    assert not error.value.deletion_committed
+    assert path.read_bytes() == before
+
+
+def test_selected_deletion_ignores_unrelated_invalid_date(database):
+    path, (old, new, _, _) = database
+    with sqlite3.connect(path) as conn:
+        conn.execute("UPDATE audit_runs SET created_at='unknown' WHERE id=?", (new,))
+    result = maintain_audits(path, owner="alice", audit_ids=[old],
+                             apply=True, service_stopped=True)
+    assert result["deleted_audits"] == 1
+    assert _rows(path)[0][0] == new
+
+
+def test_selected_cli_repeated_ids_and_private_receipts(database, capsys):
+    path, _ = database
+    first, second = 123456789, 123456790
+    with sqlite3.connect(path) as conn:
+        conn.executemany("INSERT INTO audit_runs (id, owner_id, created_at, response) "
+                         "VALUES (?, 'selected-private-owner', ?, 'selected-private-body')",
+                         [(first, OLD), (second, NEW)])
+    command = ["--db", str(path), "--owner", "selected-private-owner",
+               "--audit-id", str(first), "--audit-id", str(second)]
+    assert main(command) == 0
+    output = capsys.readouterr()
+    assert json.loads(output.out)["matched_audits"] == 2
+    assert main([*command, "--apply", "--service-stopped"]) == 0
+    output = capsys.readouterr()
+    assert json.loads(output.out)["deleted_audits"] == 2
+    for private in (str(first), str(second), "selected-private-owner", "selected-private-body"):
+        assert private not in output.out and private not in output.err
+
+
+@pytest.mark.parametrize("value", ["secret-not-an-id", "0", "-1", "True", str(2**63)])
+def test_cli_invalid_audit_id_omits_supplied_value(database, capsys, value):
+    path, _ = database
+    with pytest.raises(SystemExit) as error:
+        main(["--db", str(path), "--owner", "alice", "--audit-id", value])
+    assert error.value.code == 2
+    output = capsys.readouterr()
+    assert "positive SQLite integer required" in output.err
+    assert f"'{value}'" not in output.err
+    assert "secret-not-an-id" not in output.err
+
+
+def test_cli_selected_scope_errors_are_fixed_and_non_destructive(database, capsys):
+    path, (old, _, foreign, _) = database
+    before = path.read_bytes()
+    for args, expected in [
+        (["--audit-id", str(old)], "one_valid_deletion_scope_required"),
+        (["--older-than-days", "30", "--audit-id", str(old)],
+         "one_valid_deletion_scope_required"),
+        (["--owner", "alice", "--audit-id", str(old), "--audit-id", str(old)],
+         "valid_unique_audit_ids_required"),
+        (["--owner", "alice", "--audit-id", str(old), "--audit-id", str(foreign)],
+         "audit_id_owner_mismatch"),
+    ]:
+        assert main(["--db", str(path), *args, "--apply", "--service-stopped"]) == 1
+        output = capsys.readouterr()
+        assert not output.out
+        assert json.loads(output.err) == {"error": expected, "deletion_committed": False}
+        assert path.read_bytes() == before
+
+
+def test_usage_cli_forbids_audit_id_scope(usage_database, capsys):
+    before = usage_database.read_bytes()
+    assert main(["--usage-db", str(usage_database), "--audit-id", "1"]) == 1
+    assert json.loads(capsys.readouterr().err)["error"] == "usage_scope_is_expiry_only"
+    assert usage_database.read_bytes() == before

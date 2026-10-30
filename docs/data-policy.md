@@ -74,8 +74,11 @@ HTTPの子も親の生存と稼働期限を監視し、親の異常終了後に�
 4. 下記の停止中メンテナンスで対象と件数を確認し、削除・再取得不能の確認結果を非公開で返信する。
    本体の削除完了とバックアップ消去完了は区別して通知する。
 
-現行CLIはowner単位または期間による削除用。特定の監査だけの依頼を全履歴削除に勝手に拡大しない。
-必要な範囲がCLIで表現できなければ、個別の確認済み手順を用意してから実施する。
+CLIはowner全体・期間の削除に加え、`--owner` と繰り返し指定する `--audit-id` で本人の特定IDだけを
+削除できる。特定の監査だけの依頼を全履歴削除に勝手に拡大しない。別owner・NULL ownerの行が
+指定に含まれれば、一部だけを削除せず依頼全体を拒否する。不正・重複・未発行の将来IDも拒否する。
+既に行がなく採番上限以下のIDは追加削除なしで扱うが、採番上限はそのIDの過去の実在・所有・削除を
+証明しない。本人確認と範囲合意を私有記録で確認する。詳細は[特定IDの運用手順](beta-manual-operations.md)を参照。
 本人確認が完了しない依頼は削除せず、不足点を返信する。無期限に放置せず受付記録で追跡する。
 
 ## 運営者の停止中メンテナンス
@@ -93,14 +96,29 @@ HTTPの子も親の生存と稼働期限を監視し、親の異常終了後に�
 ```bash
 python -m ugh_audit.retention --db /data/audit.db --older-than-days 29
 python -m ugh_audit.retention --db /data/audit.db --owner alice
+# 特定IDの構文例。101・104は合意した対象IDに置き換える。
+python -m ugh_audit.retention --db /data/audit.db --owner alice --audit-id 101 --audit-id 104
 python -m ugh_audit.retention --usage-db /data/usage.db
 ```
 
-3. 対象の一方を選び、停止を実際に確認してから適用する。期限清掃とowner削除は別の操作。
+3. 合意した範囲を選び、停止を実際に確認してから適用する。期限・owner全体・特定IDは別の指定。
+   `--audit-id` は `--owner` が必須で、期間指定や利用台帳モードとは併用しない。
+   監査DBの例は選択肢であり、複数の範囲を続けて実行しない。
 
 ```bash
+# 期限清掃の例。本人確認済みの全履歴削除では、期間指定を --owner alice に置き換える。
 python -m ugh_audit.retention --db /data/audit.db --older-than-days 29 --apply --service-stopped
-# 本人確認済みの全履歴削除の場合は、上の期間指定を --owner alice に置き換える。
+```
+
+特定IDだけの場合は上の例を使わず、dry-runと同じowner・ID指定を維持する。
+
+```bash
+python -m ugh_audit.retention --db /data/audit.db --owner alice --audit-id 101 --audit-id 104 --apply --service-stopped
+```
+
+期限切れ利用台帳の清掃は、監査本文の削除とは別の操作である。
+
+```bash
 python -m ugh_audit.retention --usage-db /data/usage.db --apply --service-stopped
 ```
 
@@ -138,6 +156,9 @@ SQLiteの削除・圧縮処理と整合性確認を行うが、ストレージ�
 
 復元は公開接続を止めた環境でのみ行う。整合性確認後、復元した時点より後の削除記録と
 現在の保持期限を再適用し、招待の失効状態・利用上限も確認してから受付を再開する。
+特定IDの再適用は、同じDB系列で対象IDが発行された後のバックアップと確認できる場合に限る。
+発行前の復元では将来IDとして拒否され得るため、新規書込みを受け付けてから再実行しない。
+採番の巻戻りによる別の監査へのID再利用を避け、復元時点・対象履歴を確認できなければ停止して調査する。
 復元やコピーでバックアップの期限を延長しない。管理対象のコピーを全て期限内に消去するまで
 削除記録で追跡し、削除済みデータを復活させない。
 [配備と移行](invite-beta-deployment.md)も参照する。

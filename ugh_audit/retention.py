@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 import sqlite3
 import sys
-from typing import Optional
+from typing import Optional, Sequence
 
 
 class RetentionError(Exception):
@@ -110,8 +110,38 @@ def _timestamp(value: str) -> datetime:
         raise RetentionError("invalid_owned_audit_timestamp") from None
 
 
-def _selection(conn: sqlite3.Connection, owner: Optional[str], cutoff: Optional[datetime]) -> list:
-    if owner is not None:
+def _selection(
+    conn: sqlite3.Connection, owner: Optional[str], cutoff: Optional[datetime],
+    audit_ids: Optional[tuple[int, ...]] = None,
+) -> list:
+    if audit_ids is not None:
+        rows = []
+        missing = []
+        # Indexed lookups avoid SQLite's bound-parameter limit. All lookups run
+        # within the same read snapshot or exclusive deletion transaction.
+        for audit_id in audit_ids:
+            row = conn.execute(
+                "SELECT id, created_at, owner_id FROM audit_runs WHERE id=?", (audit_id,),
+            ).fetchone()
+            if row is None:
+                missing.append(audit_id)
+            elif row[2] != owner:
+                # Never silently skip a foreign/legacy ID and delete the rest.
+                raise RetentionError("audit_id_owner_mismatch")
+            else:
+                rows.append(row[:2])
+        if missing:
+            sequence = conn.execute(
+                "SELECT seq FROM sqlite_sequence WHERE name='audit_runs'",
+            ).fetchall()
+            if (len(sequence) > 1 or (sequence and (
+                    type(sequence[0][0]) is not int or sequence[0][0] < 0))):
+                raise RetentionError("unsupported_audit_schema")
+            if not sequence or max(missing) > sequence[0][0]:
+                # Do not register a future ID that could erase a later audit on
+                # replay. This boundary is not evidence of a missing ID's owner.
+                raise RetentionError("audit_id_not_previously_allocated")
+    elif owner is not None:
         rows = conn.execute(
             "SELECT id, created_at FROM audit_runs WHERE owner_id=?", (owner,),
         ).fetchall()
@@ -150,6 +180,7 @@ def _compact(conn: sqlite3.Connection, journal: str) -> None:
 
 def maintain_audits(
     db: Path, *, owner: Optional[str] = None, older_than_days: Optional[int] = None,
+    audit_ids: Optional[Sequence[int]] = None,
     apply: bool = False, service_stopped: bool = False, now: Optional[datetime] = None,
 ) -> dict:
     """Preview or delete owned audits; retain NULL-owner rows and quota state.
@@ -157,12 +188,27 @@ def maintain_audits(
     --apply compacts the active SQLite file and truncates WAL. It is not a secure
     erase guarantee for storage hardware, snapshots or independently held copies.
     A failure with deletion_committed=true requires cleanup before restarting.
+    audit_ids narrows an owner's scope; it must be a nonempty sequence of unique
+    positive SQLite integers. Missing IDs at or below the AUTOINCREMENT boundary
+    are idempotent no-ops, not proof of ownership; future IDs are refused. Reapply
+    recorded deletions to restored snapshots before accepting new writes.
     """
     if ((owner is None) == (older_than_days is None)
             or (owner is not None and (not isinstance(owner, str) or not owner.strip()))
             or (older_than_days is not None
                 and (type(older_than_days) is not int or not 1 <= older_than_days <= 36500))):
         raise RetentionError("one_valid_deletion_scope_required")
+    if audit_ids is not None:
+        if owner is None or older_than_days is not None:
+            raise RetentionError("one_valid_deletion_scope_required")
+        if (not isinstance(audit_ids, Sequence) or isinstance(audit_ids, (str, bytes, bytearray))
+                or not audit_ids
+                or any(type(value) is not int or not 1 <= value <= 2**63 - 1
+                       for value in audit_ids)
+                or len(set(audit_ids)) != len(audit_ids)):
+            raise RetentionError("valid_unique_audit_ids_required")
+        audit_ids = tuple(audit_ids)
+    scope = "audit_ids" if audit_ids is not None else "owner" if owner is not None else "retention"
     if apply and not service_stopped:
         raise RetentionError("service_stop_acknowledgment_required")
     clock = now or datetime.now(timezone.utc)
@@ -180,8 +226,11 @@ def maintain_audits(
             with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=0)) as conn:
                 conn.execute("BEGIN")
                 _validate(conn)
-                ids = _selection(conn, owner, cutoff)
-                return {"mode": "preview", "scope": "owner" if owner is not None else "retention",
+                ids = _selection(conn, owner, cutoff, audit_ids)
+                return {"mode": "preview", "scope": scope,
+                        **({"requested_audits": len(audit_ids),
+                            "already_absent_audits": len(audit_ids) - len(ids)}
+                           if audit_ids is not None else {}),
                         "cutoff_utc": cutoff.isoformat() if cutoff else None,
                         "matched_audits": len(ids), "deleted_audits": 0,
                         "legacy_rows_preserved": conn.execute(
@@ -192,7 +241,7 @@ def maintain_audits(
             journal = _begin_maintenance(conn)
             try:
                 _validate(conn)
-                ids = _selection(conn, owner, cutoff)
+                ids = _selection(conn, owner, cutoff, audit_ids)
                 conn.execute("CREATE TEMP TABLE deletion_ids (id INTEGER PRIMARY KEY)")
                 conn.executemany("INSERT INTO deletion_ids VALUES (?)", ((value,) for value in ids))
                 # Public writes disallow cross-owner retries; don't mutate another
@@ -214,7 +263,10 @@ def maintain_audits(
                 raise
             _compact(conn, journal)
             _validate(conn)
-            return {"mode": "applied", "scope": "owner" if owner is not None else "retention",
+            return {"mode": "applied", "scope": scope,
+                    **({"requested_audits": len(audit_ids),
+                        "already_absent_audits": len(audit_ids) - len(ids)}
+                       if audit_ids is not None else {}),
                     "cutoff_utc": cutoff.isoformat() if cutoff else None,
                     "matched_audits": len(ids), "deleted_audits": deleted,
                     "retry_links_cleared": unlinked, "database_compacted": True,
@@ -328,6 +380,17 @@ def maintain_usage(
                              deletion_committed=committed) from None
 
 
+def _audit_id_argument(value: str) -> int:
+    try:
+        audit_id = int(value)
+        if not 1 <= audit_id <= 2**63 - 1:
+            raise ValueError
+        return audit_id
+    except ValueError:
+        # argparse's default int conversion echoes the supplied argument.
+        raise argparse.ArgumentTypeError("positive SQLite integer required") from None
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     target = parser.add_mutually_exclusive_group(required=True)
@@ -336,18 +399,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--owner", help="Exact owner ID; never a token or API key")
     scope.add_argument("--older-than-days", type=int, help="Delete owned audits at least this old")
+    parser.add_argument("--audit-id", action="append", type=_audit_id_argument, dest="audit_ids",
+                        help="Repeat to select exact audit IDs; requires --owner, no age scope")
     parser.add_argument("--apply", action="store_true", help="Delete; default only previews counts")
     parser.add_argument("--service-stopped", action="store_true",
                         help="Operator confirms all audit processes and auto-deploy are stopped")
     args = parser.parse_args(argv)
     try:
         if args.usage_db is not None:
-            if args.owner is not None or args.older_than_days is not None:
+            if (args.owner is not None or args.older_than_days is not None
+                    or args.audit_ids is not None):
                 raise RetentionError("usage_scope_is_expiry_only")
             result = maintain_usage(args.usage_db, apply=args.apply,
                                     service_stopped=args.service_stopped)
         else:
             result = maintain_audits(args.db, owner=args.owner, older_than_days=args.older_than_days,
+                                    audit_ids=args.audit_ids,
                                     apply=args.apply, service_stopped=args.service_stopped)
     except RetentionError as error:
         print(json.dumps({"error": str(error), "deletion_committed": error.deletion_committed}),
