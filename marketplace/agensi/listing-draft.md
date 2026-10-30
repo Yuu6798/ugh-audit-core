@@ -42,16 +42,19 @@ operator; the requirements and draft also reach Anthropic for assessment. Your
 provider key passes through the operator to Anthropic but is not saved to audit
 history or application logs. Resolved audits, including their text and evidence,
 may be saved. Read the operator's policy before supplying confidential material.
-The creator-operated invitation beta's proposed terms are 30-day audit retention,
+The creator-operated invitation beta's planned terms are 30-day audit retention,
 deletion within seven days after identity verification, and removal from backups
-within 30 days after deletion. Automated retention is enabled and its initial
-production cleanup has passed; manual request handling and the public effective
-date still await acceptance. These terms do not describe every independently
-hosted server. The creator-operated beta's
+within 30 days after deletion. Automated retention is enabled and production
+startup cleanup has passed. The responsible operator and manual procedures are
+accepted, with a conditional effective date of November 2, 2026, at 10:00 JST.
+The public policy has not taken effect; unmet readiness conditions will postpone
+that date. These terms do not describe every independently hosted server.
+The creator-operated beta's
 private support and deletion contact is [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com).
-Ordinary mailbox send/receive evidence is confirmed. Manual deletion intake, identity
-checks, replies and the responsible operator still await acceptance, so invitations
-and publication remain on hold. Do not email API keys,
+Identity verification, scope agreement and completion replies were rehearsed with
+the operator's own mailbox and a synthetic owner. Operational acceptance is
+separate from approval of the final listing and publication; invitations and
+publication remain on hold. Do not email API keys,
 invitation tokens or full audit text. Independently hosted services use their own
 operator's contact. See
 [data handling and deletion](../../docs/data-policy.md) and the
@@ -94,11 +97,12 @@ tool引数へ貼り付けません。Codex CLIの直接接続は下記の範囲�
 Anthropicへ送られます。APIキーも運営者を経由しますが、監査履歴やアプリのログには
 保存しません。判定できた監査の本文・根拠は保存される場合があります。提供者の招待制
 ベータは、監査履歴30日、本人確認後7日以内の削除、削除後30日以内のバックアップ消去
-を運営案としています。自動削除は有効化され、本番の初回清掃を確認済みです。手動の依頼対応と
-対外的な適用開始日は受入待ちです。独自運営のすべてのサーバーへの保証ではありません。
+を運営方針とする予定です。自動削除は有効化され、本番の起動時清掃を確認済みです。担当・手動の依頼対応と
+2026-11-02 10:00 JSTの条件付き適用予定は受入済みですが、実適用は開始前です。条件未達なら延期します。
+独自運営のすべてのサーバーへの保証ではありません。
 提供者のベータの非公開問い合わせ・削除依頼先は
-[kkoo6798@gmail.com](mailto:kkoo6798@gmail.com)です。通常メールの送受信実績は確認済みです。
-削除依頼の受付・本人確認・返信手順と担当者の受入が完了するまで、招待開始・掲載は保留します。
+[kkoo6798@gmail.com](mailto:kkoo6798@gmail.com)です。運営者本人の窓口と合成ownerで本人確認・範囲合意・完了通知を実演済みです。
+担当者の運用受入とは別に、最終掲載版・公開判断が済むまで招待開始・掲載は保留します。
 キー・招待トークン・監査本文全体はメールへ記載しないでください。独自運営の場合はその運営者の窓口を使います。
 [保存・削除方針](../../docs/data-policy.md)を確認してからデータを送ってください。
 
@@ -125,12 +129,14 @@ UGHサーバーはOAuth未実装で、一般ChatGPTコネクタ対応も保証�
   separately operated MCP server when the advertised function and prerequisites
   are accurate and setup templates/instructions are bundled. It does not establish
   approval of this particular listing.
-- Complete the [release checklist](../../docs/beta-release-checklist.md), including
-  acceptance of manual deletion intake, identity checks, replies, the responsible
-  operator, records outside automated cleanup, the public policy effective date and
-  the creator's publication decision. Initial production cleanup and the approved
-  real-BYOK audit are recorded there. Keep submission and publication
-  on hold while those conditions are unresolved. Delisting does not establish
+- Complete the remaining [release checklist](../../docs/beta-release-checklist.md)
+  items. The responsible operator, manual procedures, records outside automated
+  cleanup, migration plan and conditional effective schedule are accepted. The
+  actual policy start, migration work, legacy-record disposition decision, final
+  listing and publication decision remain separate pending steps. Preserve the
+  18 legacy records; inventory and proposal preparation do not authorize deletion.
+  Production startup cleanup and the approved real-BYOK audit are recorded there.
+  Keep submission and publication on hold. Delisting does not establish
   immediate revocation of existing users' Agensi access.
 - Set Free explicitly. Do not add a separate refund promise, external checkout,
   compatibility badge or accuracy guarantee.
