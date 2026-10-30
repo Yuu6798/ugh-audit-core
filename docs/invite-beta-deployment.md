@@ -88,6 +88,11 @@ MCP接続、APIキーなしの監査拒否、利用者BYOKでの意味照合を�
 
 ## 日次削除の自動化
 
+Railwayの旧Config as Codeは新規serviceで利用できず、既存設定ファイルの読取りも
+2026-12-01に終了予定である。[公式案内](https://docs.railway.com/config-as-code)と
+[担当・期限を含む移行計画](beta-manual-operations.md#railway設定方式の移行計画)を参照する。
+現在の `railway.toml` による既存配備と、新環境で利用できる方式を混同しない。
+
 POSIX環境で `UGH_RETENTION_AUTOMATION=1` と上記startコマンドを使う。初回は旧サーバーを
 完全に停止してから切り替える。単一ホスト・単一ボリューム・単一サービスが前提で、同じDBへ
 別のPython/uvicornプロセスを接続しない。Railwayではvolume付きの1 replicaを使用する。
