@@ -45,10 +45,13 @@ may be saved. Read the operator's policy before supplying confidential material.
 The creator-operated invitation beta's planned terms are 30-day audit retention,
 deletion within seven days after identity verification, and removal from backups
 within 30 days after deletion. Automated retention is enabled and production
-startup cleanup has passed. The responsible operator and manual procedures are
-accepted, with a conditional effective date of November 2, 2026, at 10:00 JST.
-The public policy has not taken effect; unmet readiness conditions will postpone
-that date. These terms do not describe every independently hosted server.
+startup cleanup and two scheduled production cycles have passed. The responsible
+operator and manual procedures are accepted. The original conditional effective
+date of November 2, 2026, at 10:00 JST was postponed because readiness conditions
+were not met by the deadline. After readiness was verified, the date was
+rescheduled to November 3, 2026, at 10:00 JST, more than 24 hours after conditions
+were met. The public policy has not taken effect. These terms do not describe
+every independently hosted server.
 The creator-operated beta's
 private support and deletion contact is [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com).
 Identity verification, scope agreement and completion replies were rehearsed with
@@ -97,8 +100,9 @@ tool引数へ貼り付けません。Codex CLIの直接接続は下記の範囲�
 Anthropicへ送られます。APIキーも運営者を経由しますが、監査履歴やアプリのログには
 保存しません。判定できた監査の本文・根拠は保存される場合があります。提供者の招待制
 ベータは、監査履歴30日、本人確認後7日以内の削除、削除後30日以内のバックアップ消去
-を運営方針とする予定です。自動削除は有効化され、本番の起動時清掃を確認済みです。担当・手動の依頼対応と
-2026-11-02 10:00 JSTの条件付き適用予定は受入済みですが、実適用は開始前です。条件未達なら延期します。
+を運営方針とする予定です。自動削除は有効化され、本番の起動時清掃と周期2回を確認済みです。担当・手動の依頼対応は
+受入済みですが、当初の2026-11-02 10:00 JSTの条件付き適用予定は確認期限の条件未達により延期しました。
+期限後の条件充足を確認し、24時間以上後の11月3日10:00 JSTへ再設定しました。実適用はまだ開始していません。
 独自運営のすべてのサーバーへの保証ではありません。
 提供者のベータの非公開問い合わせ・削除依頼先は
 [kkoo6798@gmail.com](mailto:kkoo6798@gmail.com)です。運営者本人の窓口と合成ownerで本人確認・範囲合意・完了通知を実演済みです。
@@ -131,11 +135,12 @@ UGHサーバーはOAuth未実装で、一般ChatGPTコネクタ対応も保証�
   approval of this particular listing.
 - Complete the remaining [release checklist](../../docs/beta-release-checklist.md)
   items. The responsible operator, manual procedures, records outside automated
-  cleanup, migration plan and conditional effective schedule are accepted. The
-  actual policy start, migration work, legacy-record disposition decision, final
+  cleanup, migration plan and postponement rule are accepted. The original
+  November 2 schedule was postponed; after readiness verification, the date was
+  rescheduled to November 3 at 10:00 JST. The actual policy start, migration work, legacy-record disposition decision, final
   listing and publication decision remain separate pending steps. Preserve the
   18 legacy records; inventory and proposal preparation do not authorize deletion.
-  Production startup cleanup and the approved real-BYOK audit are recorded there.
+  Production startup cleanup, two scheduled cycles and the approved real-BYOK audit are recorded there.
   Keep submission and publication on hold. Delisting does not establish
   immediate revocation of existing users' Agensi access.
 - Set Free explicitly. Do not add a separate refund promise, external checkout,
